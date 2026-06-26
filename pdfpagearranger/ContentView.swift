@@ -10,7 +10,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if viewModel.hasDocument, let _ = viewModel.sourceDocument {
+                if viewModel.hasDocument {
                     EditorView(viewModel: viewModel)
                 } else {
                     emptyState
@@ -27,13 +27,15 @@ struct ContentView: View {
             allowedContentTypes: [.pdf],
             allowsMultipleSelection: false
         ) { result in
-            switch result {
-            case .success(let urls):
-                guard let url = urls.first else { return }
-                Task { await viewModel.importPDF(from: url) }
-            case .failure(let error):
-                importErrorMessage = error.localizedDescription
-                showError = true
+            Task { @MainActor in
+                switch result {
+                case .success(let urls):
+                    guard let url = urls.first else { return }
+                    await viewModel.importPDF(from: url)
+                case .failure(let error):
+                    importErrorMessage = error.localizedDescription
+                    showError = true
+                }
             }
         }
         .alert("Import Failed", isPresented: $showError) {

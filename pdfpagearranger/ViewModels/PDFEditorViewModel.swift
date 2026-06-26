@@ -17,9 +17,13 @@ final class PDFEditorViewModel {
     let proGate = ProGate()
 
     var canUndo: Bool { !undoStack.isEmpty }
-    var hasDocument: Bool { sourceDocument != nil && !pages.isEmpty }
+    var hasDocument: Bool { sourceDocument != nil }
 
     var pageCount: Int { pages.count }
+
+    func pageIndex(for id: UUID) -> Int? {
+        pages.firstIndex(where: { $0.id == id })
+    }
 
     func importPDF(from url: URL) async {
         isLoading = true
@@ -46,40 +50,47 @@ final class PDFEditorViewModel {
         sourceDocument = nil
         localSourceURL = nil
         undoStack.removeAll()
+        errorMessage = nil
     }
 
-    func movePage(from source: IndexSet, to destination: Int) {
-        guard !source.isEmpty else { return }
+    /// Clears the current session and returns the app to the import empty state.
+    func closeSession() async {
+        if let localSourceURL {
+            try? FileManager.default.removeItem(at: localSourceURL)
+        }
+        resetDocument()
+        await ThumbnailService.shared.clear()
+    }
+
+    func recordUndoForDrag() {
         pushUndoSnapshot()
-        pages.move(fromOffsets: source, toOffset: destination)
     }
 
-    func movePage(from sourceIndex: Int, to destinationIndex: Int) {
+    /// Reorders pages during drag-and-drop without pushing another undo entry.
+    func reorderPage(from sourceIndex: Int, to destinationIndex: Int) {
         guard sourceIndex != destinationIndex,
               pages.indices.contains(sourceIndex),
               destinationIndex >= 0,
-              destinationIndex <= pages.count else { return }
+              destinationIndex < pages.count else { return }
 
-        pushUndoSnapshot()
         let item = pages.remove(at: sourceIndex)
-        let adjustedDestination = destinationIndex > sourceIndex ? destinationIndex - 1 : destinationIndex
-        pages.insert(item, at: min(adjustedDestination, pages.count))
+        pages.insert(item, at: destinationIndex)
     }
 
-    func deletePage(at index: Int) {
-        guard pages.indices.contains(index) else { return }
+    func deletePage(id: UUID) {
+        guard let index = pageIndex(for: id) else { return }
         pushUndoSnapshot()
         pages.remove(at: index)
     }
 
-    func rotatePage(at index: Int) {
-        guard pages.indices.contains(index) else { return }
+    func rotatePage(id: UUID) {
+        guard let index = pageIndex(for: id) else { return }
         pushUndoSnapshot()
         pages[index] = pages[index].rotated()
     }
 
-    func duplicatePage(at index: Int) {
-        guard pages.indices.contains(index) else { return }
+    func duplicatePage(id: UUID) {
+        guard let index = pageIndex(for: id) else { return }
         pushUndoSnapshot()
         let duplicate = pages[index].duplicated()
         pages.insert(duplicate, at: index + 1)

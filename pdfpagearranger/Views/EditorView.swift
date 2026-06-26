@@ -10,6 +10,7 @@ struct EditorView: View {
     @State private var exportURL: URL?
     @State private var exportError: String?
     @State private var draggedPageID: UUID?
+    @State private var dragUndoRecorded = false
 
     private let gridColumns = [
         GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)
@@ -21,42 +22,14 @@ struct EditorView: View {
                 ContentUnavailableView(
                     "No Pages",
                     systemImage: "doc",
-                    description: Text("All pages were removed. Import a new PDF to continue.")
+                    description: Text("All pages were removed. Tap New PDF to import another document.")
                 )
             } else {
                 ScrollView {
                     LazyVGrid(columns: gridColumns, spacing: 16) {
                         ForEach(Array(viewModel.pages.enumerated()), id: \.element.id) { index, item in
                             if let document = viewModel.sourceDocument {
-                                PageThumbnailView(
-                                    item: item,
-                                    pageNumber: index + 1,
-                                    document: document,
-                                    onRotate: { viewModel.rotatePage(at: index) },
-                                    onDuplicate: { viewModel.duplicatePage(at: index) },
-                                    onDelete: { viewModel.deletePage(at: index) }
-                                )
-                                .opacity(draggedPageID == item.id ? 0.4 : 1)
-                                .draggable(item.id.uuidString) {
-                                    dragPreview(for: item, pageNumber: index + 1, document: document)
-                                }
-                                .dropDestination(for: String.self) { droppedIDs, location in
-                                    guard let droppedID = droppedIDs.first,
-                                          let droppedUUID = UUID(uuidString: droppedID),
-                                          let sourceIndex = viewModel.pages.firstIndex(where: { $0.id == droppedUUID }),
-                                          sourceIndex != index else {
-                                        return false
-                                    }
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        viewModel.movePage(from: sourceIndex, to: index)
-                                    }
-                                    draggedPageID = nil
-                                    return true
-                                } isTargeted: { isTargeted in
-                                    if isTargeted {
-                                        draggedPageID = item.id
-                                    }
-                                }
+                                pageCard(item: item, index: index, document: document)
                             }
                         }
                     }
@@ -67,6 +40,11 @@ struct EditorView: View {
         .navigationTitle(viewModel.documentName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("New PDF") {
+                    closeEditor()
+                }
+            }
             ToolbarItem(placement: .topBarLeading) {
                 Button("Undo") {
                     withAnimation { viewModel.undo() }
@@ -101,6 +79,45 @@ struct EditorView: View {
         }
     }
 
+    @ViewBuilder
+    private func pageCard(item: PageItem, index: Int, document: PDFDocument) -> some View {
+        PageThumbnailView(
+            item: item,
+            pageNumber: index + 1,
+            document: document,
+            onRotate: { viewModel.rotatePage(id: item.id) },
+            onDuplicate: { viewModel.duplicatePage(id: item.id) },
+            onDelete: { viewModel.deletePage(id: item.id) }
+        )
+        .opacity(draggedPageID == item.id ? 0.5 : 1)
+        .onDrag {
+            draggedPageID = item.id
+            dragUndoRecorded = false
+            return NSItemProvider(object: item.id.uuidString as NSString)
+        }
+        .onDrop(
+            of: [UTType.text],
+            delegate: PageDropDelegate(
+                destinationIndex: index,
+                viewModel: viewModel,
+                draggedPageID: $draggedPageID,
+                dragUndoRecorded: $dragUndoRecorded
+            )
+        )
+    }
+
+    private func closeEditor() {
+        cleanupExportFile()
+        showPaywall = false
+        showShareSheet = false
+        exportError = nil
+        draggedPageID = nil
+        dragUndoRecorded = false
+        Task {
+            await viewModel.closeSession()
+        }
+    }
+
     private func handleExportTap() {
         if viewModel.shouldShowPaywallForExport() {
             showPaywall = true
@@ -124,19 +141,5 @@ struct EditorView: View {
             try? FileManager.default.removeItem(at: exportURL)
         }
         exportURL = nil
-    }
-
-    @ViewBuilder
-    private func dragPreview(for item: PageItem, pageNumber: Int, document: PDFDocument) -> some View {
-        VStack {
-            Text("Page \(pageNumber)")
-                .font(.caption.bold())
-            Image(systemName: "doc.fill")
-                .font(.largeTitle)
-        }
-        .padding()
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .onAppear { draggedPageID = item.id }
-        .onDisappear { draggedPageID = nil }
     }
 }
