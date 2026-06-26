@@ -1,10 +1,3 @@
-//
-//  pdfpagearrangerApp.swift
-//  pdfpagearranger
-//
-//  Created by Abhishek Samanta on 27.06.26.
-//
-
 import SwiftUI
 
 @main
