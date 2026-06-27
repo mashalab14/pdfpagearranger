@@ -1,4 +1,5 @@
 import PDFKit
+import PhotosUI
 import SwiftUI
 
 struct PageEditorRoute: Hashable {
@@ -6,6 +7,8 @@ struct PageEditorRoute: Hashable {
 }
 
 struct PageEditorView: View {
+    @Bindable var viewModel: PDFEditorViewModel
+
     let pageItem: PageItem
     let pageNumber: Int
     let document: PDFDocument
@@ -13,6 +16,9 @@ struct PageEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var pageImage: UIImage?
     @State private var showAddSheet = false
+    @State private var showPhotosPicker = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var selectedObjectID: UUID?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,9 +37,25 @@ struct PageEditorView: View {
                     dismiss()
                 }
             }
+            if selectedObjectID != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Delete", role: .destructive) {
+                        deleteSelectedOverlay()
+                    }
+                }
+            }
         }
         .sheet(isPresented: $showAddSheet) {
-            PageAddOptionsSheet()
+            PageAddOptionsSheet {
+                showPhotosPicker = true
+            }
+        }
+        .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotoItem, matching: .images)
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                await importPhotoItem(newItem)
+            }
         }
         .task(id: renderTaskKey) {
             await loadPageImage()
@@ -43,8 +65,15 @@ struct PageEditorView: View {
     @ViewBuilder
     private var pageContent: some View {
         if let pageImage {
-            ZoomablePageView(image: pageImage)
-                .padding()
+            PageOverlayCanvasView(
+                pageImage: pageImage,
+                objects: viewModel.overlayObjects(for: pageItem.id),
+                selectedObjectID: $selectedObjectID,
+                imageProvider: { viewModel.imageAsset(for: $0) },
+                onUpdate: { viewModel.updateOverlay($0) },
+                onDelete: { viewModel.deleteOverlay(id: $0, pageItemID: pageItem.id) }
+            )
+            .padding()
         } else {
             ProgressView("Loading page…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -73,14 +102,43 @@ struct PageEditorView: View {
         "\(pageItem.id.uuidString)-\(pageItem.rotation)"
     }
 
+    private var pageAspectRatio: CGFloat {
+        guard let page = document.page(at: pageItem.originalPageIndex) else {
+            return 8.5 / 11.0
+        }
+        let bounds = page.bounds(for: .mediaBox)
+        return bounds.width / max(bounds.height, 1)
+    }
+
     private func loadPageImage() async {
         pageImage = await PageRenderService.shared.pageImage(for: pageItem, document: document)
+    }
+
+    private func importPhotoItem(_ item: PhotosPickerItem) async {
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              let image = UIImage(data: data) else {
+            return
+        }
+
+        viewModel.addImageOverlay(
+            to: pageItem.id,
+            image: image,
+            pageAspectRatio: pageAspectRatio
+        )
+        selectedPhotoItem = nil
+    }
+
+    private func deleteSelectedOverlay() {
+        guard let selectedObjectID else { return }
+        viewModel.deleteOverlay(id: selectedObjectID, pageItemID: pageItem.id)
+        self.selectedObjectID = nil
     }
 }
 
 #Preview {
     NavigationStack {
         PageEditorView(
+            viewModel: PDFEditorViewModel(),
             pageItem: PageItem(originalPageIndex: 0),
             pageNumber: 1,
             document: PDFDocument()

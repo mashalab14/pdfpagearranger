@@ -3,12 +3,17 @@ import SwiftUI
 struct PageAddOptionsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
+    let onImageTapped: () -> Void
+
     var body: some View {
         NavigationStack {
             List {
-                addOption(icon: "textformat", title: "Text", subtitle: "Coming soon")
-                addOption(icon: "photo", title: "Image", subtitle: "Coming soon")
-                addOption(icon: "signature", title: "Signature", subtitle: "Coming soon")
+                addOption(icon: "textformat", title: "Text", subtitle: "Coming soon", isEnabled: false) {}
+                addOption(icon: "photo", title: "Image", subtitle: "Import from Photos or Files", isEnabled: true) {
+                    dismiss()
+                    onImageTapped()
+                }
+                addOption(icon: "signature", title: "Signature", subtitle: "Coming soon", isEnabled: false) {}
             }
             .navigationTitle("Add")
             .navigationBarTitleDisplayMode(.inline)
@@ -22,10 +27,14 @@ struct PageAddOptionsSheet: View {
         .presentationDragIndicator(.visible)
     }
 
-    private func addOption(icon: String, title: String, subtitle: String) -> some View {
-        Button {
-            // Placeholder — overlay tools will be added later.
-        } label: {
+    private func addOption(
+        icon: String,
+        title: String,
+        subtitle: String,
+        isEnabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.title3)
@@ -42,9 +51,10 @@ struct PageAddOptionsSheet: View {
             }
             .padding(.vertical, 4)
         }
+        .disabled(!isEnabled)
     }
 }
 
 #Preview {
-    PageAddOptionsSheet()
+    PageAddOptionsSheet(onImageTapped: {})
 }

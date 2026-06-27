@@ -13,6 +13,8 @@ final class PDFEditorViewModel {
     private(set) var errorMessage: String?
 
     private var undoStack: [EditorSnapshot] = []
+    private var pageObjectsByPage: [UUID: [PageObject]] = [:]
+    private var imageAssets: [UUID: UIImage] = [:]
     private let pdfService = PDFService()
     let proGate = ProGate()
 
@@ -37,6 +39,7 @@ final class PDFEditorViewModel {
             documentName = imported.displayName
             pages = pdfService.makeInitialPages(pageCount: imported.pageCount)
             undoStack.removeAll()
+            clearOverlays()
             await ThumbnailService.shared.clear()
         } catch {
             resetDocument()
@@ -51,6 +54,7 @@ final class PDFEditorViewModel {
         localSourceURL = nil
         undoStack.removeAll()
         errorMessage = nil
+        clearOverlays()
     }
 
     /// Clears the current session and returns the app to the import empty state.
@@ -81,6 +85,7 @@ final class PDFEditorViewModel {
         guard let index = pageIndex(for: id) else { return }
         pushUndoSnapshot()
         pages.remove(at: index)
+        removeOverlays(forPageItemID: id)
     }
 
     func rotatePage(id: UUID) {
@@ -114,6 +119,73 @@ final class PDFEditorViewModel {
 
     func shouldShowPaywallForExport() -> Bool {
         proGate.requiresPaywall(pageCount: pages.count)
+    }
+
+    // MARK: - Page overlays
+
+    func overlayObjects(for pageItemID: UUID) -> [PageObject] {
+        pageObjectsByPage[pageItemID] ?? []
+    }
+
+    func imageAsset(for assetID: UUID) -> UIImage? {
+        imageAssets[assetID]
+    }
+
+    func addImageOverlay(to pageItemID: UUID, image: UIImage, pageAspectRatio: CGFloat) {
+        let assetID = UUID()
+        imageAssets[assetID] = image
+
+        let imageAspect = image.size.width / max(image.size.height, 1)
+        let widthFraction: CGFloat = 0.35
+        let heightFraction = min((widthFraction / imageAspect) / max(pageAspectRatio, 0.01), 0.6)
+
+        let nextZIndex = (pageObjectsByPage[pageItemID]?.map(\.zIndex).max() ?? -1) + 1
+        let object = PageObject(
+            pageItemID: pageItemID,
+            type: .image,
+            position: CGPoint(x: 0.5, y: 0.5),
+            size: CGSize(width: widthFraction, height: heightFraction),
+            zIndex: nextZIndex,
+            imageAssetID: assetID
+        )
+
+        pageObjectsByPage[pageItemID, default: []].append(object)
+    }
+
+    func updateOverlay(_ object: PageObject) {
+        guard var objects = pageObjectsByPage[object.pageItemID],
+              let index = objects.firstIndex(where: { $0.id == object.id }) else {
+            return
+        }
+        objects[index] = object
+        pageObjectsByPage[object.pageItemID] = objects
+    }
+
+    func deleteOverlay(id: UUID, pageItemID: UUID) {
+        guard var objects = pageObjectsByPage[pageItemID] else { return }
+
+        if let object = objects.first(where: { $0.id == id }),
+           let assetID = object.imageAssetID {
+            imageAssets.removeValue(forKey: assetID)
+        }
+
+        objects.removeAll { $0.id == id }
+        pageObjectsByPage[pageItemID] = objects
+    }
+
+    private func removeOverlays(forPageItemID pageItemID: UUID) {
+        let objects = pageObjectsByPage[pageItemID] ?? []
+        for object in objects {
+            if let assetID = object.imageAssetID {
+                imageAssets.removeValue(forKey: assetID)
+            }
+        }
+        pageObjectsByPage.removeValue(forKey: pageItemID)
+    }
+
+    private func clearOverlays() {
+        pageObjectsByPage.removeAll()
+        imageAssets.removeAll()
     }
 
     private func pushUndoSnapshot() {

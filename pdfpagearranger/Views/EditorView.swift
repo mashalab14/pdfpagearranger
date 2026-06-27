@@ -83,6 +83,7 @@ struct EditorView: View {
                let index = viewModel.pageIndex(for: route.pageItemID),
                let item = viewModel.pages.first(where: { $0.id == route.pageItemID }) {
                 PageEditorView(
+                    viewModel: viewModel,
                     pageItem: item,
                     pageNumber: index + 1,
                     document: document
