@@ -4,6 +4,7 @@ struct ImageOverlayObjectView: View {
     let object: PageObject
     let image: UIImage
     let pageSize: CGSize
+    let canvasScale: CGFloat
     let isSelected: Bool
     let onSelect: () -> Void
     let onUpdate: (PageObject) -> Void
@@ -59,7 +60,7 @@ struct ImageOverlayObjectView: View {
             }
         }
         .position(displayPosition)
-        .gesture(dragGesture)
+        .gesture(isSelected ? dragGesture : nil)
         .highPriorityGesture(isSelected ? resizeGesture : nil)
         .onTapGesture {
             onSelect()
@@ -80,12 +81,17 @@ struct ImageOverlayObjectView: View {
     private var dragGesture: some Gesture {
         DragGesture()
             .onChanged { value in
-                dragOffset = value.translation
+                let adjusted = canvasScale > 0 ? canvasScale : 1
+                dragOffset = CGSize(
+                    width: value.translation.width / adjusted,
+                    height: value.translation.height / adjusted
+                )
             }
             .onEnded { value in
+                let adjusted = canvasScale > 0 ? canvasScale : 1
                 var updated = object
-                let newX = (object.position.x * pageSize.width + value.translation.width) / pageSize.width
-                let newY = (object.position.y * pageSize.height + value.translation.height) / pageSize.height
+                let newX = (object.position.x * pageSize.width + value.translation.width / adjusted) / pageSize.width
+                let newY = (object.position.y * pageSize.height + value.translation.height / adjusted) / pageSize.height
                 updated.position = CGPoint(
                     x: clamp(newX, min: 0, max: 1),
                     y: clamp(newY, min: 0, max: 1)

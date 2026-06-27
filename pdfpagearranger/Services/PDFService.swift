@@ -76,15 +76,32 @@ final class PDFService {
         (0..<pageCount).map { PageItem(originalPageIndex: $0) }
     }
 
-    func exportPDF(pages: [PageItem], sourceDocument: PDFDocument, outputName: String) throws -> URL {
+    func exportPDF(
+        pages: [PageItem],
+        sourceDocument: PDFDocument,
+        outputName: String,
+        overlaysByPage: [UUID: [PageObject]] = [:],
+        imageAssets: [UUID: UIImage] = [:]
+    ) throws -> URL {
         let outputDocument = PDFDocument()
 
         for item in pages {
-            guard let sourcePage = sourceDocument.page(at: item.originalPageIndex)?.copy() as? PDFPage else {
-                continue
+            let overlays = overlaysByPage[item.id] ?? []
+
+            if overlays.isEmpty {
+                guard let sourcePage = sourceDocument.page(at: item.originalPageIndex)?.copy() as? PDFPage else {
+                    continue
+                }
+                sourcePage.rotation = item.rotation
+                outputDocument.insert(sourcePage, at: outputDocument.pageCount)
+            } else if let flattenedPage = flattenedPage(
+                for: item,
+                sourceDocument: sourceDocument,
+                overlays: overlays,
+                imageAssets: imageAssets
+            ) {
+                outputDocument.insert(flattenedPage, at: outputDocument.pageCount)
             }
-            sourcePage.rotation = item.rotation
-            outputDocument.insert(sourcePage, at: outputDocument.pageCount)
         }
 
         guard outputDocument.pageCount > 0 else {
@@ -106,6 +123,40 @@ final class PDFService {
         }
 
         return outputURL
+    }
+
+    private func flattenedPage(
+        for item: PageItem,
+        sourceDocument: PDFDocument,
+        overlays: [PageObject],
+        imageAssets: [UUID: UIImage]
+    ) -> PDFPage? {
+        guard let sourcePage = sourceDocument.page(at: item.originalPageIndex),
+              let pageCopy = sourcePage.copy() as? PDFPage else {
+            return nil
+        }
+
+        pageCopy.rotation = item.rotation
+        let bounds = pageCopy.bounds(for: .mediaBox)
+        guard bounds.width > 0, bounds.height > 0 else { return nil }
+
+        let exportDimension = max(bounds.width, bounds.height) * 2
+        guard let baseImage = PDFPreviewRenderer.image(
+            from: pageCopy,
+            rotation: item.rotation,
+            maxDimension: exportDimension,
+            maxScale: 4.0
+        ) else {
+            return nil
+        }
+
+        let composited = OverlayCompositor.composite(
+            baseImage: baseImage,
+            objects: overlays,
+            images: imageAssets
+        )
+
+        return PDFPage(image: composited)
     }
 
     func page(at index: Int, in document: PDFDocument) -> PDFPage? {

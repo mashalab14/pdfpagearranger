@@ -5,6 +5,9 @@ struct PageThumbnailView: View {
     let item: PageItem
     let pageNumber: Int
     let document: PDFDocument
+    let overlays: [PageObject]
+    let overlayImages: [UUID: UIImage]
+    let overlayRevision: Int
     let onRotate: () -> Void
     let onDuplicate: () -> Void
     let onDelete: () -> Void
@@ -49,7 +52,7 @@ struct PageThumbnailView: View {
     }
 
     private var taskKey: String {
-        "\(item.id.uuidString)-\(item.rotation)"
+        "\(item.id.uuidString)-\(item.rotation)-\(overlayRevision)"
     }
 
     @ViewBuilder
@@ -81,6 +84,12 @@ struct PageThumbnailView: View {
     }
 
     private func loadThumbnail() async {
-        thumbnail = await ThumbnailService.shared.thumbnail(for: item, document: document)
+        thumbnail = await ThumbnailService.shared.thumbnail(
+            for: item,
+            document: document,
+            overlays: overlays,
+            overlayImages: overlayImages,
+            revision: overlayRevision
+        )
     }
 }

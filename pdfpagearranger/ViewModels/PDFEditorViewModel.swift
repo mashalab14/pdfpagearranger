@@ -1,6 +1,7 @@
 import Foundation
 import PDFKit
 import SwiftUI
+import UIKit
 
 @Observable
 @MainActor
@@ -15,6 +16,7 @@ final class PDFEditorViewModel {
     private var undoStack: [EditorSnapshot] = []
     private var pageObjectsByPage: [UUID: [PageObject]] = [:]
     private var imageAssets: [UUID: UIImage] = [:]
+    private var overlayRevisions: [UUID: Int] = [:]
     private let pdfService = PDFService()
     let proGate = ProGate()
 
@@ -113,7 +115,9 @@ final class PDFEditorViewModel {
         return try pdfService.exportPDF(
             pages: pages,
             sourceDocument: sourceDocument,
-            outputName: documentName.isEmpty ? "document" : documentName
+            outputName: documentName.isEmpty ? "document" : documentName,
+            overlaysByPage: pageObjectsByPage,
+            imageAssets: imageAssets
         )
     }
 
@@ -125,6 +129,21 @@ final class PDFEditorViewModel {
 
     func overlayObjects(for pageItemID: UUID) -> [PageObject] {
         pageObjectsByPage[pageItemID] ?? []
+    }
+
+    func overlayRevision(for pageItemID: UUID) -> Int {
+        overlayRevisions[pageItemID] ?? 0
+    }
+
+    func overlayImages(for pageItemID: UUID) -> [UUID: UIImage] {
+        let objects = overlayObjects(for: pageItemID)
+        var images: [UUID: UIImage] = [:]
+        for object in objects {
+            if let assetID = object.imageAssetID, let image = imageAssets[assetID] {
+                images[assetID] = image
+            }
+        }
+        return images
     }
 
     func imageAsset(for assetID: UUID) -> UIImage? {
@@ -150,6 +169,7 @@ final class PDFEditorViewModel {
         )
 
         pageObjectsByPage[pageItemID, default: []].append(object)
+        bumpOverlayRevision(for: pageItemID)
     }
 
     func updateOverlay(_ object: PageObject) {
@@ -159,6 +179,7 @@ final class PDFEditorViewModel {
         }
         objects[index] = object
         pageObjectsByPage[object.pageItemID] = objects
+        bumpOverlayRevision(for: object.pageItemID)
     }
 
     func deleteOverlay(id: UUID, pageItemID: UUID) {
@@ -171,6 +192,11 @@ final class PDFEditorViewModel {
 
         objects.removeAll { $0.id == id }
         pageObjectsByPage[pageItemID] = objects
+        bumpOverlayRevision(for: pageItemID)
+    }
+
+    private func bumpOverlayRevision(for pageItemID: UUID) {
+        overlayRevisions[pageItemID, default: 0] += 1
     }
 
     private func removeOverlays(forPageItemID pageItemID: UUID) {
@@ -181,11 +207,13 @@ final class PDFEditorViewModel {
             }
         }
         pageObjectsByPage.removeValue(forKey: pageItemID)
+        overlayRevisions.removeValue(forKey: pageItemID)
     }
 
     private func clearOverlays() {
         pageObjectsByPage.removeAll()
         imageAssets.removeAll()
+        overlayRevisions.removeAll()
     }
 
     private func pushUndoSnapshot() {
