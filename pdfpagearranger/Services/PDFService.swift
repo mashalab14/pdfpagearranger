@@ -1,5 +1,6 @@
 import Foundation
 import PDFKit
+import UIKit
 import UniformTypeIdentifiers
 
 enum PDFServiceError: LocalizedError {
@@ -94,13 +95,13 @@ final class PDFService {
                 }
                 sourcePage.rotation = item.rotation
                 outputDocument.insert(sourcePage, at: outputDocument.pageCount)
-            } else if let flattenedPage = flattenedPage(
+            } else if let overlayPage = pageWithOverlays(
                 for: item,
                 sourceDocument: sourceDocument,
                 overlays: overlays,
                 imageAssets: imageAssets
             ) {
-                outputDocument.insert(flattenedPage, at: outputDocument.pageCount)
+                outputDocument.insert(overlayPage, at: outputDocument.pageCount)
             }
         }
 
@@ -125,38 +126,48 @@ final class PDFService {
         return outputURL
     }
 
-    private func flattenedPage(
+    private func pageWithOverlays(
         for item: PageItem,
         sourceDocument: PDFDocument,
         overlays: [PageObject],
         imageAssets: [UUID: UIImage]
     ) -> PDFPage? {
-        guard let sourcePage = sourceDocument.page(at: item.originalPageIndex),
-              let pageCopy = sourcePage.copy() as? PDFPage else {
+        guard let sourcePage = sourceDocument.page(at: item.originalPageIndex)?.copy() as? PDFPage else {
             return nil
         }
 
-        pageCopy.rotation = item.rotation
-        let bounds = pageCopy.bounds(for: .mediaBox)
-        guard bounds.width > 0, bounds.height > 0 else { return nil }
+        sourcePage.rotation = item.rotation
+        var mediaBox = sourcePage.bounds(for: .mediaBox)
+        guard mediaBox.width > 0, mediaBox.height > 0 else { return nil }
 
-        let exportDimension = max(bounds.width, bounds.height) * 2
-        guard let baseImage = PDFPreviewRenderer.image(
-            from: pageCopy,
-            rotation: item.rotation,
-            maxDimension: exportDimension,
-            maxScale: 4.0
-        ) else {
+        let data = NSMutableData()
+        guard let consumer = CGDataConsumer(data: data as CFMutableData),
+              let context = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
             return nil
         }
 
-        let composited = OverlayCompositor.composite(
-            baseImage: baseImage,
-            objects: overlays,
-            images: imageAssets
+        context.beginPDFPage(nil)
+
+        // Draw original page content as vector PDF (preserves selectable text).
+        sourcePage.draw(with: .mediaBox, to: context)
+
+        // Draw image overlays on top in mapped PDF coordinates.
+        OverlayPDFExporter.drawOverlays(
+            overlays,
+            images: imageAssets,
+            in: mediaBox,
+            context: context
         )
 
-        return PDFPage(image: composited)
+        context.endPDFPage()
+        context.closePDF()
+
+        guard let document = PDFDocument(data: data as Data),
+              let page = document.page(at: 0) else {
+            return nil
+        }
+
+        return page
     }
 
     func page(at index: Int, in document: PDFDocument) -> PDFPage? {

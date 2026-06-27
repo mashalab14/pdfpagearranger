@@ -1,7 +1,7 @@
 import PDFKit
 import UIKit
 
-/// Renders PDF pages for on-screen preview only. Export uses PDFKit page copying directly.
+/// Renders PDF pages for on-screen preview only. Export draws vector page content via PDFPage.draw.
 enum PDFPreviewRenderer {
     static func image(
         from page: PDFPage,
