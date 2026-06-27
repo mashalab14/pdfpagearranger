@@ -8,6 +8,7 @@ struct PageThumbnailView: View {
     let onRotate: () -> Void
     let onDuplicate: () -> Void
     let onDelete: () -> Void
+    let onTap: () -> Void
 
     @State private var thumbnail: UIImage?
 
@@ -22,6 +23,10 @@ struct PageThumbnailView: View {
                     .overlay {
                         RoundedRectangle(cornerRadius: 10)
                             .strokeBorder(Color(.separator), lineWidth: 0.5)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        onTap()
                     }
 
                 Text("\(pageNumber)")

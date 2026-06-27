@@ -11,6 +11,7 @@ struct EditorView: View {
     @State private var exportError: String?
     @State private var draggedPageID: UUID?
     @State private var dragUndoRecorded = false
+    @State private var selectedPageRoute: PageEditorRoute?
 
     private let gridColumns = [
         GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)
@@ -77,6 +78,17 @@ struct EditorView: View {
         } message: {
             Text(exportError ?? "")
         }
+        .navigationDestination(item: $selectedPageRoute) { route in
+            if let document = viewModel.sourceDocument,
+               let index = viewModel.pageIndex(for: route.pageItemID),
+               let item = viewModel.pages.first(where: { $0.id == route.pageItemID }) {
+                PageEditorView(
+                    pageItem: item,
+                    pageNumber: index + 1,
+                    document: document
+                )
+            }
+        }
     }
 
     @ViewBuilder
@@ -87,7 +99,10 @@ struct EditorView: View {
             document: document,
             onRotate: { viewModel.rotatePage(id: item.id) },
             onDuplicate: { viewModel.duplicatePage(id: item.id) },
-            onDelete: { viewModel.deletePage(id: item.id) }
+            onDelete: { viewModel.deletePage(id: item.id) },
+            onTap: {
+                selectedPageRoute = PageEditorRoute(pageItemID: item.id)
+            }
         )
         .opacity(draggedPageID == item.id ? 0.5 : 1)
         .onDrag {
