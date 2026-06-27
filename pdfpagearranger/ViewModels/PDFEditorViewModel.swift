@@ -197,7 +197,7 @@ final class PDFEditorViewModel {
             image: image,
             type: .signature,
             pageAspectRatio: pageAspectRatio,
-            widthFraction: 0.45
+            widthFraction: 0.30
         )
     }
 

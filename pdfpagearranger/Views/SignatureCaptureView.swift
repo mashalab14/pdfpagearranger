@@ -68,32 +68,54 @@ struct SignatureCaptureView: View {
     }
 
     private var signatureColorPicker: some View {
-        HStack(spacing: 20) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("Color")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            ForEach(SignatureInkColor.allCases) { color in
-                Button {
-                    selectedColor = color
-                } label: {
-                    Circle()
-                        .fill(color.displayColor)
-                        .frame(width: 28, height: 28)
-                        .overlay {
-                            Circle()
-                                .strokeBorder(
-                                    selectedColor == color ? Color.accentColor : Color(.separator),
-                                    lineWidth: selectedColor == color ? 2.5 : 1
-                                )
-                        }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    ForEach(SignatureInkColor.allCases) { color in
+                        colorSwatch(for: color)
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(color.rawValue)
-                .accessibilityIdentifier(color.accessibilityIdentifier)
+                .padding(.vertical, 4)
             }
+        }
+    }
 
-            Spacer()
+    private func colorSwatch(for color: SignatureInkColor) -> some View {
+        Button {
+            selectedColor = color
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(color.displayColor)
+                    .frame(width: 30, height: 30)
+
+                if selectedColor == color {
+                    Circle()
+                        .strokeBorder(Color.accentColor, lineWidth: 3)
+                        .frame(width: 38, height: 38)
+
+                    Image(systemName: "checkmark")
+                        .font(.caption2.bold())
+                        .foregroundStyle(checkmarkColor(for: color))
+                }
+            }
+            .frame(width: 40, height: 40)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(color.rawValue)
+        .accessibilityIdentifier(color.accessibilityIdentifier)
+    }
+
+    private func checkmarkColor(for color: SignatureInkColor) -> Color {
+        switch color {
+        case .black, .darkGray, .blue, .purple:
+            return .white
+        case .red, .green:
+            return .white
         }
     }
 

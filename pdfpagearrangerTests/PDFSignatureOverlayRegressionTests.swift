@@ -209,4 +209,61 @@ final class PDFSignatureOverlayRegressionTests: XCTestCase {
         tempURLs.append(exportURL)
         try ExportAssertions.assertPageCount(1, in: exportURL)
     }
+
+    func testSignatureInitialSizeIsReasonable() throws {
+        let page = try XCTUnwrap(viewModel.pages.first)
+        let drawing = SignatureTestHelpers.makeSampleDrawing()
+        let image = try XCTUnwrap(SignatureRenderer.image(from: drawing))
+
+        viewModel.addSignatureOverlay(
+            to: page.id,
+            image: image,
+            pageAspectRatio: 612.0 / 792.0
+        )
+
+        let signature = try XCTUnwrap(viewModel.overlayObjects(for: page.id).first)
+        XCTAssertEqual(signature.position.x, 0.5, accuracy: 0.001)
+        XCTAssertEqual(signature.position.y, 0.5, accuracy: 0.001)
+        XCTAssertEqual(signature.size.width, 0.30, accuracy: 0.001)
+        XCTAssertLessThanOrEqual(signature.size.height, 0.20)
+    }
+
+    func testRotatePageRotatesSignatureWithPage() throws {
+        let page = try XCTUnwrap(viewModel.pages.first)
+        var signature = OverlayTestFactory.seedSignature(on: viewModel, pageItemID: page.id)
+        signature.position = CGPoint(x: 0.9, y: 0.3)
+        viewModel.updateOverlay(signature)
+
+        let before = try XCTUnwrap(viewModel.overlayObjects(for: page.id).first)
+        let displayBefore = before.displayGeometry(pageRotation: page.rotation)
+
+        viewModel.rotatePage(id: page.id)
+
+        let rotatedPage = try XCTUnwrap(viewModel.pages.first(where: { $0.id == page.id }))
+        let after = try XCTUnwrap(viewModel.overlayObjects(for: rotatedPage.id).first)
+        let displayAfter = after.displayGeometry(pageRotation: rotatedPage.rotation)
+
+        XCTAssertEqual(after.position, before.position)
+        XCTAssertNotEqual(displayAfter.position.x, displayBefore.position.x, accuracy: 0.001)
+        XCTAssertNotEqual(displayAfter.position.y, displayBefore.position.y, accuracy: 0.001)
+        XCTAssertEqual(rotatedPage.rotation, 90)
+    }
+
+    func testMoveResizeDeleteSignatureStillWorks() throws {
+        let page = try XCTUnwrap(viewModel.pages.first)
+        var signature = OverlayTestFactory.seedSignature(on: viewModel, pageItemID: page.id)
+
+        signature.position = CGPoint(x: 0.25, y: 0.75)
+        viewModel.updateOverlay(signature)
+        signature = try XCTUnwrap(viewModel.overlayObjects(for: page.id).first)
+        XCTAssertEqual(signature.position.x, 0.25, accuracy: 0.001)
+
+        signature.size = CGSize(width: 0.4, height: 0.12)
+        viewModel.updateOverlay(signature)
+        signature = try XCTUnwrap(viewModel.overlayObjects(for: page.id).first)
+        XCTAssertEqual(signature.size.width, 0.4, accuracy: 0.001)
+
+        viewModel.deleteOverlay(id: signature.id, pageItemID: page.id)
+        XCTAssertEqual(viewModel.overlayObjects(for: page.id).count, 0)
+    }
 }

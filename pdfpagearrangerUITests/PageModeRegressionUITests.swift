@@ -39,5 +39,7 @@ final class PageModeRegressionUITests: PDFPagesUITestCase {
         XCTAssertTrue(useSignatureButton.exists)
         XCTAssertFalse(useSignatureButton.isEnabled)
         XCTAssertTrue(app.buttons["signatureColor_black"].exists)
+        XCTAssertTrue(app.buttons["signatureColor_red"].exists)
+        XCTAssertTrue(app.buttons["signatureColor_purple"].exists)
     }
 }

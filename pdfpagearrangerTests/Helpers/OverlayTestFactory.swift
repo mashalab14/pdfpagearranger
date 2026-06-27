@@ -28,7 +28,7 @@ enum OverlayTestFactory {
         pageItemID: UUID,
         assetID: UUID = UUID(),
         position: CGPoint = CGPoint(x: 0.5, y: 0.5),
-        size: CGSize = CGSize(width: 0.45, height: 0.12),
+        size: CGSize = CGSize(width: 0.30, height: 0.12),
         rotation: CGFloat = 0,
         opacity: CGFloat = 1,
         zIndex: Int = 0
