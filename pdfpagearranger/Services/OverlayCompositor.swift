@@ -5,7 +5,8 @@ enum OverlayCompositor {
     static func composite(
         baseImage: UIImage,
         objects: [PageObject],
-        images: [UUID: UIImage]
+        images: [UUID: UIImage],
+        pageRotation: Int = 0
     ) -> UIImage {
         guard !objects.isEmpty else { return baseImage }
 
@@ -22,9 +23,11 @@ enum OverlayCompositor {
                     continue
                 }
 
+                let geometry = object.displayGeometry(pageRotation: pageRotation)
                 drawOverlay(
                     overlayImage,
-                    object: object,
+                    geometry: geometry,
+                    opacity: object.opacity,
                     pageSize: pageSize,
                     in: context.cgContext
                 )
@@ -34,21 +37,22 @@ enum OverlayCompositor {
 
     private static func drawOverlay(
         _ image: UIImage,
-        object: PageObject,
+        geometry: OverlayPageGeometry.Transformed,
+        opacity: CGFloat,
         pageSize: CGSize,
         in context: CGContext
     ) {
-        let width = object.size.width * pageSize.width
-        let height = object.size.height * pageSize.height
-        let centerX = object.position.x * pageSize.width
-        let centerY = object.position.y * pageSize.height
+        let width = geometry.size.width * pageSize.width
+        let height = geometry.size.height * pageSize.height
+        let centerX = geometry.position.x * pageSize.width
+        let centerY = geometry.position.y * pageSize.height
 
         context.saveGState()
-        context.setAlpha(object.opacity)
+        context.setAlpha(opacity)
 
-        if object.rotation != 0 {
+        if geometry.rotation != 0 {
             context.translateBy(x: centerX, y: centerY)
-            context.rotate(by: object.rotation * .pi / 180)
+            context.rotate(by: geometry.rotation * .pi / 180)
             context.translateBy(x: -width / 2, y: -height / 2)
             image.draw(in: CGRect(x: 0, y: 0, width: width, height: height))
         } else {

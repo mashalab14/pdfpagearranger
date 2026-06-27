@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ImageOverlayObjectView: View {
     let object: PageObject
+    let pageRotation: Int
     let image: UIImage
     let pageSize: CGSize
     let canvasScale: CGFloat
@@ -14,17 +15,21 @@ struct ImageOverlayObjectView: View {
     @State private var resizeScale: CGFloat = 1
     @State private var steadyResizeScale: CGFloat = 1
 
+    private var displayGeometry: OverlayPageGeometry.Transformed {
+        object.displayGeometry(pageRotation: pageRotation)
+    }
+
     private var displaySize: CGSize {
         CGSize(
-            width: object.size.width * pageSize.width * resizeScale,
-            height: object.size.height * pageSize.height * resizeScale
+            width: displayGeometry.size.width * pageSize.width * resizeScale,
+            height: displayGeometry.size.height * pageSize.height * resizeScale
         )
     }
 
     private var displayPosition: CGPoint {
         CGPoint(
-            x: object.position.x * pageSize.width + dragOffset.width,
-            y: object.position.y * pageSize.height + dragOffset.height
+            x: displayGeometry.position.x * pageSize.width + dragOffset.width,
+            y: displayGeometry.position.y * pageSize.height + dragOffset.height
         )
     }
 
@@ -35,7 +40,7 @@ struct ImageOverlayObjectView: View {
                 .scaledToFit()
                 .frame(width: displaySize.width, height: displaySize.height)
                 .opacity(object.opacity)
-                .rotationEffect(.degrees(object.rotation))
+                .rotationEffect(.degrees(displayGeometry.rotation))
                 .overlay {
                     if isSelected {
                         RoundedRectangle(cornerRadius: 4)
@@ -89,13 +94,22 @@ struct ImageOverlayObjectView: View {
             }
             .onEnded { value in
                 let adjusted = canvasScale > 0 ? canvasScale : 1
-                var updated = object
-                let newX = (object.position.x * pageSize.width + value.translation.width / adjusted) / pageSize.width
-                let newY = (object.position.y * pageSize.height + value.translation.height / adjusted) / pageSize.height
-                updated.position = CGPoint(
+                let newX = (displayGeometry.position.x * pageSize.width + value.translation.width / adjusted) / pageSize.width
+                let newY = (displayGeometry.position.y * pageSize.height + value.translation.height / adjusted) / pageSize.height
+                let displayPoint = CGPoint(
                     x: clamp(newX, min: 0, max: 1),
                     y: clamp(newY, min: 0, max: 1)
                 )
+                let stored = OverlayPageGeometry.storageTransform(
+                    displayPosition: displayPoint,
+                    displaySize: displayGeometry.size,
+                    objectRotation: displayGeometry.rotation,
+                    pageRotation: pageRotation
+                )
+                var updated = object
+                updated.position = stored.position
+                updated.size = stored.size
+                updated.rotation = stored.rotation
                 dragOffset = .zero
                 onUpdate(updated)
             }
@@ -108,11 +122,20 @@ struct ImageOverlayObjectView: View {
             }
             .onEnded { value in
                 let finalScale = max(steadyResizeScale * value, 0.15)
-                var updated = object
-                updated.size = CGSize(
-                    width: clamp(object.size.width * finalScale, min: 0.08, max: 0.95),
-                    height: clamp(object.size.height * finalScale, min: 0.08, max: 0.95)
+                let resizedDisplaySize = CGSize(
+                    width: clamp(displayGeometry.size.width * finalScale, min: 0.08, max: 0.95),
+                    height: clamp(displayGeometry.size.height * finalScale, min: 0.08, max: 0.95)
                 )
+                let stored = OverlayPageGeometry.storageTransform(
+                    displayPosition: displayGeometry.position,
+                    displaySize: resizedDisplaySize,
+                    objectRotation: displayGeometry.rotation,
+                    pageRotation: pageRotation
+                )
+                var updated = object
+                updated.position = stored.position
+                updated.size = stored.size
+                updated.rotation = stored.rotation
                 resizeScale = 1
                 steadyResizeScale = 1
                 onUpdate(updated)

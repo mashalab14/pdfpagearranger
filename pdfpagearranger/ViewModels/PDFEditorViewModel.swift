@@ -120,6 +120,7 @@ final class PDFEditorViewModel {
         guard let index = pageIndex(for: id) else { return }
         pushUndoSnapshot()
         pages[index] = pages[index].rotated()
+        bumpOverlayRevision(for: id)
     }
 
     func duplicatePage(id: UUID) {

@@ -156,6 +156,7 @@ final class PDFService {
             overlays,
             images: imageAssets,
             in: mediaBox,
+            pageRotation: item.rotation,
             context: context
         )
 

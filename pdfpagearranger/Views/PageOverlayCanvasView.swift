@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PageOverlayCanvasView: View {
     let pageImage: UIImage
+    let pageRotation: Int
     let objects: [PageObject]
     @Binding var selectedObjectID: UUID?
     let imageProvider: (UUID) -> UIImage?
@@ -59,6 +60,7 @@ struct PageOverlayCanvasView: View {
                    let overlayImage = imageProvider(assetID) {
                     ImageOverlayObjectView(
                         object: object,
+                        pageRotation: pageRotation,
                         image: overlayImage,
                         pageSize: fitSize,
                         canvasScale: scale,

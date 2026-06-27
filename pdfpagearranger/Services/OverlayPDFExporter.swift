@@ -7,8 +7,11 @@ enum OverlayPDFExporter {
         _ objects: [PageObject],
         images: [UUID: UIImage],
         in pageBounds: CGRect,
+        pageRotation: Int,
         context: CGContext
     ) {
+        let displaySize = OverlayPageGeometry.displaySize(for: pageRotation, mediaBox: pageBounds)
+
         for object in objects.sorted(by: { $0.zIndex < $1.zIndex }) {
             guard object.type == .image,
                   let assetID = object.imageAssetID,
@@ -17,28 +20,38 @@ enum OverlayPDFExporter {
                 continue
             }
 
-            drawOverlay(cgImage, object: object, pageBounds: pageBounds, in: context)
+            let geometry = object.displayGeometry(pageRotation: pageRotation)
+            drawOverlay(
+                cgImage,
+                geometry: geometry,
+                opacity: object.opacity,
+                displaySize: displaySize,
+                pageBounds: pageBounds,
+                in: context
+            )
         }
     }
 
     private static func drawOverlay(
         _ image: CGImage,
-        object: PageObject,
+        geometry: OverlayPageGeometry.Transformed,
+        opacity: CGFloat,
+        displaySize: CGSize,
         pageBounds: CGRect,
         in context: CGContext
     ) {
-        let width = object.size.width * pageBounds.width
-        let height = object.size.height * pageBounds.height
-        let centerX = pageBounds.minX + object.position.x * pageBounds.width
+        let width = geometry.size.width * displaySize.width
+        let height = geometry.size.height * displaySize.height
+        let centerX = pageBounds.minX + geometry.position.x * displaySize.width
         // Page Mode uses a top-left origin; PDF uses bottom-left.
-        let centerY = pageBounds.maxY - object.position.y * pageBounds.height
+        let centerY = pageBounds.maxY - geometry.position.y * displaySize.height
 
         context.saveGState()
-        context.setAlpha(object.opacity)
+        context.setAlpha(opacity)
 
-        if object.rotation != 0 {
+        if geometry.rotation != 0 {
             context.translateBy(x: centerX, y: centerY)
-            context.rotate(by: -object.rotation * .pi / 180)
+            context.rotate(by: -geometry.rotation * .pi / 180)
             drawImage(image, in: CGRect(x: -width / 2, y: -height / 2, width: width, height: height), context: context)
         } else {
             drawImage(

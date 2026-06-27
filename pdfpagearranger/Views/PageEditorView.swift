@@ -69,6 +69,7 @@ struct PageEditorView: View {
         if let pageImage {
             PageOverlayCanvasView(
                 pageImage: pageImage,
+                pageRotation: pageItem.rotation,
                 objects: viewModel.overlayObjects(for: pageItem.id),
                 selectedObjectID: $selectedObjectID,
                 imageProvider: { viewModel.imageAsset(for: $0) },

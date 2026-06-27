@@ -71,7 +71,8 @@ actor ThumbnailService {
             return OverlayCompositor.composite(
                 baseImage: baseImage,
                 objects: overlays,
-                images: overlayImages
+                images: overlayImages,
+                pageRotation: rotation
             )
         }.value
     }
