@@ -35,6 +35,9 @@ final class PageModeRegressionUITests: PDFPagesUITestCase {
 
         XCTAssertTrue(app.descendants(matching: .any)["signatureCaptureView"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["signatureClearButton"].exists)
-        XCTAssertTrue(app.buttons["signatureUseButton"].exists)
+        let useSignatureButton = app.buttons["signatureUseButton"]
+        XCTAssertTrue(useSignatureButton.exists)
+        XCTAssertFalse(useSignatureButton.isEnabled)
+        XCTAssertTrue(app.buttons["signatureColor_black"].exists)
     }
 }

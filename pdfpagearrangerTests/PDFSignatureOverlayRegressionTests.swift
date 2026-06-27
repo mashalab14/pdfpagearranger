@@ -154,6 +154,24 @@ final class PDFSignatureOverlayRegressionTests: XCTestCase {
         XCTAssertNotNil(PDFDocument(url: exportURL)?.page(at: 0))
     }
 
+    func testExportIncludesVisibleSignatureFromRenderer() throws {
+        let page = try XCTUnwrap(viewModel.pages.first)
+        let drawing = SignatureTestHelpers.makeSampleDrawing(color: SignatureInkColor.black.uiColor)
+        let image = try XCTUnwrap(SignatureRenderer.image(from: drawing))
+        XCTAssertTrue(SignatureTestHelpers.imageHasInkPixels(image))
+
+        viewModel.addSignatureOverlay(
+            to: page.id,
+            image: image,
+            pageAspectRatio: 612.0 / 792.0
+        )
+
+        let exportURL = try viewModel.exportPDF()
+        tempURLs.append(exportURL)
+        try ExportAssertions.assertPageCount(1, in: exportURL)
+        try ExportAssertions.assertExportDoesNotUseRasterizedPageInitializer()
+    }
+
     func testExportWithSignaturePreservesSelectableText() async throws {
         let expectedText = "SelectableExportText"
         let sourceURL = try PDFTestFactory.writeTextPDF(named: "SignatureText", text: expectedText)
