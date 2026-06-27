@@ -24,6 +24,7 @@ struct SignatureCaptureView: View {
                     .overlay {
                         RoundedRectangle(cornerRadius: 12)
                             .strokeBorder(Color(.separator), lineWidth: 1)
+                            .allowsHitTesting(false)
                     }
                     .padding(.horizontal)
                     .accessibilityIdentifier("signatureCaptureView")
