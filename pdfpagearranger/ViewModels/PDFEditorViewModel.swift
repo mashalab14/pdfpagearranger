@@ -101,11 +101,15 @@ final class PDFEditorViewModel {
         pushUndoSnapshot()
         let duplicate = pages[index].duplicated()
         pages.insert(duplicate, at: index + 1)
+        copyOverlays(fromPageItemID: id, toPageItemID: duplicate.id)
     }
 
     func undo() {
         guard let snapshot = undoStack.popLast() else { return }
         pages = snapshot.pages
+        pageObjectsByPage = snapshot.pageObjectsByPage
+        overlayRevisions = snapshot.overlayRevisions
+        pruneUnreferencedImageAssets()
     }
 
     func exportPDF() throws -> URL {
@@ -186,7 +190,8 @@ final class PDFEditorViewModel {
         guard var objects = pageObjectsByPage[pageItemID] else { return }
 
         if let object = objects.first(where: { $0.id == id }),
-           let assetID = object.imageAssetID {
+           let assetID = object.imageAssetID,
+           !isImageAssetReferenced(assetID, excludingObjectID: id) {
             imageAssets.removeValue(forKey: assetID)
         }
 
@@ -199,15 +204,56 @@ final class PDFEditorViewModel {
         overlayRevisions[pageItemID, default: 0] += 1
     }
 
+    private func copyOverlays(fromPageItemID sourceID: UUID, toPageItemID destinationID: UUID) {
+        let sourceOverlays = pageObjectsByPage[sourceID] ?? []
+        guard !sourceOverlays.isEmpty else { return }
+
+        let copiedOverlays = sourceOverlays.map { overlay in
+            PageObject(
+                pageItemID: destinationID,
+                type: overlay.type,
+                position: overlay.position,
+                size: overlay.size,
+                rotation: overlay.rotation,
+                opacity: overlay.opacity,
+                zIndex: overlay.zIndex,
+                imageAssetID: overlay.imageAssetID
+            )
+        }
+
+        pageObjectsByPage[destinationID] = copiedOverlays
+        bumpOverlayRevision(for: destinationID)
+    }
+
     private func removeOverlays(forPageItemID pageItemID: UUID) {
         let objects = pageObjectsByPage[pageItemID] ?? []
         for object in objects {
-            if let assetID = object.imageAssetID {
+            if let assetID = object.imageAssetID,
+               !isImageAssetReferenced(assetID, excludingObjectID: object.id) {
                 imageAssets.removeValue(forKey: assetID)
             }
         }
         pageObjectsByPage.removeValue(forKey: pageItemID)
         overlayRevisions.removeValue(forKey: pageItemID)
+    }
+
+    private func isImageAssetReferenced(_ assetID: UUID, excludingObjectID: UUID? = nil) -> Bool {
+        for objects in pageObjectsByPage.values {
+            for object in objects {
+                if object.id == excludingObjectID { continue }
+                if object.imageAssetID == assetID { return true }
+            }
+        }
+        return false
+    }
+
+    private func pruneUnreferencedImageAssets() {
+        let referencedAssetIDs = Set(
+            pageObjectsByPage.values.flatMap { objects in
+                objects.compactMap(\.imageAssetID)
+            }
+        )
+        imageAssets = imageAssets.filter { referencedAssetIDs.contains($0.key) }
     }
 
     private func clearOverlays() {
@@ -217,7 +263,11 @@ final class PDFEditorViewModel {
     }
 
     private func pushUndoSnapshot() {
-        undoStack.append(EditorSnapshot(pages: pages))
+        undoStack.append(EditorSnapshot(
+            pages: pages,
+            pageObjectsByPage: pageObjectsByPage,
+            overlayRevisions: overlayRevisions
+        ))
         if undoStack.count > 50 {
             undoStack.removeFirst()
         }
