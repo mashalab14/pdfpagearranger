@@ -6,8 +6,19 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		A10000072FEF3305002EEE4B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 924C92462FEF3305002EEE4B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 924C924D2FEF3305002EEE4B;
+			remoteInfo = pdfpagearranger;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		924C924E2FEF3305002EEE4B /* pdfpagearranger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = pdfpagearranger.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000012FEF3305002EEE4B /* pdfpagearrangerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = pdfpagearrangerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +27,22 @@
 			path = pdfpagearranger;
 			sourceTree = "<group>";
 		};
+		A10000022FEF3305002EEE4B /* pdfpagearrangerTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = pdfpagearrangerTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		924C924B2FEF3305002EEE4B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000052FEF3305002EEE4B /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +56,7 @@
 			isa = PBXGroup;
 			children = (
 				924C92502FEF3305002EEE4B /* pdfpagearranger */,
+				A10000022FEF3305002EEE4B /* pdfpagearrangerTests */,
 				924C924F2FEF3305002EEE4B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				924C924E2FEF3305002EEE4B /* pdfpagearranger.app */,
+				A10000012FEF3305002EEE4B /* pdfpagearrangerTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +95,29 @@
 			productReference = 924C924E2FEF3305002EEE4B /* pdfpagearranger.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A10000032FEF3305002EEE4B /* pdfpagearrangerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A100000B2FEF3305002EEE4B /* Build configuration list for PBXNativeTarget "pdfpagearrangerTests" */;
+			buildPhases = (
+				A10000042FEF3305002EEE4B /* Sources */,
+				A10000052FEF3305002EEE4B /* Frameworks */,
+				A10000062FEF3305002EEE4B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A10000082FEF3305002EEE4B /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A10000022FEF3305002EEE4B /* pdfpagearrangerTests */,
+			);
+			name = pdfpagearrangerTests;
+			packageProductDependencies = (
+			);
+			productName = pdfpagearrangerTests;
+			productReference = A10000012FEF3305002EEE4B /* pdfpagearrangerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -82,6 +130,10 @@
 				TargetAttributes = {
 					924C924D2FEF3305002EEE4B = {
 						CreatedOnToolsVersion = 26.5;
+					};
+					A10000032FEF3305002EEE4B = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = 924C924D2FEF3305002EEE4B;
 					};
 				};
 			};
@@ -100,12 +152,20 @@
 			projectRoot = "";
 			targets = (
 				924C924D2FEF3305002EEE4B /* pdfpagearranger */,
+				A10000032FEF3305002EEE4B /* pdfpagearrangerTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		924C924C2FEF3305002EEE4B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000062FEF3305002EEE4B /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +182,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10000042FEF3305002EEE4B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A10000082FEF3305002EEE4B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 924C924D2FEF3305002EEE4B /* pdfpagearranger */;
+			targetProxy = A10000072FEF3305002EEE4B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		924C92572FEF3305002EEE4B /* Debug */ = {
@@ -310,6 +385,56 @@
 			};
 			name = Release;
 		};
+		A10000092FEF3305002EEE4B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 83PNR6MHM2;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.abhisheksamanta.pdfpagearrangerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/pdfpagearranger.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/pdfpagearranger";
+			};
+			name = Debug;
+		};
+		A100000A2FEF3305002EEE4B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 83PNR6MHM2;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.abhisheksamanta.pdfpagearrangerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/pdfpagearranger.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/pdfpagearranger";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -327,6 +452,15 @@
 			buildConfigurations = (
 				924C925A2FEF3305002EEE4B /* Debug */,
 				924C925B2FEF3305002EEE4B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A100000B2FEF3305002EEE4B /* Build configuration list for PBXNativeTarget "pdfpagearrangerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10000092FEF3305002EEE4B /* Debug */,
+				A100000A2FEF3305002EEE4B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
