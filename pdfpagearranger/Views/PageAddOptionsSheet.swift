@@ -4,6 +4,7 @@ struct PageAddOptionsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let onImageTapped: () -> Void
+    let onSignatureTapped: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -13,7 +14,16 @@ struct PageAddOptionsSheet: View {
                     dismiss()
                     onImageTapped()
                 }
-                addOption(icon: "signature", title: "Signature", subtitle: "Coming soon", isEnabled: false) {}
+                addOption(
+                    icon: "signature",
+                    title: "Signature",
+                    subtitle: "Draw with your finger",
+                    isEnabled: true,
+                    accessibilityIdentifier: "addSignatureOption"
+                ) {
+                    dismiss()
+                    onSignatureTapped()
+                }
             }
             .navigationTitle("Add")
             .navigationBarTitleDisplayMode(.inline)
@@ -27,14 +37,16 @@ struct PageAddOptionsSheet: View {
         .presentationDragIndicator(.visible)
     }
 
+    @ViewBuilder
     private func addOption(
         icon: String,
         title: String,
         subtitle: String,
         isEnabled: Bool,
+        accessibilityIdentifier: String? = nil,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        let button = Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.title3)
@@ -52,9 +64,15 @@ struct PageAddOptionsSheet: View {
             .padding(.vertical, 4)
         }
         .disabled(!isEnabled)
+
+        if let accessibilityIdentifier {
+            button.accessibilityIdentifier(accessibilityIdentifier)
+        } else {
+            button
+        }
     }
 }
 
 #Preview {
-    PageAddOptionsSheet(onImageTapped: {})
+    PageAddOptionsSheet(onImageTapped: {}, onSignatureTapped: {})
 }

@@ -20,6 +20,10 @@ struct PageObject: Identifiable, Equatable, Codable {
     var zIndex: Int
     var imageAssetID: UUID?
 
+    var usesRasterImageAsset: Bool {
+        (type == .image || type == .signature) && imageAssetID != nil
+    }
+
     init(
         id: UUID = UUID(),
         pageItemID: UUID,

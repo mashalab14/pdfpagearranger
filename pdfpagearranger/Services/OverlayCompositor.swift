@@ -17,7 +17,7 @@ enum OverlayCompositor {
             baseImage.draw(in: CGRect(origin: .zero, size: pageSize))
 
             for object in objects.sorted(by: { $0.zIndex < $1.zIndex }) {
-                guard object.type == .image,
+                guard object.usesRasterImageAsset,
                       let assetID = object.imageAssetID,
                       let overlayImage = images[assetID] else {
                     continue

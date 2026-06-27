@@ -17,6 +17,7 @@ struct PageEditorView: View {
     @State private var pageImage: UIImage?
     @State private var showAddSheet = false
     @State private var showPhotosPicker = false
+    @State private var showSignatureCapture = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var selectedObjectID: UUID?
 
@@ -48,8 +49,22 @@ struct PageEditorView: View {
             }
         }
         .sheet(isPresented: $showAddSheet) {
-            PageAddOptionsSheet {
-                showPhotosPicker = true
+            PageAddOptionsSheet(
+                onImageTapped: {
+                    showPhotosPicker = true
+                },
+                onSignatureTapped: {
+                    showSignatureCapture = true
+                }
+            )
+        }
+        .sheet(isPresented: $showSignatureCapture) {
+            SignatureCaptureView { image in
+                viewModel.addSignatureOverlay(
+                    to: pageItem.id,
+                    image: image,
+                    pageAspectRatio: pageAspectRatio
+                )
             }
         }
         .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotoItem, matching: .images)

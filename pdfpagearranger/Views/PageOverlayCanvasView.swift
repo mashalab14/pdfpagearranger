@@ -55,7 +55,7 @@ struct PageOverlayCanvasView: View {
                 .frame(width: fitSize.width, height: fitSize.height)
 
             ForEach(sortedObjects) { object in
-                if object.type == .image,
+                if object.usesRasterImageAsset,
                    let assetID = object.imageAssetID,
                    let overlayImage = imageProvider(assetID) {
                     ImageOverlayObjectView(

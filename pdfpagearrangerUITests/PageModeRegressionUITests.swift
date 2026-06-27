@@ -22,4 +22,19 @@ final class PageModeRegressionUITests: PDFPagesUITestCase {
 
         XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].waitForExistence(timeout: 10))
     }
+
+    func testPageModeAddSignatureOpensCaptureCanvas() throws {
+        try launchWithImportedPDF(pageCount: 1)
+        waitForThumbnail(pageNumber: 1)
+
+        app.descendants(matching: .any)["pageThumbnail_1"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["pageModeView"].waitForExistence(timeout: 10))
+
+        app.buttons["pageModeAddButton"].tap()
+        app.buttons["addSignatureOption"].tap()
+
+        XCTAssertTrue(app.descendants(matching: .any)["signatureCaptureView"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["signatureClearButton"].exists)
+        XCTAssertTrue(app.buttons["signatureUseButton"].exists)
+    }
 }

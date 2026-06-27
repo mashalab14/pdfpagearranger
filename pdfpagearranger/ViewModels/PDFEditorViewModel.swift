@@ -182,19 +182,44 @@ final class PDFEditorViewModel {
     }
 
     func addImageOverlay(to pageItemID: UUID, image: UIImage, pageAspectRatio: CGFloat) {
+        addRasterOverlay(
+            to: pageItemID,
+            image: image,
+            type: .image,
+            pageAspectRatio: pageAspectRatio,
+            widthFraction: 0.35
+        )
+    }
+
+    func addSignatureOverlay(to pageItemID: UUID, image: UIImage, pageAspectRatio: CGFloat) {
+        addRasterOverlay(
+            to: pageItemID,
+            image: image,
+            type: .signature,
+            pageAspectRatio: pageAspectRatio,
+            widthFraction: 0.45
+        )
+    }
+
+    private func addRasterOverlay(
+        to pageItemID: UUID,
+        image: UIImage,
+        type: PageObjectType,
+        pageAspectRatio: CGFloat,
+        widthFraction: CGFloat
+    ) {
         pushUndoSnapshot()
 
         let assetID = UUID()
         imageAssets[assetID] = image
 
         let imageAspect = image.size.width / max(image.size.height, 1)
-        let widthFraction: CGFloat = 0.35
         let heightFraction = min((widthFraction / imageAspect) / max(pageAspectRatio, 0.01), 0.6)
 
         let nextZIndex = (pageObjectsByPage[pageItemID]?.map(\.zIndex).max() ?? -1) + 1
         let object = PageObject(
             pageItemID: pageItemID,
-            type: .image,
+            type: type,
             position: CGPoint(x: 0.5, y: 0.5),
             size: CGSize(width: widthFraction, height: heightFraction),
             zIndex: nextZIndex,

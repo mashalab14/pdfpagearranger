@@ -11,7 +11,7 @@ enum OverlayPDFExporter {
         context: CGContext
     ) {
         for object in objects.sorted(by: { $0.zIndex < $1.zIndex }) {
-            guard object.type == .image,
+            guard object.usesRasterImageAsset,
                   let assetID = object.imageAssetID,
                   let image = images[assetID],
                   let cgImage = image.cgImage else {
