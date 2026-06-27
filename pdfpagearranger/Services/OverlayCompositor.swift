@@ -1,6 +1,6 @@
 import UIKit
 
-/// Composites image overlays onto a rendered PDF page image using normalized coordinates.
+/// Composites image overlays onto a rendered PDF page image using shared geometry mapping.
 enum OverlayCompositor {
     static func composite(
         baseImage: UIImage,
@@ -23,47 +23,18 @@ enum OverlayCompositor {
                     continue
                 }
 
-                let geometry = object.displayGeometry(pageRotation: pageRotation)
-                drawOverlay(
+                let layout = OverlayGeometryEngine.thumbnailLayout(
+                    for: object,
+                    pageRotation: pageRotation,
+                    renderSize: pageSize
+                )
+                OverlayGeometryEngine.drawUIImage(
                     overlayImage,
-                    geometry: geometry,
+                    layout: layout,
                     opacity: object.opacity,
-                    pageSize: pageSize,
                     in: context.cgContext
                 )
             }
         }
-    }
-
-    private static func drawOverlay(
-        _ image: UIImage,
-        geometry: OverlayPageGeometry.Transformed,
-        opacity: CGFloat,
-        pageSize: CGSize,
-        in context: CGContext
-    ) {
-        let width = geometry.size.width * pageSize.width
-        let height = geometry.size.height * pageSize.height
-        let centerX = geometry.position.x * pageSize.width
-        let centerY = geometry.position.y * pageSize.height
-
-        context.saveGState()
-        context.setAlpha(opacity)
-
-        if geometry.rotation != 0 {
-            context.translateBy(x: centerX, y: centerY)
-            context.rotate(by: geometry.rotation * .pi / 180)
-            context.translateBy(x: -width / 2, y: -height / 2)
-            image.draw(in: CGRect(x: 0, y: 0, width: width, height: height))
-        } else {
-            image.draw(in: CGRect(
-                x: centerX - width / 2,
-                y: centerY - height / 2,
-                width: width,
-                height: height
-            ))
-        }
-
-        context.restoreGState()
     }
 }

@@ -15,21 +15,29 @@ struct ImageOverlayObjectView: View {
     @State private var resizeScale: CGFloat = 1
     @State private var steadyResizeScale: CGFloat = 1
 
-    private var displayGeometry: OverlayPageGeometry.Transformed {
+    private var layout: OverlayGeometryEngine.Layout {
+        OverlayGeometryEngine.pageModeLayout(
+            for: object,
+            pageRotation: pageRotation,
+            renderSize: pageSize
+        )
+    }
+
+    private var displayGeometry: OverlayGeometryEngine.NormalizedGeometry {
         object.displayGeometry(pageRotation: pageRotation)
     }
 
     private var displaySize: CGSize {
         CGSize(
-            width: displayGeometry.size.width * pageSize.width * resizeScale,
-            height: displayGeometry.size.height * pageSize.height * resizeScale
+            width: layout.size.width * resizeScale,
+            height: layout.size.height * resizeScale
         )
     }
 
     private var displayPosition: CGPoint {
         CGPoint(
-            x: displayGeometry.position.x * pageSize.width + dragOffset.width,
-            y: displayGeometry.position.y * pageSize.height + dragOffset.height
+            x: layout.center.x + dragOffset.width,
+            y: layout.center.y + dragOffset.height
         )
     }
 
@@ -40,7 +48,7 @@ struct ImageOverlayObjectView: View {
                 .scaledToFit()
                 .frame(width: displaySize.width, height: displaySize.height)
                 .opacity(object.opacity)
-                .rotationEffect(.degrees(displayGeometry.rotation))
+                .rotationEffect(.degrees(layout.rotationDegrees))
                 .overlay {
                     if isSelected {
                         RoundedRectangle(cornerRadius: 4)
@@ -94,13 +102,13 @@ struct ImageOverlayObjectView: View {
             }
             .onEnded { value in
                 let adjusted = canvasScale > 0 ? canvasScale : 1
-                let newX = (displayGeometry.position.x * pageSize.width + value.translation.width / adjusted) / pageSize.width
-                let newY = (displayGeometry.position.y * pageSize.height + value.translation.height / adjusted) / pageSize.height
+                let newX = (layout.center.x + value.translation.width / adjusted) / pageSize.width
+                let newY = (layout.center.y + value.translation.height / adjusted) / pageSize.height
                 let displayPoint = CGPoint(
                     x: clamp(newX, min: 0, max: 1),
                     y: clamp(newY, min: 0, max: 1)
                 )
-                let stored = OverlayPageGeometry.storageTransform(
+                let stored = OverlayGeometryEngine.storageGeometry(
                     displayPosition: displayPoint,
                     displaySize: displayGeometry.size,
                     objectRotation: displayGeometry.rotation,
@@ -126,7 +134,7 @@ struct ImageOverlayObjectView: View {
                     width: clamp(displayGeometry.size.width * finalScale, min: 0.08, max: 0.95),
                     height: clamp(displayGeometry.size.height * finalScale, min: 0.08, max: 0.95)
                 )
-                let stored = OverlayPageGeometry.storageTransform(
+                let stored = OverlayGeometryEngine.storageGeometry(
                     displayPosition: displayGeometry.position,
                     displaySize: resizedDisplaySize,
                     objectRotation: displayGeometry.rotation,
