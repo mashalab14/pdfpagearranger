@@ -44,29 +44,12 @@ actor ThumbnailService {
     private func renderThumbnail(page: PDFPage, rotation: Int) async -> UIImage? {
         let maxDimension = maxThumbnailDimension
         return await Task.detached(priority: .utility) {
-            let bounds = page.bounds(for: .mediaBox)
-            let scale = min(
-                maxDimension / max(bounds.width, bounds.height),
-                1.0
+            PDFPreviewRenderer.image(
+                from: page,
+                rotation: rotation,
+                maxDimension: maxDimension,
+                maxScale: 1.0
             )
-            let thumbnailSize = CGSize(
-                width: bounds.width * scale,
-                height: bounds.height * scale
-            )
-
-            let renderer = UIGraphicsImageRenderer(size: thumbnailSize)
-            return renderer.image { context in
-                UIColor.white.setFill()
-                context.fill(CGRect(origin: .zero, size: thumbnailSize))
-
-                context.cgContext.saveGState()
-                context.cgContext.translateBy(x: thumbnailSize.width / 2, y: thumbnailSize.height / 2)
-                context.cgContext.rotate(by: CGFloat(rotation) * .pi / 180)
-                context.cgContext.scaleBy(x: scale, y: scale)
-                context.cgContext.translateBy(x: -bounds.width / 2, y: -bounds.height / 2)
-                page.draw(with: .mediaBox, to: context.cgContext)
-                context.cgContext.restoreGState()
-            }
         }.value
     }
 }
