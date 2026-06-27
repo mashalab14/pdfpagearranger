@@ -1,8 +1,9 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 struct ContentView: View {
-    @State private var viewModel = PDFEditorViewModel()
+    @Bindable var viewModel: PDFEditorViewModel
     @State private var showImporter = false
     @State private var showError = false
     @State private var importErrorMessage: String?
@@ -12,6 +13,8 @@ struct ContentView: View {
             Group {
                 if viewModel.hasDocument {
                     EditorView(viewModel: viewModel)
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier(UITestLaunchConfiguration.documentReadyIdentifier)
                 } else {
                     emptyState
                 }
@@ -76,11 +79,14 @@ struct ContentView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            .accessibilityIdentifier("importPDFButton")
 
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemGroupedBackground))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("emptyStateView")
     }
 
     private var loadingOverlay: some View {
@@ -95,5 +101,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    ContentView(viewModel: PDFEditorViewModel())
 }

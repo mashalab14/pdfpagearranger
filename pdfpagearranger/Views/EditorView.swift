@@ -36,6 +36,8 @@ struct EditorView: View {
                     }
                     .padding()
                 }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("documentPageGrid")
             }
         }
         .navigationTitle(viewModel.documentName)
@@ -51,6 +53,7 @@ struct EditorView: View {
                     withAnimation { viewModel.undo() }
                 }
                 .disabled(!viewModel.canUndo)
+                .accessibilityIdentifier("undoButton")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Export") {

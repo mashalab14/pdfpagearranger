@@ -29,8 +29,22 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A10000032FEF3305002EEE4B"
-               BuildableName = "pdfpagearrangerTests.xctest"
-               BlueprintName = "pdfpagearrangerTests"
+               BuildableName = "PDFPagesTests.xctest"
+               BlueprintName = "PDFPagesTests"
+               ReferencedContainer = "container:pdfpagearranger.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "A20000032FEF3305002EEE4B"
+               BuildableName = "PDFPagesUITests.xctest"
+               BlueprintName = "PDFPagesUITests"
                ReferencedContainer = "container:pdfpagearranger.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -49,8 +63,19 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A10000032FEF3305002EEE4B"
-               BuildableName = "pdfpagearrangerTests.xctest"
-               BlueprintName = "pdfpagearrangerTests"
+               BuildableName = "PDFPagesTests.xctest"
+               BlueprintName = "PDFPagesTests"
+               ReferencedContainer = "container:pdfpagearranger.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "A20000032FEF3305002EEE4B"
+               BuildableName = "PDFPagesUITests.xctest"
+               BlueprintName = "PDFPagesUITests"
                ReferencedContainer = "container:pdfpagearranger.xcodeproj">
             </BuildableReference>
          </TestableReference>

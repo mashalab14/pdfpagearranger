@@ -31,6 +31,8 @@ struct PageEditorView: View {
         .navigationTitle("Page \(pageNumber)")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(false)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("pageModeView")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Done") {
@@ -96,6 +98,7 @@ struct PageEditorView: View {
         .padding(.horizontal)
         .padding(.vertical, 12)
         .background(.bar)
+        .accessibilityIdentifier("pageModeAddButton")
     }
 
     private var renderTaskKey: String {

@@ -28,6 +28,8 @@ struct PageThumbnailView: View {
                             .strokeBorder(Color(.separator), lineWidth: 0.5)
                     }
                     .contentShape(Rectangle())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityIdentifier("pageThumbnail_\(pageNumber)")
                     .onTapGesture {
                         onTap()
                     }
@@ -38,6 +40,7 @@ struct PageThumbnailView: View {
                     .padding(.vertical, 4)
                     .background(.ultraThinMaterial, in: Capsule())
                     .padding(8)
+                    .accessibilityIdentifier("pageNumberLabel_\(pageNumber)")
             }
 
             HStack(spacing: 0) {
@@ -81,6 +84,8 @@ struct PageThumbnailView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("\(label.lowercased())Page_\(pageNumber)")
     }
 
     private func loadThumbnail() async {

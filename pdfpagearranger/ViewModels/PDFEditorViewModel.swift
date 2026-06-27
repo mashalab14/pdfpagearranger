@@ -20,6 +20,14 @@ final class PDFEditorViewModel {
     private let pdfService = PDFService()
     let proGate = ProGate()
 
+    init() {
+        if let pageCount = UITestLaunchConfiguration.autoImportPageCount {
+            Task {
+                await self.importUITestDocument(pageCount: pageCount)
+            }
+        }
+    }
+
     var canUndo: Bool { !undoStack.isEmpty }
     var hasDocument: Bool { sourceDocument != nil }
 
@@ -45,6 +53,24 @@ final class PDFEditorViewModel {
             await ThumbnailService.shared.clear()
         } catch {
             resetDocument()
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func importUITestDocument(pageCount: Int) async {
+        do {
+            let generatedURL = try UITestPDFGenerator.writeMultiPagePDF(pageCount: pageCount)
+            await importPDF(from: generatedURL)
+
+            if UITestLaunchConfiguration.shouldSeedOverlay,
+               let firstPage = pages.first {
+                addImageOverlay(
+                    to: firstPage.id,
+                    image: UIImage(systemName: "star.fill") ?? UIImage(),
+                    pageAspectRatio: 612.0 / 792.0
+                )
+            }
+        } catch {
             errorMessage = error.localizedDescription
         }
     }

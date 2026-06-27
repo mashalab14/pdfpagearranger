@@ -1,0 +1,23 @@
+#!/bin/sh
+# Run the full PDF Pages regression suite before allowing a commit.
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+XCODEBUILD="/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild"
+SCHEME="pdfpagearranger"
+DESTINATION="platform=iOS Simulator,name=iPhone 17"
+
+cd "$ROOT"
+
+if [ ! -x "$XCODEBUILD" ]; then
+  echo "pre-commit: Xcode not found at $XCODEBUILD"
+  exit 1
+fi
+
+echo "pre-commit: running PDF Pages regression tests..."
+"$XCODEBUILD" \
+  -scheme "$SCHEME" \
+  -destination "$DESTINATION" \
+  test
+
+echo "pre-commit: all regression tests passed."
