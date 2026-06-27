@@ -1,7 +1,8 @@
-import Foundation
+import UIKit
 
-struct EditorSnapshot: Equatable {
+struct EditorSnapshot {
     let pages: [PageItem]
     let pageObjectsByPage: [UUID: [PageObject]]
     let overlayRevisions: [UUID: Int]
+    let imageAssets: [UUID: UIImage]
 }

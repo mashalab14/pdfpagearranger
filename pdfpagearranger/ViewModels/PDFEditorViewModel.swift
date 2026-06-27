@@ -136,7 +136,7 @@ final class PDFEditorViewModel {
         pages = snapshot.pages
         pageObjectsByPage = snapshot.pageObjectsByPage
         overlayRevisions = snapshot.overlayRevisions
-        pruneUnreferencedImageAssets()
+        imageAssets = snapshot.imageAssets
     }
 
     func exportPDF() throws -> URL {
@@ -182,6 +182,8 @@ final class PDFEditorViewModel {
     }
 
     func addImageOverlay(to pageItemID: UUID, image: UIImage, pageAspectRatio: CGFloat) {
+        pushUndoSnapshot()
+
         let assetID = UUID()
         imageAssets[assetID] = image
 
@@ -208,13 +210,19 @@ final class PDFEditorViewModel {
               let index = objects.firstIndex(where: { $0.id == object.id }) else {
             return
         }
+        guard objects[index] != object else { return }
+
+        pushUndoSnapshot()
         objects[index] = object
         pageObjectsByPage[object.pageItemID] = objects
         bumpOverlayRevision(for: object.pageItemID)
     }
 
     func deleteOverlay(id: UUID, pageItemID: UUID) {
-        guard var objects = pageObjectsByPage[pageItemID] else { return }
+        guard var objects = pageObjectsByPage[pageItemID],
+              objects.contains(where: { $0.id == id }) else { return }
+
+        pushUndoSnapshot()
 
         if let object = objects.first(where: { $0.id == id }),
            let assetID = object.imageAssetID,
@@ -274,15 +282,6 @@ final class PDFEditorViewModel {
         return false
     }
 
-    private func pruneUnreferencedImageAssets() {
-        let referencedAssetIDs = Set(
-            pageObjectsByPage.values.flatMap { objects in
-                objects.compactMap(\.imageAssetID)
-            }
-        )
-        imageAssets = imageAssets.filter { referencedAssetIDs.contains($0.key) }
-    }
-
     private func clearOverlays() {
         pageObjectsByPage.removeAll()
         imageAssets.removeAll()
@@ -293,7 +292,8 @@ final class PDFEditorViewModel {
         undoStack.append(EditorSnapshot(
             pages: pages,
             pageObjectsByPage: pageObjectsByPage,
-            overlayRevisions: overlayRevisions
+            overlayRevisions: overlayRevisions,
+            imageAssets: imageAssets
         ))
         if undoStack.count > 50 {
             undoStack.removeFirst()
