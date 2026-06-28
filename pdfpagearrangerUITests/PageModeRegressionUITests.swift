@@ -23,8 +23,8 @@ final class PageModeRegressionUITests: PDFPagesUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].waitForExistence(timeout: 10))
     }
 
-    func testPageModeAddSignatureOpensCaptureCanvas() throws {
-        try launchWithImportedPDF(pageCount: 1)
+    func testPageModeAddSignatureOpensSignatureLibrary() throws {
+        try launchWithImportedPDF(pageCount: 1, isolatedSignatureLibrary: true)
         waitForThumbnail(pageNumber: 1)
 
         app.descendants(matching: .any)["pageThumbnail_1"].tap()
@@ -33,11 +33,18 @@ final class PageModeRegressionUITests: PDFPagesUITestCase {
         app.buttons["pageModeAddButton"].tap()
         app.buttons["addSignatureOption"].tap()
 
+        XCTAssertTrue(app.descendants(matching: .any)["signatureLibraryView"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["No saved signatures"].waitForExistence(timeout: 5))
+
+        let createButton = app.buttons["Create Signature"]
+        XCTAssertTrue(createButton.waitForExistence(timeout: 5))
+        createButton.tap()
+
         XCTAssertTrue(app.descendants(matching: .any)["signatureCaptureView"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["signatureClearButton"].exists)
-        let useSignatureButton = app.buttons["signatureUseButton"]
-        XCTAssertTrue(useSignatureButton.exists)
-        XCTAssertFalse(useSignatureButton.isEnabled)
+        let saveAndUseButton = app.buttons["signatureSaveAndUseButton"]
+        XCTAssertTrue(saveAndUseButton.exists)
+        XCTAssertFalse(saveAndUseButton.isEnabled)
         XCTAssertTrue(app.buttons["signatureColor_black"].exists)
         XCTAssertTrue(app.buttons["signatureColor_red"].exists)
         XCTAssertTrue(app.buttons["signatureColor_purple"].exists)

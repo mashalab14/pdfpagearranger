@@ -5,7 +5,23 @@ enum UITestLaunchConfiguration {
     static let seedOverlayArgument = "-uiTestSeedOverlay"
     static let autoImportPagesArgument = "-uiTestAutoImportPages"
     static let autoImportPagesEnvironmentKey = "UI_TEST_AUTO_IMPORT_PAGES"
+    static let isolatedSignatureLibraryArgument = "-uiTestIsolatedSignatureLibrary"
     static let documentReadyIdentifier = "documentModeReady"
+
+    private static var cachedIsolatedSignatureLibraryRoot: URL?
+
+    static var isolatedSignatureLibraryRoot: URL? {
+        guard ProcessInfo.processInfo.arguments.contains(isolatedSignatureLibraryArgument) else {
+            return nil
+        }
+        if let cachedIsolatedSignatureLibraryRoot {
+            return cachedIsolatedSignatureLibraryRoot
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UITestSignatureLibrary-\(UUID().uuidString)", isDirectory: true)
+        cachedIsolatedSignatureLibraryRoot = url
+        return url
+    }
 
     static var importPDFPath: String? {
         launchValue(for: importPDFArgument)

@@ -19,10 +19,17 @@ class PDFPagesUITestCase: XCTestCase {
     }
 
     @discardableResult
-    func launchWithImportedPDF(pageCount: Int = 4, seedOverlay: Bool = false) throws -> URL {
+    func launchWithImportedPDF(
+        pageCount: Int = 4,
+        seedOverlay: Bool = false,
+        isolatedSignatureLibrary: Bool = false
+    ) throws -> URL {
         app.launchArguments = ["-uiTestAutoImportPages", String(pageCount)]
         if seedOverlay {
             app.launchArguments.append("-uiTestSeedOverlay")
+        }
+        if isolatedSignatureLibrary {
+            app.launchArguments.append("-uiTestIsolatedSignatureLibrary")
         }
         app.launch()
 

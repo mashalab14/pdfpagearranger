@@ -17,7 +17,7 @@ struct PageAddOptionsSheet: View {
                 addOption(
                     icon: "signature",
                     title: "Signature",
-                    subtitle: "Draw with your finger",
+                    subtitle: "Choose or create a signature",
                     isEnabled: true,
                     accessibilityIdentifier: "addSignatureOption"
                 ) {

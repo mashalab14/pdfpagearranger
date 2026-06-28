@@ -17,9 +17,40 @@ struct PageEditorView: View {
     @State private var pageImage: UIImage?
     @State private var showAddSheet = false
     @State private var showPhotosPicker = false
-    @State private var showSignatureCapture = false
+    @State private var showSignatureLibrary = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var selectedObjectID: UUID?
+
+    private let signatureLibraryStore: SignatureLibraryStore
+
+    init(
+        viewModel: PDFEditorViewModel,
+        pageItem: PageItem,
+        pageNumber: Int,
+        document: PDFDocument,
+        signatureLibraryStore: SignatureLibraryStore
+    ) {
+        self._viewModel = Bindable(wrappedValue: viewModel)
+        self.pageItem = pageItem
+        self.pageNumber = pageNumber
+        self.document = document
+        self.signatureLibraryStore = signatureLibraryStore
+    }
+
+    init(
+        viewModel: PDFEditorViewModel,
+        pageItem: PageItem,
+        pageNumber: Int,
+        document: PDFDocument
+    ) {
+        self.init(
+            viewModel: viewModel,
+            pageItem: pageItem,
+            pageNumber: pageNumber,
+            document: document,
+            signatureLibraryStore: Self.makeDefaultSignatureLibraryStore()
+        )
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,12 +85,12 @@ struct PageEditorView: View {
                     showPhotosPicker = true
                 },
                 onSignatureTapped: {
-                    showSignatureCapture = true
+                    showSignatureLibrary = true
                 }
             )
         }
-        .sheet(isPresented: $showSignatureCapture) {
-            SignatureCaptureView { image in
+        .sheet(isPresented: $showSignatureLibrary) {
+            SignatureLibraryView(store: signatureLibraryStore) { image in
                 viewModel.addSignatureOverlay(
                     to: pageItem.id,
                     image: image,
@@ -151,6 +182,18 @@ struct PageEditorView: View {
         guard let selectedObjectID else { return }
         viewModel.deleteOverlay(id: selectedObjectID, pageItemID: pageItem.id)
         self.selectedObjectID = nil
+    }
+
+    private static func makeDefaultSignatureLibraryStore() -> SignatureLibraryStore {
+        if let uiTestRoot = UITestLaunchConfiguration.isolatedSignatureLibraryRoot {
+            return SignatureLibraryStore(rootDirectory: uiTestRoot)
+        }
+        if let store = try? SignatureLibraryStore.makeDefault() {
+            return store
+        }
+        let fallback = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SignatureLibrary", isDirectory: true)
+        return SignatureLibraryStore(rootDirectory: fallback)
     }
 }
 

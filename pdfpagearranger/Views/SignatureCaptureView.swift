@@ -49,12 +49,12 @@ struct SignatureCaptureView: View {
                         dismiss()
                     }
 
-                    Button("Use Signature") {
+                    Button("Save & Use") {
                         useSignature()
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!hasDrawing)
-                    .accessibilityIdentifier("signatureUseButton")
+                    .accessibilityIdentifier("signatureSaveAndUseButton")
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 8)
