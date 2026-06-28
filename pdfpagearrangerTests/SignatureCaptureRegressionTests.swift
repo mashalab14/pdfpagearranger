@@ -55,6 +55,12 @@ enum SignatureTestHelpers {
         case center
         case small
         case large
+        case dot
+        case loop
+        case heavyPressure
+        case lightPressure
+        case longHorizontal
+        case tall
     }
 
     static func makePlacementDrawing(
@@ -76,24 +82,214 @@ enum SignatureTestHelpers {
             return makeLocalizedStroke(center: CGPoint(x: 200, y: 150), color: color, span: 24, strokeWidth: 2)
         case .large:
             return makeLocalizedStroke(center: CGPoint(x: 200, y: 150), color: color, span: 260, strokeWidth: 5)
+        case .dot:
+            return makeDotDrawing(center: CGPoint(x: 200, y: 150), color: color)
+        case .loop:
+            return makeLoopDrawing(center: CGPoint(x: 200, y: 150), color: color)
+        case .heavyPressure:
+            return makeLocalizedStroke(center: CGPoint(x: 200, y: 150), color: color, span: 120, strokeWidth: 14)
+        case .lightPressure:
+            return makeLocalizedStroke(
+                center: CGPoint(x: 200, y: 150),
+                color: color,
+                span: 120,
+                strokeWidth: 2,
+                opacity: 1
+            )
+        case .longHorizontal:
+            return makeLocalizedStroke(center: CGPoint(x: 200, y: 150), color: color, span: 320, strokeWidth: 3)
+        case .tall:
+            return makeTallStroke(center: CGPoint(x: 200, y: 150), color: color, span: 180)
         }
     }
 
     static func transparentMargins(in image: UIImage) -> (top: CGFloat, bottom: CGFloat, left: CGFloat, right: CGFloat)? {
-        guard let bounds = SignatureRenderer.opaquePixelBounds(in: image) else { return nil }
+        guard let borders = transparentBorderWidths(in: image) else { return nil }
+        return borders
+    }
+
+    static func transparentBorderWidths(
+        in image: UIImage,
+        alphaThreshold: UInt8 = 0
+    ) -> (top: CGFloat, bottom: CGFloat, left: CGFloat, right: CGFloat)? {
+        guard let cgImage = image.cgImage else { return nil }
+
+        let width = cgImage.width
+        let height = cgImage.height
+        guard width > 0, height > 0 else { return nil }
+
+        var pixelData = [UInt8](repeating: 0, count: width * height * 4)
+        guard let context = CGContext(
+            data: &pixelData,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        func rowHasInk(_ y: Int) -> Bool {
+            for x in 0..<width where pixelData[(y * width + x) * 4 + 3] > alphaThreshold {
+                return true
+            }
+            return false
+        }
+
+        func columnHasInk(_ x: Int) -> Bool {
+            for y in 0..<height where pixelData[(y * width + x) * 4 + 3] > alphaThreshold {
+                return true
+            }
+            return false
+        }
+
+        var top = 0
+        while top < height, !rowHasInk(top) { top += 1 }
+
+        var bottom = 0
+        var row = height - 1
+        while row >= 0, !rowHasInk(row) {
+            bottom += 1
+            row -= 1
+        }
+
+        var left = 0
+        while left < width, !columnHasInk(left) { left += 1 }
+
+        var right = 0
+        var column = width - 1
+        while column >= 0, !columnHasInk(column) {
+            right += 1
+            column -= 1
+        }
+
+        let scale = image.scale
         return (
-            top: bounds.minY,
-            bottom: image.size.height - bounds.maxY,
-            left: bounds.minX,
-            right: image.size.width - bounds.maxX
+            top: CGFloat(top) / scale,
+            bottom: CGFloat(bottom) / scale,
+            left: CGFloat(left) / scale,
+            right: CGFloat(right) / scale
         )
+    }
+
+    static func referenceInkBounds(for drawing: PKDrawing) -> CGRect? {
+        SignatureRenderer.renderedInkBounds(from: drawing)
+    }
+
+    static func assertTightCrop(
+        for drawing: PKDrawing,
+        horizontalPadding: CGFloat = SignatureRenderer.defaultHorizontalPadding,
+        verticalPadding: CGFloat = SignatureRenderer.defaultVerticalPadding,
+        tolerance: CGFloat = 2,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let image = try XCTUnwrap(
+            SignatureRenderer.image(
+                from: drawing,
+                horizontalPadding: horizontalPadding,
+                verticalPadding: verticalPadding
+            ),
+            file: file,
+            line: line
+        )
+        let referenceInk = try XCTUnwrap(referenceInkBounds(for: drawing), file: file, line: line)
+        let borders = try XCTUnwrap(transparentBorderWidths(in: image), file: file, line: line)
+
+        XCTAssertLessThanOrEqual(borders.top, verticalPadding + tolerance, file: file, line: line)
+        XCTAssertLessThanOrEqual(borders.bottom, verticalPadding + tolerance, file: file, line: line)
+        XCTAssertLessThanOrEqual(borders.left, horizontalPadding + tolerance, file: file, line: line)
+        XCTAssertLessThanOrEqual(borders.right, horizontalPadding + tolerance, file: file, line: line)
+
+        XCTAssertEqual(image.size.width, referenceInk.width + horizontalPadding * 2, accuracy: tolerance, file: file, line: line)
+        XCTAssertEqual(image.size.height, referenceInk.height + verticalPadding * 2, accuracy: tolerance, file: file, line: line)
+        XCTAssertTrue(imageHasInkPixels(image), file: file, line: line)
+        XCTAssertTrue(hasTransparentBackground(image), file: file, line: line)
+    }
+
+    private static func makeDotDrawing(center: CGPoint, color: UIColor) -> PKDrawing {
+        let point = PKStrokePoint(
+            location: center,
+            timeOffset: 0,
+            size: CGSize(width: 8, height: 8),
+            opacity: 1,
+            force: 1,
+            azimuth: 0,
+            altitude: 0
+        )
+        let path = PKStrokePath(controlPoints: [point], creationDate: Date())
+        let stroke = PKStroke(ink: PKInk(.pen, color: color), path: path)
+        return PKDrawing(strokes: [stroke])
+    }
+
+    private static func makeLoopDrawing(center: CGPoint, color: UIColor) -> PKDrawing {
+        let radius: CGFloat = 36
+        let points = (0..<16).map { index -> PKStrokePoint in
+            let angle = (CGFloat(index) / 16) * (.pi * 2)
+            return PKStrokePoint(
+                location: CGPoint(
+                    x: center.x + cos(angle) * radius,
+                    y: center.y + sin(angle) * radius
+                ),
+                timeOffset: TimeInterval(index) * 0.01,
+                size: CGSize(width: 3, height: 3),
+                opacity: 1,
+                force: 1,
+                azimuth: 0,
+                altitude: 0
+            )
+        }
+        let path = PKStrokePath(controlPoints: points, creationDate: Date())
+        let stroke = PKStroke(ink: PKInk(.pen, color: color), path: path)
+        return PKDrawing(strokes: [stroke])
+    }
+
+    private static func makeTallStroke(center: CGPoint, color: UIColor, span: CGFloat) -> PKDrawing {
+        let halfSpan = span / 2
+        let points = [
+            PKStrokePoint(
+                location: CGPoint(x: center.x, y: center.y - halfSpan),
+                timeOffset: 0,
+                size: CGSize(width: 3, height: 3),
+                opacity: 1,
+                force: 1,
+                azimuth: 0,
+                altitude: 0
+            ),
+            PKStrokePoint(
+                location: CGPoint(x: center.x + 8, y: center.y),
+                timeOffset: 0.05,
+                size: CGSize(width: 3, height: 3),
+                opacity: 1,
+                force: 1,
+                azimuth: 0,
+                altitude: 0
+            ),
+            PKStrokePoint(
+                location: CGPoint(x: center.x, y: center.y + halfSpan),
+                timeOffset: 0.1,
+                size: CGSize(width: 3, height: 3),
+                opacity: 1,
+                force: 1,
+                azimuth: 0,
+                altitude: 0
+            ),
+        ]
+        let path = PKStrokePath(controlPoints: points, creationDate: Date())
+        let stroke = PKStroke(ink: PKInk(.pen, color: color), path: path)
+        return PKDrawing(strokes: [stroke])
     }
 
     private static func makeLocalizedStroke(
         center: CGPoint,
         color: UIColor,
         span: CGFloat,
-        strokeWidth: CGFloat = 3
+        strokeWidth: CGFloat = 3,
+        opacity: CGFloat = 1
     ) -> PKDrawing {
         let halfSpan = span / 2
         let points = [
@@ -101,7 +297,7 @@ enum SignatureTestHelpers {
                 location: CGPoint(x: center.x - halfSpan, y: center.y + 2),
                 timeOffset: 0,
                 size: CGSize(width: strokeWidth, height: strokeWidth),
-                opacity: 1,
+                opacity: opacity,
                 force: 1,
                 azimuth: 0,
                 altitude: 0
@@ -110,7 +306,7 @@ enum SignatureTestHelpers {
                 location: CGPoint(x: center.x, y: center.y - 2),
                 timeOffset: 0.05,
                 size: CGSize(width: strokeWidth, height: strokeWidth),
-                opacity: 1,
+                opacity: opacity,
                 force: 1,
                 azimuth: 0,
                 altitude: 0
@@ -119,7 +315,7 @@ enum SignatureTestHelpers {
                 location: CGPoint(x: center.x + halfSpan, y: center.y + 1),
                 timeOffset: 0.1,
                 size: CGSize(width: strokeWidth, height: strokeWidth),
-                opacity: 1,
+                opacity: opacity,
                 force: 1,
                 azimuth: 0,
                 altitude: 0
@@ -129,6 +325,35 @@ enum SignatureTestHelpers {
         let path = PKStrokePath(controlPoints: points, creationDate: Date())
         let stroke = PKStroke(ink: PKInk(.pen, color: color), path: path)
         return PKDrawing(strokes: [stroke])
+    }
+
+    static func maxAlpha(in image: UIImage) -> UInt8 {
+        guard let cgImage = image.cgImage else { return 0 }
+
+        let width = cgImage.width
+        let height = cgImage.height
+        guard width > 0, height > 0 else { return 0 }
+
+        var pixelData = [UInt8](repeating: 0, count: width * height * 4)
+        guard let context = CGContext(
+            data: &pixelData,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return 0
+        }
+
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        var maxValue: UInt8 = 0
+        for index in stride(from: 3, to: pixelData.count, by: 4) {
+            maxValue = max(maxValue, pixelData[index])
+        }
+        return maxValue
     }
 
     static func imageHasInkPixels(_ image: UIImage) -> Bool {
@@ -320,11 +545,19 @@ final class SignatureCaptureRegressionTests: XCTestCase {
 
     func testCroppedSignatureIncludesPaddingWithoutClippingStrokes() throws {
         let drawing = SignatureTestHelpers.makeSampleDrawing()
-        let paddedImage = try XCTUnwrap(SignatureRenderer.image(from: drawing, padding: SignatureRenderer.defaultPadding))
-        let tightImage = try XCTUnwrap(SignatureRenderer.image(from: drawing, padding: 0))
+        let paddedImage = try XCTUnwrap(
+            SignatureRenderer.image(
+                from: drawing,
+                horizontalPadding: SignatureRenderer.defaultHorizontalPadding,
+                verticalPadding: SignatureRenderer.defaultVerticalPadding
+            )
+        )
+        let tightImage = try XCTUnwrap(
+            SignatureRenderer.image(from: drawing, horizontalPadding: 0, verticalPadding: 0)
+        )
 
-        XCTAssertGreaterThanOrEqual(paddedImage.size.width, tightImage.size.width)
-        XCTAssertGreaterThanOrEqual(paddedImage.size.height, tightImage.size.height)
+        XCTAssertGreaterThan(paddedImage.size.width, tightImage.size.width)
+        XCTAssertGreaterThan(paddedImage.size.height, tightImage.size.height)
         XCTAssertTrue(SignatureTestHelpers.imageHasInkPixels(paddedImage))
     }
 
@@ -360,7 +593,7 @@ final class SignatureCaptureRegressionTests: XCTestCase {
     func testSignatureRendererExportsInLightTraitCollection() throws {
         let source = try signatureRendererSource()
         XCTAssertTrue(source.contains("userInterfaceStyle: .light"))
-        XCTAssertTrue(source.contains("trimTransparentEdges"))
+        XCTAssertTrue(source.contains("opaquePixelBounds"))
     }
 
     func testUseSignatureDisabledWhenDrawingIsEmpty() throws {
@@ -375,48 +608,72 @@ final class SignatureCaptureRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("hasDrawing = false"))
     }
 
+    func testLightPressureDrawingRendersDetectableInk() throws {
+        let drawing = SignatureTestHelpers.makePlacementDrawing(.lightPressure)
+        XCTAssertFalse(drawing.bounds.isEmpty)
+
+        let rendered = drawing.image(from: drawing.bounds.insetBy(dx: -40, dy: -40), scale: 2)
+        let maxAlpha = SignatureTestHelpers.maxAlpha(in: rendered)
+        XCTAssertGreaterThan(maxAlpha, 0, "Expected light-pressure stroke to render visible pixels")
+
+        let image = try XCTUnwrap(SignatureRenderer.image(from: drawing))
+        XCTAssertTrue(SignatureTestHelpers.imageHasInkPixels(image))
+    }
+
     func testTightSignatureCropForEdgePlacements() throws {
-        let padding = SignatureRenderer.defaultPadding
-        let maxAllowedMargin = padding + 3
+        let placements: [SignatureTestHelpers.DrawingPlacement] = [
+            .top, .bottom, .left, .right, .small, .large,
+            .dot, .loop, .heavyPressure, .lightPressure, .longHorizontal, .tall,
+        ]
 
-        for placement in [
-            SignatureTestHelpers.DrawingPlacement.top,
-            .bottom,
-            .left,
-            .right,
-            .small,
-            .large,
-        ] {
-            let drawing = SignatureTestHelpers.makePlacementDrawing(placement)
-            let image = try XCTUnwrap(
-                SignatureRenderer.image(from: drawing),
-                "Expected image for placement \(placement)"
-            )
-            let margins = try XCTUnwrap(
-                SignatureTestHelpers.transparentMargins(in: image),
-                "Expected margins for placement \(placement)"
-            )
-
-            XCTAssertLessThanOrEqual(margins.top, maxAllowedMargin, "Top margin too large for \(placement)")
-            XCTAssertLessThanOrEqual(margins.bottom, maxAllowedMargin, "Bottom margin too large for \(placement)")
-            XCTAssertLessThanOrEqual(margins.left, maxAllowedMargin, "Left margin too large for \(placement)")
-            XCTAssertLessThanOrEqual(margins.right, maxAllowedMargin, "Right margin too large for \(placement)")
+        for placement in placements {
+            try XCTContext.runActivity(named: "Tight crop for \(String(describing: placement))") { _ in
+                try SignatureTestHelpers.assertTightCrop(
+                    for: SignatureTestHelpers.makePlacementDrawing(placement)
+                )
+            }
         }
     }
 
     func testCropPaddingIsPreservedAroundInk() throws {
         let drawing = SignatureTestHelpers.makePlacementDrawing(.center)
-        let padded = try XCTUnwrap(SignatureRenderer.image(from: drawing, padding: 8))
-        let tight = try XCTUnwrap(SignatureRenderer.image(from: drawing, padding: 0))
+        let horizontal = SignatureRenderer.defaultHorizontalPadding
+        let vertical = SignatureRenderer.defaultVerticalPadding
+        let padded = try XCTUnwrap(
+            SignatureRenderer.image(
+                from: drawing,
+                horizontalPadding: horizontal,
+                verticalPadding: vertical
+            )
+        )
+        let tight = try XCTUnwrap(
+            SignatureRenderer.image(from: drawing, horizontalPadding: 0, verticalPadding: 0)
+        )
 
-        XCTAssertGreaterThanOrEqual(padded.size.width, tight.size.width + 14)
-        XCTAssertGreaterThanOrEqual(padded.size.height, tight.size.height + 14)
+        XCTAssertGreaterThan(padded.size.width, tight.size.width)
+        XCTAssertGreaterThan(padded.size.height, tight.size.height)
 
-        let margins = try XCTUnwrap(SignatureTestHelpers.transparentMargins(in: padded))
-        XCTAssertEqual(margins.top, 8, accuracy: 2)
-        XCTAssertEqual(margins.bottom, 8, accuracy: 2)
-        XCTAssertEqual(margins.left, 8, accuracy: 2)
-        XCTAssertEqual(margins.right, 8, accuracy: 2)
+        let margins = try XCTUnwrap(SignatureTestHelpers.transparentBorderWidths(in: padded))
+        XCTAssertEqual(margins.top, vertical, accuracy: 1.5)
+        XCTAssertEqual(margins.bottom, vertical, accuracy: 1.5)
+        XCTAssertEqual(margins.left, horizontal, accuracy: 1.5)
+        XCTAssertEqual(margins.right, horizontal, accuracy: 1.5)
+    }
+
+    func testSignatureCropHasNoExcessTransparentRowsOrColumns() throws {
+        let drawing = SignatureTestHelpers.makePlacementDrawing(.longHorizontal)
+        let image = try XCTUnwrap(SignatureRenderer.image(from: drawing))
+        let borders = try XCTUnwrap(SignatureTestHelpers.transparentBorderWidths(in: image))
+
+        XCTAssertLessThanOrEqual(borders.top, SignatureRenderer.defaultVerticalPadding + 1)
+        XCTAssertLessThanOrEqual(borders.bottom, SignatureRenderer.defaultVerticalPadding + 1)
+        XCTAssertLessThanOrEqual(borders.left, SignatureRenderer.defaultHorizontalPadding + 1)
+        XCTAssertLessThanOrEqual(borders.right, SignatureRenderer.defaultHorizontalPadding + 1)
+    }
+
+    func testSignatureCropDoesNotClipRenderedInk() throws {
+        let drawing = SignatureTestHelpers.makePlacementDrawing(.heavyPressure)
+        try SignatureTestHelpers.assertTightCrop(for: drawing, tolerance: 2)
     }
 
     func testTransparentBackgroundPreservedAfterTightCrop() throws {

@@ -2,38 +2,61 @@ import PencilKit
 import UIKit
 
 enum SignatureRenderer {
-    static let defaultPadding: CGFloat = 8
+    static let defaultHorizontalPadding: CGFloat = 4
+    static let defaultVerticalPadding: CGFloat = 3
+    static let defaultPadding: CGFloat = defaultHorizontalPadding
+
     private static let renderScale: CGFloat = 2
-    private static let renderBleed: CGFloat = 2
+    private static let alphaThreshold: UInt8 = 0
 
-    static func image(from drawing: PKDrawing, padding: CGFloat = defaultPadding) -> UIImage? {
-        let bounds = inkBounds(from: drawing)
-        guard !bounds.isEmpty else { return nil }
+    static func image(
+        from drawing: PKDrawing,
+        horizontalPadding: CGFloat = defaultHorizontalPadding,
+        verticalPadding: CGFloat = defaultVerticalPadding
+    ) -> UIImage? {
+        var renderBounds = renderBounds(for: drawing)
+        guard !renderBounds.isEmpty else { return nil }
 
-        let renderBounds = bounds.insetBy(dx: -renderBleed, dy: -renderBleed)
-        let strokeImage = renderDrawingImage(from: drawing, bounds: renderBounds, scale: renderScale)
-        guard let trimmedImage = trimTransparentEdges(from: strokeImage) else { return nil }
+        for _ in 0..<4 {
+            let rendered = renderDrawingImage(from: drawing, bounds: renderBounds, scale: renderScale)
+            guard let inkBounds = opaquePixelBounds(in: rendered, alphaThreshold: alphaThreshold) else {
+                renderBounds = renderBounds.insetBy(dx: -16, dy: -16)
+                continue
+            }
 
-        let paddedSize = CGSize(
-            width: trimmedImage.size.width + padding * 2,
-            height: trimmedImage.size.height + padding * 2
-        )
+            let cropRect = CGRect(
+                x: inkBounds.origin.x - horizontalPadding,
+                y: inkBounds.origin.y - verticalPadding,
+                width: inkBounds.width + horizontalPadding * 2,
+                height: inkBounds.height + verticalPadding * 2
+            )
 
-        let format = UIGraphicsImageRendererFormat()
-        format.opaque = false
-        format.scale = renderScale
+            if let cropped = cropImage(rendered, to: cropRect) {
+                return cropped.withRenderingMode(.alwaysOriginal)
+            }
 
-        let renderer = UIGraphicsImageRenderer(size: paddedSize, format: format)
-        let image = renderer.image { _ in
-            trimmedImage.draw(at: CGPoint(x: padding, y: padding))
+            renderBounds = renderBounds.insetBy(dx: -16, dy: -16)
         }
 
-        return image.withRenderingMode(.alwaysOriginal)
+        return nil
+    }
+
+    static func image(from drawing: PKDrawing, padding: CGFloat) -> UIImage? {
+        image(from: drawing, horizontalPadding: padding, verticalPadding: padding)
+    }
+
+    /// Ink bounds detected from the rendered bitmap before crop padding is applied.
+    static func renderedInkBounds(from drawing: PKDrawing) -> CGRect? {
+        let bounds = renderBounds(for: drawing)
+        guard !bounds.isEmpty else { return nil }
+
+        let rendered = renderDrawingImage(from: drawing, bounds: bounds, scale: renderScale)
+        return opaquePixelBounds(in: rendered)
     }
 
     static func opaquePixelBounds(
         in image: UIImage,
-        alphaThreshold: UInt8 = 2
+        alphaThreshold: UInt8 = alphaThreshold
     ) -> CGRect? {
         guard let cgImage = image.cgImage else { return nil }
 
@@ -41,20 +64,7 @@ enum SignatureRenderer {
         let height = cgImage.height
         guard width > 0, height > 0 else { return nil }
 
-        var pixelData = [UInt8](repeating: 0, count: width * height * 4)
-        guard let context = CGContext(
-            data: &pixelData,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width * 4,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
-            return nil
-        }
-
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let pixelData = decodeRGBA8Pixels(from: cgImage) else { return nil }
 
         var minX = width
         var minY = height
@@ -64,8 +74,7 @@ enum SignatureRenderer {
 
         for y in 0..<height {
             for x in 0..<width {
-                let index = (y * width + x) * 4
-                let alpha = pixelData[index + 3]
+                let alpha = pixelData[(y * width + x) * 4 + 3]
                 guard alpha > alphaThreshold else { continue }
 
                 foundInk = true
@@ -93,29 +102,22 @@ enum SignatureRenderer {
         )
     }
 
-    private static func inkBounds(from drawing: PKDrawing) -> CGRect {
+    private static func renderBounds(for drawing: PKDrawing) -> CGRect {
         guard !drawing.strokes.isEmpty else { return .zero }
 
-        var bounds = CGRect.null
+        var bounds = drawing.bounds
+        var maxStrokeRadius: CGFloat = 0
         for stroke in drawing.strokes {
             bounds = bounds.union(stroke.renderBounds)
-
             for point in stroke.path {
                 let radius = max(point.size.width, point.size.height) / 2
-                let pointBounds = CGRect(
-                    x: point.location.x - radius,
-                    y: point.location.y - radius,
-                    width: radius * 2,
-                    height: radius * 2
-                )
-                bounds = bounds.union(pointBounds)
+                maxStrokeRadius = max(maxStrokeRadius, radius)
             }
         }
 
-        if bounds.isNull {
-            return drawing.bounds
-        }
-        return bounds
+        let safetyMargin = max(defaultHorizontalPadding, defaultVerticalPadding) + 4
+        let bleed = max(maxStrokeRadius * 3, 32) + safetyMargin
+        return bounds.insetBy(dx: -bleed, dy: -bleed)
     }
 
     private static func renderDrawingImage(from drawing: PKDrawing, bounds: CGRect, scale: CGFloat) -> UIImage {
@@ -127,20 +129,42 @@ enum SignatureRenderer {
         return strokeImage
     }
 
-    private static func trimTransparentEdges(from image: UIImage, alphaThreshold: UInt8 = 2) -> UIImage? {
-        guard let cgImage = image.cgImage,
-              let bounds = opaquePixelBounds(in: image, alphaThreshold: alphaThreshold) else {
+    private static func cropImage(_ image: UIImage, to rectInPoints: CGRect) -> UIImage? {
+        guard let cgImage = image.cgImage else { return nil }
+
+        let pixelRect = CGRect(
+            x: rectInPoints.origin.x * image.scale,
+            y: rectInPoints.origin.y * image.scale,
+            width: rectInPoints.width * image.scale,
+            height: rectInPoints.height * image.scale
+        ).integral
+
+        let imagePixelRect = CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height)
+        let clamped = pixelRect.intersection(imagePixelRect)
+        guard clamped.width > 0, clamped.height > 0 else { return nil }
+
+        guard let cropped = cgImage.cropping(to: clamped) else { return nil }
+        return UIImage(cgImage: cropped, scale: image.scale, orientation: image.imageOrientation)
+    }
+
+    private static func decodeRGBA8Pixels(from cgImage: CGImage) -> [UInt8]? {
+        let width = cgImage.width
+        let height = cgImage.height
+        var pixelData = [UInt8](repeating: 0, count: width * height * 4)
+
+        guard let context = CGContext(
+            data: &pixelData,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
             return nil
         }
 
-        let pixelRect = CGRect(
-            x: bounds.origin.x * image.scale,
-            y: bounds.origin.y * image.scale,
-            width: bounds.width * image.scale,
-            height: bounds.height * image.scale
-        ).integral
-
-        guard let cropped = cgImage.cropping(to: pixelRect) else { return nil }
-        return UIImage(cgImage: cropped, scale: image.scale, orientation: image.imageOrientation)
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return pixelData
     }
 }
