@@ -39,4 +39,61 @@ class PDFPagesUITestCase: XCTestCase {
         XCTAssertTrue(thumbnail.waitForExistence(timeout: timeout), "Thumbnail \(pageNumber) should appear")
         return thumbnail
     }
+
+    var documentActionsButton: XCUIElement {
+        app.buttons["documentActionsButton"]
+    }
+
+    func openDocumentActionsMenu(file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(
+            documentActionsButton.waitForExistence(timeout: 5),
+            "Document Actions menu button should appear in Document Mode",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            documentActionsButton.isEnabled,
+            "Document Actions menu button should be enabled when a document is open",
+            file: file,
+            line: line
+        )
+        documentActionsButton.tap()
+    }
+
+    func documentActionButton(named title: String) -> XCUIElement {
+        app.buttons[title]
+    }
+
+    func tapDocumentAction(_ title: String, file: StaticString = #filePath, line: UInt = #line) {
+        openDocumentActionsMenu(file: file, line: line)
+
+        let actionButton = documentActionButton(named: title)
+        XCTAssertTrue(
+            actionButton.waitForExistence(timeout: 3),
+            "Expected \(title) in the Document Actions menu",
+            file: file,
+            line: line
+        )
+        actionButton.tap()
+    }
+
+    func assertExportShareSheetIsPresented(
+        timeout: TimeInterval = 8,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let shareSheet = app.descendants(matching: .any)["exportShareSheet"]
+        XCTAssertTrue(
+            shareSheet.waitForExistence(timeout: timeout),
+            "Export should present the share sheet",
+            file: file,
+            line: line
+        )
+    }
+
+    func dismissExportShareSheetIfPresent() {
+        if app.descendants(matching: .any)["exportShareSheet"].exists {
+            app.swipeDown(velocity: .fast)
+        }
+    }
 }

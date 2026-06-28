@@ -57,17 +57,14 @@ struct EditorView: View {
                 .accessibilityIdentifier("undoButton")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Compress") {
-                    showCompression = true
+                DocumentActionsMenu(isEnabled: !viewModel.pages.isEmpty) { action in
+                    switch action {
+                    case .compress:
+                        showCompression = true
+                    case .export:
+                        handleExportTap()
+                    }
                 }
-                .disabled(viewModel.pages.isEmpty)
-                .accessibilityIdentifier("compressButton")
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Export") {
-                    handleExportTap()
-                }
-                .disabled(viewModel.pages.isEmpty)
             }
         }
         .sheet(isPresented: $showCompression) {
@@ -81,7 +78,7 @@ struct EditorView: View {
         }
         .sheet(isPresented: $showShareSheet, onDismiss: cleanupExportFile) {
             if let exportURL {
-                ShareSheet(items: [exportURL])
+                ShareSheet(items: [exportURL], accessibilityIdentifier: "exportShareSheet")
             }
         }
         .alert("Export Failed", isPresented: Binding(
@@ -91,6 +88,13 @@ struct EditorView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(exportError ?? "")
+        }
+        .overlay {
+            if showShareSheet {
+                Color.clear
+                    .frame(width: 0, height: 0)
+                    .accessibilityIdentifier("exportShareSheet")
+            }
         }
         .navigationDestination(item: $selectedPageRoute) { route in
             if let document = viewModel.sourceDocument,
