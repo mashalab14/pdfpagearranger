@@ -147,4 +147,130 @@ final class SignatureLibraryStoreRegressionTests: XCTestCase {
             XCTAssertEqual(error as? SignatureLibraryStoreError, .emptyImageData)
         }
     }
+
+    func testRenamingUpdatesDisplayName() throws {
+        let asset = try store.saveSignature(
+            imageData: SignatureAssetTestFactory.makePNGData(),
+            sourceType: .drawn,
+            displayName: "Original"
+        )
+
+        let renamed = try store.renameSignature(id: asset.id, newDisplayName: "Updated Name")
+
+        XCTAssertEqual(renamed.displayName, "Updated Name")
+        XCTAssertEqual(store.getSignature(id: asset.id)?.displayName, "Updated Name")
+    }
+
+    func testRenamingTrimsWhitespaceFromDisplayName() throws {
+        let asset = try store.saveSignature(
+            imageData: SignatureAssetTestFactory.makePNGData(),
+            sourceType: .drawn,
+            displayName: "Original"
+        )
+
+        let renamed = try store.renameSignature(id: asset.id, newDisplayName: "  Trimmed Name  ")
+
+        XCTAssertEqual(renamed.displayName, "Trimmed Name")
+    }
+
+    func testRenamingUpdatesUpdatedAt() throws {
+        let asset = try store.saveSignature(
+            imageData: SignatureAssetTestFactory.makePNGData(),
+            sourceType: .drawn,
+            displayName: "Original"
+        )
+
+        _ = try store.renameSignature(id: asset.id, newDisplayName: "First Rename")
+        let afterFirstRename = try XCTUnwrap(store.getSignature(id: asset.id))
+
+        Thread.sleep(forTimeInterval: 1.1)
+        _ = try store.renameSignature(id: asset.id, newDisplayName: "Second Rename")
+        let afterSecondRename = try XCTUnwrap(store.getSignature(id: asset.id))
+
+        XCTAssertGreaterThan(afterSecondRename.updatedAt, afterFirstRename.updatedAt)
+    }
+
+    func testRenamingPersistsAfterReloadingStore() throws {
+        let directory = tempDirectories[0]
+        let asset = try store.saveSignature(
+            imageData: SignatureAssetTestFactory.makePNGData(),
+            sourceType: .drawn,
+            displayName: "Before Reload"
+        )
+
+        _ = try store.renameSignature(id: asset.id, newDisplayName: "After Reload")
+
+        let reloadedStore = SignatureLibraryStore(rootDirectory: directory)
+        let fetched = try XCTUnwrap(reloadedStore.getSignature(id: asset.id))
+        XCTAssertEqual(fetched.displayName, "After Reload")
+    }
+
+    func testRenamingOneSignatureDoesNotAffectOthers() throws {
+        let first = try store.saveSignature(
+            imageData: SignatureAssetTestFactory.makePNGData(color: .black),
+            sourceType: .drawn,
+            displayName: "First"
+        )
+        let second = try store.saveSignature(
+            imageData: SignatureAssetTestFactory.makePNGData(color: .blue),
+            sourceType: .drawn,
+            displayName: "Second"
+        )
+
+        _ = try store.renameSignature(id: first.id, newDisplayName: "First Renamed")
+
+        XCTAssertEqual(store.getSignature(id: first.id)?.displayName, "First Renamed")
+        XCTAssertEqual(store.getSignature(id: second.id)?.displayName, "Second")
+    }
+
+    func testRenamingNonExistentSignatureFailsGracefully() {
+        XCTAssertThrowsError(
+            try store.renameSignature(id: UUID(), newDisplayName: "Missing")
+        ) { error in
+            XCTAssertEqual(error as? SignatureLibraryStoreError, .signatureNotFound)
+        }
+    }
+
+    func testRenamingRejectsEmptyOrWhitespaceOnlyNames() throws {
+        let asset = try store.saveSignature(
+            imageData: SignatureAssetTestFactory.makePNGData(),
+            sourceType: .drawn,
+            displayName: "Original"
+        )
+
+        XCTAssertThrowsError(
+            try store.renameSignature(id: asset.id, newDisplayName: "")
+        ) { error in
+            XCTAssertEqual(error as? SignatureLibraryStoreError, .emptyDisplayName)
+        }
+
+        XCTAssertThrowsError(
+            try store.renameSignature(id: asset.id, newDisplayName: "   ")
+        ) { error in
+            XCTAssertEqual(error as? SignatureLibraryStoreError, .emptyDisplayName)
+        }
+
+        XCTAssertEqual(store.getSignature(id: asset.id)?.displayName, "Original")
+    }
+
+    func testImageFilesRemainUnchangedAfterRename() throws {
+        let imageData = SignatureAssetTestFactory.makePNGData()
+        let asset = try store.saveSignature(
+            imageData: imageData,
+            sourceType: .drawn,
+            displayName: "Original"
+        )
+        let imageURL = store.imageURL(for: asset)
+        let imageDataBeforeRename = try Data(contentsOf: imageURL)
+        let imageFileNameBeforeRename = asset.imageFileName
+        let thumbnailFileNameBeforeRename = asset.thumbnailFileName
+
+        let renamed = try store.renameSignature(id: asset.id, newDisplayName: "Renamed")
+
+        XCTAssertEqual(renamed.imageFileName, imageFileNameBeforeRename)
+        XCTAssertEqual(renamed.thumbnailFileName, thumbnailFileNameBeforeRename)
+        XCTAssertEqual(renamed.id, asset.id)
+        XCTAssertEqual(try Data(contentsOf: imageURL), imageDataBeforeRename)
+        XCTAssertTrue(store.hasImageFile(for: renamed))
+    }
 }

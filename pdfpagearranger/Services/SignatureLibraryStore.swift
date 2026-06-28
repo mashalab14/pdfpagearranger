@@ -5,6 +5,8 @@ enum SignatureLibraryStoreError: LocalizedError, Equatable {
     case emptyImageData
     case invalidImageData
     case writeFailed
+    case signatureNotFound
+    case emptyDisplayName
 
     var errorDescription: String? {
         switch self {
@@ -14,6 +16,10 @@ enum SignatureLibraryStoreError: LocalizedError, Equatable {
             return "Signature image data could not be decoded."
         case .writeFailed:
             return "Could not save the signature to local storage."
+        case .signatureNotFound:
+            return "The signature could not be found."
+        case .emptyDisplayName:
+            return "Signature name cannot be empty."
         }
     }
 }
@@ -127,6 +133,30 @@ final class SignatureLibraryStore {
         let asset = assets.remove(at: index)
         try? persistMetadataRecords(assets)
         removeFiles(for: asset)
+    }
+
+    @discardableResult
+    func renameSignature(id: UUID, newDisplayName: String) throws -> SignatureAsset {
+        let trimmedName = newDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            throw SignatureLibraryStoreError.emptyDisplayName
+        }
+
+        var assets = loadMetadataRecords()
+        guard let index = assets.firstIndex(where: { $0.id == id }) else {
+            throw SignatureLibraryStoreError.signatureNotFound
+        }
+
+        assets[index].displayName = trimmedName
+        assets[index].updatedAt = Date()
+
+        do {
+            try persistMetadataRecords(assets)
+        } catch {
+            throw SignatureLibraryStoreError.writeFailed
+        }
+
+        return assets[index]
     }
 
     func imageURL(for asset: SignatureAsset) -> URL {

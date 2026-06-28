@@ -8,6 +8,8 @@ struct SignatureLibraryView: View {
 
     @State private var signatures: [SignatureAsset] = []
     @State private var showCapture = false
+    @State private var assetPendingRename: SignatureAsset?
+    @State private var renameDraftName = ""
 
     private let gridColumns = [
         GridItem(.flexible(), spacing: 16),
@@ -39,6 +41,17 @@ struct SignatureLibraryView: View {
                 SignatureCaptureView { image in
                     saveAndUse(image)
                 }
+            }
+            .alert("Rename Signature", isPresented: renameAlertIsPresented) {
+                TextField("Name", text: $renameDraftName)
+                Button("Save") {
+                    saveRename()
+                }
+                Button("Cancel", role: .cancel) {
+                    assetPendingRename = nil
+                }
+            } message: {
+                Text("Enter a name for this signature.")
             }
         }
         .presentationDetents([.large])
@@ -118,7 +131,29 @@ struct SignatureLibraryView: View {
             }
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button("Rename") {
+                beginRename(for: asset)
+            }
+            .accessibilityIdentifier("signatureLibraryRenameOption_\(asset.id.uuidString)")
+
+            Button("Delete", role: .destructive) {
+                deleteAsset(asset)
+            }
+            .accessibilityIdentifier("signatureLibraryDeleteOption_\(asset.id.uuidString)")
+        }
         .accessibilityIdentifier("signatureLibraryItem_\(asset.id.uuidString)")
+    }
+
+    private var renameAlertIsPresented: Binding<Bool> {
+        Binding(
+            get: { assetPendingRename != nil },
+            set: { isPresented in
+                if !isPresented {
+                    assetPendingRename = nil
+                }
+            }
+        )
     }
 
     @ViewBuilder
@@ -157,6 +192,28 @@ struct SignatureLibraryView: View {
         }
         onSelectSignature(image)
         dismiss()
+    }
+
+    private func beginRename(for asset: SignatureAsset) {
+        assetPendingRename = asset
+        renameDraftName = asset.displayName
+    }
+
+    private func saveRename() {
+        guard let asset = assetPendingRename else { return }
+        defer { assetPendingRename = nil }
+
+        do {
+            _ = try store.renameSignature(id: asset.id, newDisplayName: renameDraftName)
+            reloadSignatures()
+        } catch {
+            return
+        }
+    }
+
+    private func deleteAsset(_ asset: SignatureAsset) {
+        store.deleteSignature(id: asset.id)
+        reloadSignatures()
     }
 }
 

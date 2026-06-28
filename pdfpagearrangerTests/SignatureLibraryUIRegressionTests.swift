@@ -151,4 +151,13 @@ final class SignatureLibraryUIRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("Save & Use"))
         XCTAssertTrue(source.contains("signatureSaveAndUseButton"))
     }
+
+    func testSignatureLibrarySupportsRenameAndDeleteContextMenu() throws {
+        let source = try signatureLibraryViewSource()
+        XCTAssertTrue(source.contains(".contextMenu"))
+        XCTAssertTrue(source.contains("Rename"))
+        XCTAssertTrue(source.contains("Delete"))
+        XCTAssertTrue(source.contains("renameSignature"))
+        XCTAssertTrue(source.contains("Rename Signature"))
+    }
 }
