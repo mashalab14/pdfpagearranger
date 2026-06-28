@@ -18,6 +18,7 @@ final class PDFEditorViewModel {
     private var imageAssets: [UUID: UIImage] = [:]
     private var overlayRevisions: [UUID: Int] = [:]
     private let pdfService = PDFService()
+    private let compressionService = CompressionService()
     let proGate = ProGate()
 
     init() {
@@ -154,6 +155,39 @@ final class PDFEditorViewModel {
 
     func shouldShowPaywallForExport() -> Bool {
         proGate.requiresPaywall(pageCount: pages.count)
+    }
+
+    // MARK: - Compression
+
+    func prepareCompressionInput() async throws -> CompressionPreparedInput {
+        let exportURL = try exportPDF()
+        let byteCount = fileByteCount(at: exportURL)
+        return CompressionPreparedInput(exportURL: exportURL, byteCount: byteCount)
+    }
+
+    func compressPreparedPDF(
+        _ input: CompressionPreparedInput,
+        settings: CompressionSettings,
+        progress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> CompressionResult {
+        try await compressionService.compress(
+            inputURL: input.exportURL,
+            settings: settings,
+            outputName: documentName.isEmpty ? "document" : documentName,
+            progress: progress
+        )
+    }
+
+    func cancelCompression() async {
+        await compressionService.cancel()
+    }
+
+    func adoptCompressedPDF(from url: URL) async {
+        await importPDF(from: url)
+    }
+
+    private func fileByteCount(at url: URL) -> Int64 {
+        (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value ?? 0
     }
 
     // MARK: - Page overlays

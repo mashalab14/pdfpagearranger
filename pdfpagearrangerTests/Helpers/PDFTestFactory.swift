@@ -163,4 +163,51 @@ extension PDFTestFactory {
         }
         return try write(data, named: name)
     }
+
+    static func writeImageHeavyPDF(
+        named name: String,
+        pageCount: Int = 1,
+        imageDimension: CGFloat = 2_400
+    ) throws -> URL {
+        let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792)
+        let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
+        let photo = makePhotoImage(dimension: imageDimension)
+        let data = renderer.pdfData { context in
+            for _ in 0..<pageCount {
+                context.beginPage()
+                photo.draw(in: pageRect)
+            }
+        }
+        return try write(data, named: name)
+    }
+
+    private static func makePhotoImage(dimension: CGFloat) -> UIImage {
+        let size = CGSize(width: dimension, height: dimension)
+        return UIGraphicsImageRenderer(size: size).image { context in
+            let colors = [UIColor.systemTeal.cgColor, UIColor.systemPurple.cgColor] as CFArray
+            let gradient = CGGradient(
+                colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                colors: colors,
+                locations: [0, 1]
+            )!
+            context.cgContext.drawLinearGradient(
+                gradient,
+                start: .zero,
+                end: CGPoint(x: dimension, y: dimension),
+                options: []
+            )
+
+            for index in 0..<80 {
+                let offset = CGFloat(index) * (dimension / 80)
+                let rect = CGRect(
+                    x: offset,
+                    y: offset * 0.6,
+                    width: dimension * 0.08,
+                    height: dimension * 0.08
+                )
+                UIColor(white: 1, alpha: 0.15).setFill()
+                context.fill(rect)
+            }
+        }
+    }
 }

@@ -7,6 +7,7 @@ struct EditorView: View {
 
     @State private var showPaywall = false
     @State private var showShareSheet = false
+    @State private var showCompression = false
     @State private var exportURL: URL?
     @State private var exportError: String?
     @State private var draggedPageID: UUID?
@@ -56,11 +57,21 @@ struct EditorView: View {
                 .accessibilityIdentifier("undoButton")
             }
             ToolbarItem(placement: .topBarTrailing) {
+                Button("Compress") {
+                    showCompression = true
+                }
+                .disabled(viewModel.pages.isEmpty)
+                .accessibilityIdentifier("compressButton")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 Button("Export") {
                     handleExportTap()
                 }
                 .disabled(viewModel.pages.isEmpty)
             }
+        }
+        .sheet(isPresented: $showCompression) {
+            CompressionView(viewModel: viewModel)
         }
         .sheet(isPresented: $showPaywall) {
             PaywallView(pageCount: viewModel.pageCount) {
