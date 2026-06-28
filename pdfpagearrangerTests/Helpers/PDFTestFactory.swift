@@ -148,6 +148,57 @@ extension PDFTestFactory {
         return try write(data, named: name)
     }
 
+    static func writeMetadataHeavyTextPDF(
+        named name: String,
+        text: String,
+        metadataPaddingLength: Int = 120_000
+    ) throws -> URL {
+        let baseURL = try writeTextPDF(named: name, text: text)
+        guard let document = PDFDocument(url: baseURL) else {
+            throw NSError(domain: "PDFTestFactory", code: 4)
+        }
+
+        let padding = String(repeating: "M", count: metadataPaddingLength)
+        document.documentAttributes = [
+            PDFDocumentAttribute.titleAttribute.rawValue: "Metadata Heavy Document",
+            PDFDocumentAttribute.authorAttribute.rawValue: padding,
+            PDFDocumentAttribute.subjectAttribute.rawValue: padding,
+            PDFDocumentAttribute.keywordsAttribute.rawValue: padding,
+            PDFDocumentAttribute.creatorAttribute.rawValue: "PDF Pages Regression Factory",
+            PDFDocumentAttribute.producerAttribute.rawValue: "PDF Pages Regression Factory Producer",
+        ]
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(name)-metadata-heavy-\(UUID().uuidString).pdf")
+        guard document.write(to: outputURL) else {
+            throw NSError(domain: "PDFTestFactory", code: 5)
+        }
+
+        try? FileManager.default.removeItem(at: baseURL)
+        return outputURL
+    }
+
+    static func attachCompressionMetadata(to sourceURL: URL, named name: String) throws -> URL {
+        guard let document = PDFDocument(url: sourceURL) else {
+            throw NSError(domain: "PDFTestFactory", code: 6)
+        }
+
+        let padding = String(repeating: "C", count: 120_000)
+        var attributes = document.documentAttributes ?? [:]
+        attributes[PDFDocumentAttribute.authorAttribute.rawValue] = padding
+        attributes[PDFDocumentAttribute.keywordsAttribute.rawValue] = padding
+        attributes[PDFDocumentAttribute.creatorAttribute.rawValue] = "PDF Pages Regression Factory"
+        attributes[PDFDocumentAttribute.producerAttribute.rawValue] = "PDF Pages Regression Factory Producer"
+        document.documentAttributes = attributes
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(name)-\(UUID().uuidString).pdf")
+        guard document.write(to: outputURL) else {
+            throw NSError(domain: "PDFTestFactory", code: 7)
+        }
+        return outputURL
+    }
+
     static func writePDF(named name: String, pageCount: Int, labels: [String]) throws -> URL {
         let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792)
         let renderer = UIGraphicsPDFRenderer(bounds: pageRect)

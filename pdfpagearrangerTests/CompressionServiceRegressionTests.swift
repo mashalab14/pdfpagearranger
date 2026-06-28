@@ -14,14 +14,17 @@ final class CompressionServiceRegressionTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testCompressionReducesFileSizeForImageHeavyPDF() async throws {
-        let sourceURL = try PDFTestFactory.writeImageHeavyPDF(named: "ImageHeavy", pageCount: 1)
+    func testCompressionReducesFileSizeForMetadataHeavyPDF() async throws {
+        let sourceURL = try PDFTestFactory.writeMetadataHeavyTextPDF(
+            named: "MetadataHeavy",
+            text: "MetadataHeavyCompressionText"
+        )
         tempURLs.append(sourceURL)
 
         let result = try await compressionService.compress(
             inputURL: sourceURL,
             settings: CompressionSettings(preset: .balanced),
-            outputName: "ImageHeavy"
+            outputName: "MetadataHeavy"
         )
         tempURLs.append(result.outputURL)
 
@@ -33,14 +36,60 @@ final class CompressionServiceRegressionTests: XCTestCase {
         XCTAssertTrue(result.meaningfulCompression)
     }
 
-    func testCompressionPreservesPageCount() async throws {
-        let sourceURL = try PDFTestFactory.writeImageHeavyPDF(named: "ImageHeavyMulti", pageCount: 3)
+    func testCompressionPreservesIdenticalPDFKitStringExtraction() async throws {
+        let sourceURL = try PDFTestFactory.writeMetadataHeavyTextPDF(
+            named: "StringExtraction",
+            text: "IdenticalPDFKitStringExtractionText"
+        )
         tempURLs.append(sourceURL)
 
         let result = try await compressionService.compress(
             inputURL: sourceURL,
             settings: CompressionSettings(preset: .smallestFile),
-            outputName: "ImageHeavyMulti"
+            outputName: "StringExtraction"
+        )
+        tempURLs.append(result.outputURL)
+
+        try CompressionAssertions.assertIdenticalPDFKitStringExtraction(
+            sourceURL: sourceURL,
+            compressedURL: result.outputURL
+        )
+    }
+
+    func testCompressionDoesNotRasterizeTextOnlyPDFs() async throws {
+        let sourceURL = try PDFTestFactory.writeMetadataHeavyTextPDF(
+            named: "TextOnlyNoRaster",
+            text: "TextOnlyPDFMustRemainVectorAndSearchable"
+        )
+        tempURLs.append(sourceURL)
+
+        let result = try await compressionService.compress(
+            inputURL: sourceURL,
+            settings: CompressionSettings(preset: .balanced),
+            outputName: "TextOnlyNoRaster"
+        )
+        tempURLs.append(result.outputURL)
+
+        try CompressionAssertions.assertTextOnlyPDFWasNotRasterized(
+            sourceURL: sourceURL,
+            compressedURL: result.outputURL
+        )
+    }
+
+    func testCompressionPreservesPageCount() async throws {
+        let sourceURL = try PDFTestFactory.writeMetadataHeavyTextPDF(
+            named: "MetadataHeavyMulti",
+            text: "PageCountMetadataHeavy"
+        )
+        tempURLs.append(sourceURL)
+
+        let multiPageURL = try writeMultiPageCopy(from: sourceURL, pageCount: 3)
+        tempURLs.append(multiPageURL)
+
+        let result = try await compressionService.compress(
+            inputURL: multiPageURL,
+            settings: CompressionSettings(preset: .smallestFile),
+            outputName: "MetadataHeavyMulti"
         )
         tempURLs.append(result.outputURL)
 
@@ -48,16 +97,19 @@ final class CompressionServiceRegressionTests: XCTestCase {
     }
 
     func testCompressionPreservesPageOrder() async throws {
-        let sourceURL = try PDFTestFactory.writePDF(
+        let baseURL = try PDFTestFactory.writePDF(
             named: "Ordered",
             pageCount: 3,
             labels: ["Alpha", "Beta", "Gamma"]
         )
+        tempURLs.append(baseURL)
+
+        let sourceURL = try PDFTestFactory.attachCompressionMetadata(to: baseURL, named: "OrderedWithMetadata")
         tempURLs.append(sourceURL)
 
         let result = try await compressionService.compress(
             inputURL: sourceURL,
-            settings: CompressionSettings(preset: .highestQuality),
+            settings: CompressionSettings(preset: .balanced),
             outputName: "Ordered"
         )
         tempURLs.append(result.outputURL)
@@ -69,13 +121,16 @@ final class CompressionServiceRegressionTests: XCTestCase {
     }
 
     func testCompressionPreservesPageRotations() async throws {
-        let sourceURL = try PDFTestFactory.writeImageHeavyPDF(named: "RotatedImageHeavy", pageCount: 1)
+        let sourceURL = try PDFTestFactory.writeMetadataHeavyTextPDF(
+            named: "RotatedMetadataHeavy",
+            text: "RotationShouldPersistInCompressionOutput"
+        )
         tempURLs.append(sourceURL)
         let document = try XCTUnwrap(PDFDocument(url: sourceURL))
         document.page(at: 0)?.rotation = 90
 
         let rotatedURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("RotatedImageHeavy-\(UUID().uuidString).pdf")
+            .appendingPathComponent("RotatedMetadataHeavy-\(UUID().uuidString).pdf")
         tempURLs.append(rotatedURL)
         XCTAssertTrue(document.write(to: rotatedURL))
 
@@ -85,7 +140,7 @@ final class CompressionServiceRegressionTests: XCTestCase {
         let result = try await compressionService.compress(
             inputURL: rotatedURL,
             settings: CompressionSettings(preset: .balanced),
-            outputName: "RotatedImageHeavy"
+            outputName: "RotatedMetadataHeavy"
         )
         tempURLs.append(result.outputURL)
 
@@ -116,29 +171,31 @@ final class CompressionServiceRegressionTests: XCTestCase {
 
         let exportURL = try viewModel.exportPDF()
         tempURLs.append(exportURL)
+        let metadataExportURL = try PDFTestFactory.attachCompressionMetadata(to: exportURL, named: "OverlayExport")
+        tempURLs.append(metadataExportURL)
 
-        let exportedDocument = try XCTUnwrap(PDFDocument(url: exportURL))
-        let strategy = ImageDownsampleCompressionStrategy()
-        let compressedDocument = try strategy.compressDocument(
-            exportedDocument,
-            settings: CompressionSettings(preset: .highestQuality),
-            progress: { _ in },
-            isCancelled: { false }
+        let result = try await compressionService.compress(
+            inputURL: metadataExportURL,
+            settings: CompressionSettings(preset: .balanced),
+            outputName: "OverlayExport"
         )
+        tempURLs.append(result.outputURL)
 
-        let compressedURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("OverlayExport-compressed-\(UUID().uuidString).pdf")
-        tempURLs.append(compressedURL)
-        XCTAssertTrue(compressedDocument.write(to: compressedURL))
-
-        try ExportAssertions.assertPageCount(1, in: compressedURL)
-        try ExportAssertions.assertPageContainsText("OverlayExportText", at: 0, in: compressedURL)
+        try ExportAssertions.assertPageCount(1, in: result.outputURL)
+        try ExportAssertions.assertPageContainsText("OverlayExportText", at: 0, in: result.outputURL)
+        try CompressionAssertions.assertIdenticalPDFKitStringExtraction(
+            sourceURL: metadataExportURL,
+            compressedURL: result.outputURL
+        )
         try ExportAssertions.assertExportDoesNotUseRasterizedPageInitializer()
     }
 
     func testCompressionPreservesSearchableTextWhenPossible() async throws {
         let expectedText = "SelectableCompressionText"
-        let sourceURL = try PDFTestFactory.writeTextPDF(named: "TextOnlyCompression", text: expectedText)
+        let sourceURL = try PDFTestFactory.writeMetadataHeavyTextPDF(
+            named: "TextOnlyCompression",
+            text: expectedText
+        )
         tempURLs.append(sourceURL)
 
         let result = try await compressionService.compress(
@@ -149,10 +206,17 @@ final class CompressionServiceRegressionTests: XCTestCase {
         tempURLs.append(result.outputURL)
 
         try ExportAssertions.assertPageContainsText(expectedText, at: 0, in: result.outputURL)
+        try CompressionAssertions.assertIdenticalPDFKitStringExtraction(
+            sourceURL: sourceURL,
+            compressedURL: result.outputURL
+        )
     }
 
     func testCompressionNeverModifiesOriginalPDF() async throws {
-        let sourceURL = try PDFTestFactory.writeImageHeavyPDF(named: "OriginalGuard", pageCount: 1)
+        let sourceURL = try PDFTestFactory.writeMetadataHeavyTextPDF(
+            named: "OriginalGuard",
+            text: "OriginalGuardText"
+        )
         tempURLs.append(sourceURL)
         let originalData = try Data(contentsOf: sourceURL)
 
@@ -170,6 +234,42 @@ final class CompressionServiceRegressionTests: XCTestCase {
         XCTAssertNotEqual(
             try Data(contentsOf: sourceURL),
             try Data(contentsOf: result.outputURL)
+        )
+    }
+
+    @MainActor
+    func testCompressionNeverModifiesImportedPDFByteForByte() async throws {
+        let viewModel = PDFEditorViewModel()
+        let sourceURL = try PDFTestFactory.writeMetadataHeavyTextPDF(
+            named: "ImportedOriginalGuard",
+            text: "ImportedOriginalGuardText"
+        )
+        tempURLs.append(sourceURL)
+
+        await viewModel.importPDF(from: sourceURL)
+        let importedURL = try XCTUnwrap(viewModel.localSourceURL)
+        let importedData = try Data(contentsOf: importedURL)
+
+        let prepared = try await viewModel.prepareCompressionInput()
+        tempURLs.append(prepared.exportURL)
+        let metadataExportURL = try PDFTestFactory.attachCompressionMetadata(
+            to: prepared.exportURL,
+            named: "ImportedCompressionExport"
+        )
+        tempURLs.append(metadataExportURL)
+
+        let result = try await viewModel.compressPreparedPDF(
+            CompressionPreparedInput(
+                exportURL: metadataExportURL,
+                byteCount: prepared.byteCount
+            ),
+            settings: CompressionSettings(preset: .balanced)
+        )
+        tempURLs.append(result.outputURL)
+
+        try CompressionAssertions.assertOriginalPDFUnchanged(
+            originalData: importedData,
+            currentURL: importedURL
         )
     }
 
@@ -191,14 +291,17 @@ final class CompressionServiceRegressionTests: XCTestCase {
         }
     }
 
-    func testCompressionReportsInsufficientSavingsForAlreadyOptimizedTextPDF() async throws {
-        let sourceURL = try PDFTestFactory.writeImageHeavyPDF(named: "AlreadySmallImage", pageCount: 1)
+    func testCompressionReportsInsufficientSavingsForAlreadyOptimizedPDF() async throws {
+        let sourceURL = try PDFTestFactory.writeMetadataHeavyTextPDF(
+            named: "AlreadyOptimized",
+            text: "AlreadyOptimizedText"
+        )
         tempURLs.append(sourceURL)
 
         let firstPass = try await compressionService.compress(
             inputURL: sourceURL,
-            settings: CompressionSettings(preset: .balanced),
-            outputName: "AlreadySmallPass1"
+            settings: CompressionSettings(preset: .smallestFile),
+            outputName: "AlreadyOptimizedPass1"
         )
         tempURLs.append(firstPass.outputURL)
 
@@ -206,9 +309,25 @@ final class CompressionServiceRegressionTests: XCTestCase {
             _ = try await compressionService.compress(
                 inputURL: firstPass.outputURL,
                 settings: CompressionSettings(preset: .highestQuality),
-                outputName: "AlreadySmallPass2"
+                outputName: "AlreadyOptimizedPass2"
             )
             XCTFail("Expected insufficient savings when recompressing an already optimized PDF")
+        } catch let error as CompressionError {
+            XCTAssertEqual(error, .insufficientSavings)
+        }
+    }
+
+    func testCompressionReportsInsufficientSavingsForImageHeavyPDFWithoutRasterization() async throws {
+        let sourceURL = try PDFTestFactory.writeImageHeavyPDF(named: "ImageHeavyNoRaster", pageCount: 1)
+        tempURLs.append(sourceURL)
+
+        do {
+            _ = try await compressionService.compress(
+                inputURL: sourceURL,
+                settings: CompressionSettings(preset: .balanced),
+                outputName: "ImageHeavyNoRaster"
+            )
+            XCTFail("Expected insufficient savings for image-heavy PDF without page rasterization")
         } catch let error as CompressionError {
             XCTAssertEqual(error, .insufficientSavings)
         }
@@ -218,9 +337,11 @@ final class CompressionServiceRegressionTests: XCTestCase {
         try ExportAssertions.assertExportDoesNotUseRasterizedPageInitializer()
     }
 
-    @MainActor
     func testCompressedPDFRendersThumbnail() async throws {
-        let sourceURL = try PDFTestFactory.writeImageHeavyPDF(named: "ThumbSource", pageCount: 1)
+        let sourceURL = try PDFTestFactory.writeMetadataHeavyTextPDF(
+            named: "ThumbSource",
+            text: "ThumbnailCompressionText"
+        )
         tempURLs.append(sourceURL)
 
         let result = try await compressionService.compress(
@@ -241,6 +362,27 @@ final class CompressionServiceRegressionTests: XCTestCase {
         )
         XCTAssertNotNil(thumbnail)
     }
+
+    private func writeMultiPageCopy(from sourceURL: URL, pageCount: Int) throws -> URL {
+        guard let sourceDocument = PDFDocument(url: sourceURL),
+              let sourcePage = sourceDocument.page(at: 0)?.copy() as? PDFPage else {
+            throw NSError(domain: "CompressionServiceRegressionTests", code: 1)
+        }
+
+        let document = PDFDocument()
+        for _ in 0..<pageCount {
+            guard let page = sourcePage.copy() as? PDFPage else { continue }
+            document.insert(page, at: document.pageCount)
+        }
+        document.documentAttributes = sourceDocument.documentAttributes
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MultiPageMetadataHeavy-\(UUID().uuidString).pdf")
+        guard document.write(to: outputURL) else {
+            throw NSError(domain: "CompressionServiceRegressionTests", code: 2)
+        }
+        return outputURL
+    }
 }
 
 @MainActor
@@ -251,7 +393,10 @@ final class CompressionViewModelRegressionTests: XCTestCase {
     override func setUp() async throws {
         try await super.setUp()
         viewModel = PDFEditorViewModel()
-        let url = try PDFTestFactory.writeImageHeavyPDF(named: "VMImageHeavy", pageCount: 1)
+        let url = try PDFTestFactory.writeMetadataHeavyTextPDF(
+            named: "VMMetadataHeavy",
+            text: "ViewModelCompressionText"
+        )
         tempURLs.append(url)
         await viewModel.importPDF(from: url)
     }
@@ -269,14 +414,25 @@ final class CompressionViewModelRegressionTests: XCTestCase {
         let prepared = try await viewModel.prepareCompressionInput()
         tempURLs.append(prepared.exportURL)
 
+        let metadataExportURL = try PDFTestFactory.attachCompressionMetadata(to: prepared.exportURL, named: "VMExport")
+        tempURLs.append(metadataExportURL)
+        let metadataPrepared = CompressionPreparedInput(
+            exportURL: metadataExportURL,
+            byteCount: prepared.byteCount
+        )
+
         let result = try await viewModel.compressPreparedPDF(
-            prepared,
+            metadataPrepared,
             settings: CompressionSettings(preset: .balanced)
         )
         tempURLs.append(result.outputURL)
 
         try CompressionAssertions.assertFileSizeReduced(
-            originalURL: prepared.exportURL,
+            originalURL: metadataExportURL,
+            compressedURL: result.outputURL
+        )
+        try CompressionAssertions.assertIdenticalPDFKitStringExtraction(
+            sourceURL: metadataExportURL,
             compressedURL: result.outputURL
         )
     }

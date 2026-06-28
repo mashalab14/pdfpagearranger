@@ -1,6 +1,5 @@
 import Foundation
 import PDFKit
-import UIKit
 
 enum CompressionError: LocalizedError, Equatable {
     case unreadableInput
@@ -37,10 +36,9 @@ protocol CompressionStrategy {
     ) throws -> PDFDocument
 }
 
-/// Recompresses image-dominant pages with JPEG downsampling while preserving text pages via vector redraw.
-struct ImageDownsampleCompressionStrategy: CompressionStrategy {
-    private let minimumTextLengthForVectorPreservation = 24
-
+/// Rewrites PDFs using vector page copies and document metadata cleanup.
+/// Never rasterizes page content or converts pages into image-only PDFs.
+struct MetadataOptimizationCompressionStrategy: CompressionStrategy {
     func compressDocument(
         _ document: PDFDocument,
         settings: CompressionSettings,
@@ -57,25 +55,16 @@ struct ImageDownsampleCompressionStrategy: CompressionStrategy {
                 throw CompressionError.cancelled
             }
 
-            guard let sourcePage = document.page(at: index)?.copy() as? PDFPage else {
+            guard let originalPage = document.page(at: index),
+                  let copiedPage = originalPage.copy() as? PDFPage else {
                 continue
             }
 
-            let rebuiltPage: PDFPage?
-            if settings.preset.usesImageDownsampling, isImageDominantPage(sourcePage) {
-                rebuiltPage = rasterizedPage(from: sourcePage, preset: settings.preset)
-            } else {
-                rebuiltPage = sourcePage.copy() as? PDFPage
+            if copiedPage.rotation != originalPage.rotation {
+                copiedPage.rotation = originalPage.rotation
             }
 
-            guard let rebuiltPage else {
-                throw CompressionError.compressionFailed
-            }
-
-            if rebuiltPage.rotation != sourcePage.rotation {
-                rebuiltPage.rotation = sourcePage.rotation
-            }
-            outputDocument.insert(rebuiltPage, at: outputDocument.pageCount)
+            outputDocument.insert(copiedPage, at: outputDocument.pageCount)
             progress(Double(index + 1) / Double(pageCount))
         }
 
@@ -83,94 +72,26 @@ struct ImageDownsampleCompressionStrategy: CompressionStrategy {
             throw CompressionError.compressionFailed
         }
 
+        applyMetadataOptimization(to: outputDocument, preset: settings.preset)
+
         return outputDocument
     }
 
-    private func isImageDominantPage(_ page: PDFPage) -> Bool {
-        let text = page.string?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return text.count < minimumTextLengthForVectorPreservation
-    }
+    private func applyMetadataOptimization(to document: PDFDocument, preset: CompressionPreset) {
+        var attributes = document.documentAttributes ?? [:]
 
-    private func vectorCopiedPage(from page: PDFPage) -> PDFPage? {
-        guard let drawPage = page.copy() as? PDFPage else { return nil }
-
-        let rotation = drawPage.rotation
-        drawPage.rotation = 0
-
-        var mediaBox = drawPage.bounds(for: .mediaBox)
-        guard mediaBox.width > 0, mediaBox.height > 0 else { return nil }
-
-        let data = NSMutableData()
-        guard let consumer = CGDataConsumer(data: data as CFMutableData),
-              let context = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
-            return nil
+        for key in preset.metadataKeysToRemove {
+            attributes.removeValue(forKey: key)
         }
 
-        var pageInfo: [CFString: Any] = [kCGPDFContextMediaBox: mediaBox]
-        if rotation != 0 {
-            pageInfo["Rotate" as CFString] = rotation
+        if preset.stripsLargeCustomMetadata {
+            attributes = attributes.filter { _, value in
+                guard let string = value as? String else { return true }
+                return string.count <= 256
+            }
         }
 
-        context.beginPDFPage(pageInfo as CFDictionary)
-        drawPage.draw(with: .mediaBox, to: context)
-        context.endPDFPage()
-        context.closePDF()
-
-        guard let document = PDFDocument(data: data as Data),
-              let copiedPage = document.page(at: 0)?.copy() as? PDFPage else {
-            return nil
-        }
-
-        copiedPage.rotation = rotation
-        return copiedPage
-    }
-
-    private func rasterizedPage(from page: PDFPage, preset: CompressionPreset) -> PDFPage? {
-        guard let drawPage = page.copy() as? PDFPage else { return nil }
-
-        let rotation = drawPage.rotation
-        drawPage.rotation = 0
-
-        let mediaBox = drawPage.bounds(for: .mediaBox)
-        guard mediaBox.width > 0, mediaBox.height > 0 else { return nil }
-
-        let scale = min(1, preset.maxImageDimension / max(mediaBox.width, mediaBox.height))
-        let renderSize = CGSize(width: mediaBox.width * scale, height: mediaBox.height * scale)
-        let rendered = drawPage.thumbnail(of: renderSize, for: .mediaBox)
-
-        guard let jpegData = rendered.jpegData(compressionQuality: preset.jpegQuality),
-              let compressedImage = UIImage(data: jpegData) else {
-            drawPage.rotation = rotation
-            return vectorCopiedPage(from: page)
-        }
-
-        var pageMediaBox = mediaBox
-        let data = NSMutableData()
-        guard let consumer = CGDataConsumer(data: data as CFMutableData),
-              let context = CGContext(consumer: consumer, mediaBox: &pageMediaBox, nil) else {
-            drawPage.rotation = rotation
-            return vectorCopiedPage(from: page)
-        }
-
-        var pageInfo: [CFString: Any] = [kCGPDFContextMediaBox: pageMediaBox]
-        if rotation != 0 {
-            pageInfo["Rotate" as CFString] = rotation
-        }
-
-        context.beginPDFPage(pageInfo as CFDictionary)
-        compressedImage.draw(in: pageMediaBox)
-        context.endPDFPage()
-        context.closePDF()
-
-        guard let document = PDFDocument(data: data as Data),
-              let rasterPage = document.page(at: 0)?.copy() as? PDFPage else {
-            drawPage.rotation = rotation
-            return vectorCopiedPage(from: page)
-        }
-
-        rasterPage.rotation = rotation
-        return rasterPage
+        document.documentAttributes = attributes
     }
 }
 
@@ -202,7 +123,7 @@ actor CompressionService {
     private let fileManager = FileManager.default
     private let cancellationFlag = CompressionCancellationFlag()
 
-    init(strategy: CompressionStrategy = ImageDownsampleCompressionStrategy()) {
+    init(strategy: CompressionStrategy = MetadataOptimizationCompressionStrategy()) {
         self.strategy = strategy
     }
 

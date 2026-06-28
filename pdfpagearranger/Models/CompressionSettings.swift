@@ -1,4 +1,5 @@
 import Foundation
+import PDFKit
 
 enum CompressionPreset: String, CaseIterable, Identifiable, Codable {
     case highestQuality
@@ -23,37 +24,37 @@ enum CompressionPreset: String, CaseIterable, Identifiable, Codable {
     var detail: String {
         switch self {
         case .highestQuality:
-            return "Best visual fidelity with modest size savings."
+            return "Preserves all vector content; removes only redundant producer metadata."
         case .balanced:
-            return "Recommended balance of quality and file size."
+            return "Recommended balance that keeps text and links while trimming document metadata."
         case .smallestFile:
-            return "Smallest size; image-heavy pages may lose sharpness."
+            return "Most aggressive metadata cleanup while keeping pages fully vector."
         }
     }
 
-    var jpegQuality: CGFloat {
+    var metadataKeysToRemove: [String] {
         switch self {
         case .highestQuality:
-            return 0.88
+            return [PDFDocumentAttribute.producerAttribute.rawValue]
         case .balanced:
-            return 0.62
+            return [
+                PDFDocumentAttribute.producerAttribute.rawValue,
+                PDFDocumentAttribute.creatorAttribute.rawValue,
+                PDFDocumentAttribute.keywordsAttribute.rawValue,
+            ]
         case .smallestFile:
-            return 0.42
+            return [
+                PDFDocumentAttribute.producerAttribute.rawValue,
+                PDFDocumentAttribute.creatorAttribute.rawValue,
+                PDFDocumentAttribute.keywordsAttribute.rawValue,
+                PDFDocumentAttribute.authorAttribute.rawValue,
+                PDFDocumentAttribute.subjectAttribute.rawValue,
+                PDFDocumentAttribute.titleAttribute.rawValue,
+            ]
         }
     }
 
-    var maxImageDimension: CGFloat {
-        switch self {
-        case .highestQuality:
-            return 2_400
-        case .balanced:
-            return 1_600
-        case .smallestFile:
-            return 1_050
-        }
-    }
-
-    var usesImageDownsampling: Bool {
+    var stripsLargeCustomMetadata: Bool {
         switch self {
         case .highestQuality:
             return false
@@ -67,11 +68,11 @@ enum CompressionPreset: String, CaseIterable, Identifiable, Codable {
         let ratio: Double
         switch self {
         case .highestQuality:
-            ratio = 0.88
+            ratio = 0.92
         case .balanced:
-            ratio = 0.58
+            ratio = 0.82
         case .smallestFile:
-            ratio = 0.38
+            ratio = 0.72
         }
         return Int64((Double(originalBytes) * ratio).rounded(.down))
     }
