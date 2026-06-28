@@ -47,6 +47,90 @@ enum SignatureTestHelpers {
         makeSampleDrawing(color: color, offset: CGPoint(x: 400, y: 300))
     }
 
+    enum DrawingPlacement {
+        case top
+        case bottom
+        case left
+        case right
+        case center
+        case small
+        case large
+    }
+
+    static func makePlacementDrawing(
+        _ placement: DrawingPlacement,
+        color: UIColor = SignatureInkColor.defaultInk.uiColor
+    ) -> PKDrawing {
+        switch placement {
+        case .top:
+            return makeLocalizedStroke(center: CGPoint(x: 200, y: 14), color: color, span: 70)
+        case .bottom:
+            return makeLocalizedStroke(center: CGPoint(x: 200, y: 286), color: color, span: 70)
+        case .left:
+            return makeLocalizedStroke(center: CGPoint(x: 14, y: 150), color: color, span: 70)
+        case .right:
+            return makeLocalizedStroke(center: CGPoint(x: 386, y: 150), color: color, span: 70)
+        case .center:
+            return makeLocalizedStroke(center: CGPoint(x: 200, y: 150), color: color, span: 90)
+        case .small:
+            return makeLocalizedStroke(center: CGPoint(x: 200, y: 150), color: color, span: 24, strokeWidth: 2)
+        case .large:
+            return makeLocalizedStroke(center: CGPoint(x: 200, y: 150), color: color, span: 260, strokeWidth: 5)
+        }
+    }
+
+    static func transparentMargins(in image: UIImage) -> (top: CGFloat, bottom: CGFloat, left: CGFloat, right: CGFloat)? {
+        guard let bounds = SignatureRenderer.opaquePixelBounds(in: image) else { return nil }
+        return (
+            top: bounds.minY,
+            bottom: image.size.height - bounds.maxY,
+            left: bounds.minX,
+            right: image.size.width - bounds.maxX
+        )
+    }
+
+    private static func makeLocalizedStroke(
+        center: CGPoint,
+        color: UIColor,
+        span: CGFloat,
+        strokeWidth: CGFloat = 3
+    ) -> PKDrawing {
+        let halfSpan = span / 2
+        let points = [
+            PKStrokePoint(
+                location: CGPoint(x: center.x - halfSpan, y: center.y + 2),
+                timeOffset: 0,
+                size: CGSize(width: strokeWidth, height: strokeWidth),
+                opacity: 1,
+                force: 1,
+                azimuth: 0,
+                altitude: 0
+            ),
+            PKStrokePoint(
+                location: CGPoint(x: center.x, y: center.y - 2),
+                timeOffset: 0.05,
+                size: CGSize(width: strokeWidth, height: strokeWidth),
+                opacity: 1,
+                force: 1,
+                azimuth: 0,
+                altitude: 0
+            ),
+            PKStrokePoint(
+                location: CGPoint(x: center.x + halfSpan, y: center.y + 1),
+                timeOffset: 0.1,
+                size: CGSize(width: strokeWidth, height: strokeWidth),
+                opacity: 1,
+                force: 1,
+                azimuth: 0,
+                altitude: 0
+            ),
+        ]
+
+        let path = PKStrokePath(controlPoints: points, creationDate: Date())
+        let stroke = PKStroke(ink: PKInk(.pen, color: color), path: path)
+        return PKDrawing(strokes: [stroke])
+    }
+
     static func imageHasInkPixels(_ image: UIImage) -> Bool {
         guard let average = averageInkColor(in: image) else { return false }
         let total = Int(average.red) + Int(average.green) + Int(average.blue)
@@ -289,5 +373,55 @@ final class SignatureCaptureRegressionTests: XCTestCase {
         let source = try signatureCaptureViewSource()
         XCTAssertTrue(source.contains("canvasView?.drawing = PKDrawing()"))
         XCTAssertTrue(source.contains("hasDrawing = false"))
+    }
+
+    func testTightSignatureCropForEdgePlacements() throws {
+        let padding = SignatureRenderer.defaultPadding
+        let maxAllowedMargin = padding + 3
+
+        for placement in [
+            SignatureTestHelpers.DrawingPlacement.top,
+            .bottom,
+            .left,
+            .right,
+            .small,
+            .large,
+        ] {
+            let drawing = SignatureTestHelpers.makePlacementDrawing(placement)
+            let image = try XCTUnwrap(
+                SignatureRenderer.image(from: drawing),
+                "Expected image for placement \(placement)"
+            )
+            let margins = try XCTUnwrap(
+                SignatureTestHelpers.transparentMargins(in: image),
+                "Expected margins for placement \(placement)"
+            )
+
+            XCTAssertLessThanOrEqual(margins.top, maxAllowedMargin, "Top margin too large for \(placement)")
+            XCTAssertLessThanOrEqual(margins.bottom, maxAllowedMargin, "Bottom margin too large for \(placement)")
+            XCTAssertLessThanOrEqual(margins.left, maxAllowedMargin, "Left margin too large for \(placement)")
+            XCTAssertLessThanOrEqual(margins.right, maxAllowedMargin, "Right margin too large for \(placement)")
+        }
+    }
+
+    func testCropPaddingIsPreservedAroundInk() throws {
+        let drawing = SignatureTestHelpers.makePlacementDrawing(.center)
+        let padded = try XCTUnwrap(SignatureRenderer.image(from: drawing, padding: 8))
+        let tight = try XCTUnwrap(SignatureRenderer.image(from: drawing, padding: 0))
+
+        XCTAssertGreaterThanOrEqual(padded.size.width, tight.size.width + 14)
+        XCTAssertGreaterThanOrEqual(padded.size.height, tight.size.height + 14)
+
+        let margins = try XCTUnwrap(SignatureTestHelpers.transparentMargins(in: padded))
+        XCTAssertEqual(margins.top, 8, accuracy: 2)
+        XCTAssertEqual(margins.bottom, 8, accuracy: 2)
+        XCTAssertEqual(margins.left, 8, accuracy: 2)
+        XCTAssertEqual(margins.right, 8, accuracy: 2)
+    }
+
+    func testTransparentBackgroundPreservedAfterTightCrop() throws {
+        let drawing = SignatureTestHelpers.makePlacementDrawing(.center)
+        let image = try XCTUnwrap(SignatureRenderer.image(from: drawing))
+        XCTAssertTrue(SignatureTestHelpers.hasTransparentBackground(image))
     }
 }

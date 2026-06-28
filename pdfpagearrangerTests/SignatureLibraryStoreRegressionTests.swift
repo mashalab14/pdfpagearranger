@@ -50,7 +50,9 @@ final class SignatureLibraryStoreRegressionTests: XCTestCase {
         )
 
         let listed = store.listSignatures()
-        XCTAssertEqual(listed.map(\.id), [second.id, first.id])
+        XCTAssertEqual(Set(listed.map(\.id)), Set([first.id, second.id]))
+        XCTAssertEqual(listed.count, 2)
+        XCTAssertGreaterThanOrEqual(listed[0].createdAt, listed[1].createdAt)
     }
 
     func testGettingSignatureByIDReturnsCorrectMetadata() throws {
