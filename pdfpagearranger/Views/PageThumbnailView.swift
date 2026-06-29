@@ -18,9 +18,7 @@ struct PageThumbnailView: View {
     var body: some View {
         VStack(spacing: 8) {
             ZStack(alignment: .topLeading) {
-                thumbnailContent
-                    .frame(maxWidth: .infinity)
-                    .aspectRatio(0.72, contentMode: .fit)
+                thumbnailPreview
                     .background(Color(.secondarySystemBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay {
@@ -68,6 +66,41 @@ struct PageThumbnailView: View {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    @ViewBuilder
+    private var thumbnailPreview: some View {
+        let layout = thumbnailLayout
+
+        Group {
+            switch layout.orientation {
+            case .portraitStyle:
+                thumbnailContent
+                    .aspectRatio(layout.aspectRatio, contentMode: .fit)
+                    .frame(height: PageThumbnailLayout.standardPortraitHeight)
+            case .landscapeStyle:
+                thumbnailContent
+                    .aspectRatio(layout.aspectRatio, contentMode: .fit)
+                    .frame(width: PageThumbnailLayout.standardLandscapeWidth)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var thumbnailLayout: (orientation: PageThumbnailOrientation, aspectRatio: CGFloat) {
+        guard let page = document.page(at: item.originalPageIndex) else {
+            return (.portraitStyle, 0.72)
+        }
+
+        let bounds = page.bounds(for: .mediaBox)
+        return (
+            PageThumbnailLayout.orientation(for: item.rotation),
+            PageThumbnailLayout.displayAspectRatio(
+                pageWidth: bounds.width,
+                pageHeight: bounds.height,
+                rotation: item.rotation
+            )
+        )
     }
 
     private func pageActionButton(
