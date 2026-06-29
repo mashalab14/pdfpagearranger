@@ -20,6 +20,7 @@ struct PageEditorView: View {
     @State private var signatureLibraryShowsDefaultGuidance = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var selectedObjectID: UUID?
+    @State private var placementAnimatingOverlayIDs: Set<UUID> = []
     @State private var pageTransitionEdge: Edge = .trailing
 
     private let signatureLibraryStore: SignatureLibraryStore
@@ -116,6 +117,7 @@ struct PageEditorView: View {
         }
         .onChange(of: pageRoute.pageItemID) { _, _ in
             selectedObjectID = nil
+            placementAnimatingOverlayIDs.removeAll()
         }
         .task(id: renderTaskKey) {
             await loadPageImage()
@@ -129,6 +131,10 @@ struct PageEditorView: View {
                 pageImage: pageImage,
                 pageRotation: pageItem.rotation,
                 objects: viewModel.overlayObjects(for: pageItem.id),
+                placementAnimatingOverlayIDs: placementAnimatingOverlayIDs,
+                onPlacementAnimationFinished: { overlayID in
+                    placementAnimatingOverlayIDs.remove(overlayID)
+                },
                 selectedObjectID: $selectedObjectID,
                 imageProvider: { viewModel.imageAsset(for: $0) },
                 onUpdate: { viewModel.updateOverlay($0) },
@@ -202,12 +208,13 @@ struct PageEditorView: View {
             return
         }
 
-        viewModel.addImageOverlay(
+        let overlayID = viewModel.addImageOverlay(
             to: pageItem.id,
             image: image,
             pageAspectRatio: pageAspectRatio
         )
         selectedPhotoItem = nil
+        registerNewOverlayPlacement(overlayID: overlayID)
     }
 
     private func deleteSelectedOverlay() {
@@ -239,6 +246,12 @@ struct PageEditorView: View {
             image: image,
             pageAspectRatio: pageAspectRatio
         )
+        registerNewOverlayPlacement(overlayID: overlayID)
+    }
+
+    private func registerNewOverlayPlacement(overlayID: UUID) {
+        placementAnimatingOverlayIDs.insert(overlayID)
+        OverlayPlacementFeedback.playPlacementHaptic()
         selectedObjectID = overlayID
     }
 

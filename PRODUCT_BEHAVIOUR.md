@@ -769,6 +769,7 @@ See [Signatures](#20-signatures--library-drawing-placement).
 - From **Add → Image**
 - Placed at **centre** of page
 - Initial width: **35%** of page width (height from image aspect ratio, capped)
+- **Placement feedback:** light haptic + short scale/fade “stamp” animation (see [Overlay placement feedback](#overlay-placement-feedback))
 - **Undo:** one entry
 
 ### Appearance
@@ -903,9 +904,28 @@ Applies to **image overlays** and **signature overlays** (same UI).
 | **Tap overlay** (not selected) | Selects overlay; shows blue border, delete (×) top-right, resize handle bottom-right; brings overlay to **front** if it was behind another |
 | **Tap empty canvas** | Deselects |
 | **Select another overlay** | Switches selection |
-| **Place signature** (Quick Signature, library, or Save & Use) | New signature overlay is **auto-selected** |
+| **Place overlay** (image import, Quick Signature, Signature Library, or Save & Use) | New overlay is **auto-selected** with placement haptic + animation |
 
 **Only one overlay selected at a time.** No multi-select.
+
+### Overlay placement feedback
+
+When the user **newly places** an image or signature overlay in Page Mode (image import, Quick Signature, Signature Library, or Save & Use):
+
+| Feedback | Behaviour |
+|----------|-----------|
+| **Haptic** | Light impact haptic fires once on successful placement |
+| **Animation** | Overlay fades in (opacity 0 → 1) and scales up (~0.95 → 1.0) over ~150 ms |
+| **Selection** | New overlay remains **auto-selected** after the animation |
+
+**Animation does not run** for overlays that already exist when:
+
+- Reopening Page Mode or returning from Document Mode
+- Swiping between pages
+- Page zoom/pan or normal canvas rendering
+- Thumbnail rendering, export, undo/redo, or page duplicate
+
+Haptics do **not** fire for those cases either.
 
 ### Move (selected overlay)
 
@@ -1195,6 +1215,8 @@ After restart: user sees **home screen** and must **Import PDF** again. Saved si
 | Signature ink default color | **Black** |
 | Signature ink default thickness | **Medium** (~2.5 pt) |
 | Signature ink thickness options | **Thin** ~1.5 pt, **Medium** ~2.5 pt, **Thick** ~4.0 pt |
+| Overlay placement animation duration | **~150 ms** |
+| Overlay placement animation scale | **0.95 → 1.0** |
 | PDF import | **Single file**, PDF only |
 | Multi-page selection | **Not supported** |
 | Text overlays | **Not implemented** (shown as "Coming soon") |

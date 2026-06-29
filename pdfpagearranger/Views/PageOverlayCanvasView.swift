@@ -4,6 +4,8 @@ struct PageOverlayCanvasView: View {
     let pageImage: UIImage
     let pageRotation: Int
     let objects: [PageObject]
+    let placementAnimatingOverlayIDs: Set<UUID>
+    let onPlacementAnimationFinished: (UUID) -> Void
     @Binding var selectedObjectID: UUID?
     let imageProvider: (UUID) -> UIImage?
     let onUpdate: (PageObject) -> Void
@@ -82,6 +84,10 @@ struct PageOverlayCanvasView: View {
                         pageSize: fitSize,
                         canvasScale: scale,
                         isSelected: selectedObjectID == object.id,
+                        animatePlacement: placementAnimatingOverlayIDs.contains(object.id),
+                        onPlacementAnimationFinished: {
+                            onPlacementAnimationFinished(object.id)
+                        },
                         onSelect: {
                             selectedObjectID = object.id
                             bringToFront(object)

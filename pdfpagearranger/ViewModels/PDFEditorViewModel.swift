@@ -241,7 +241,8 @@ final class PDFEditorViewModel {
         imageAssets[assetID]
     }
 
-    func addImageOverlay(to pageItemID: UUID, image: UIImage, pageAspectRatio: CGFloat) {
+    @discardableResult
+    func addImageOverlay(to pageItemID: UUID, image: UIImage, pageAspectRatio: CGFloat) -> UUID {
         addRasterOverlay(
             to: pageItemID,
             image: image,

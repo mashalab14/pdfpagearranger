@@ -7,6 +7,8 @@ struct ImageOverlayObjectView: View {
     let pageSize: CGSize
     let canvasScale: CGFloat
     let isSelected: Bool
+    let animatePlacement: Bool
+    let onPlacementAnimationFinished: (() -> Void)?
     let onSelect: () -> Void
     let onUpdate: (PageObject) -> Void
     let onDelete: () -> Void
@@ -17,6 +19,8 @@ struct ImageOverlayObjectView: View {
     @State private var resizeScale: CGFloat = 1
     @State private var steadyResizeScale: CGFloat = 1
     @State private var resizeStartLayoutSize: CGSize?
+    @State private var placementReveal: CGFloat = 1
+    @State private var didStartPlacementAnimation = false
 
     private var layout: OverlayGeometryEngine.Layout {
         OverlayGeometryEngine.pageModeLayout(
@@ -60,6 +64,39 @@ struct ImageOverlayObjectView: View {
     }
 
     var body: some View {
+        overlayContent
+            .opacity(Double(object.opacity * placementReveal))
+            .scaleEffect(OverlayPlacementAnimation.scale(for: placementReveal))
+            .position(displayPosition)
+            .gesture(isSelected ? dragGesture : nil)
+            .simultaneousGesture(isSelected ? magnificationGesture : nil)
+            .onTapGesture {
+                onSelect()
+            }
+            .onAppear {
+                startPlacementAnimationIfNeeded()
+            }
+            .onChange(of: animatePlacement) { _, shouldAnimate in
+                if shouldAnimate {
+                    startPlacementAnimationIfNeeded()
+                } else {
+                    placementReveal = 1
+                    didStartPlacementAnimation = false
+                }
+            }
+            .onChange(of: isSelected) { _, selected in
+                if !selected {
+                    resetTransientGestureState()
+                }
+            }
+            .onChange(of: object.id) { _, _ in
+                resetTransientGestureState()
+                placementReveal = 1
+                didStartPlacementAnimation = false
+            }
+    }
+
+    private var overlayContent: some View {
         overlayImage
             .overlay(alignment: .topTrailing) {
                 if isSelected {
@@ -71,20 +108,6 @@ struct ImageOverlayObjectView: View {
                     resizeHandle
                 }
             }
-            .position(displayPosition)
-            .gesture(isSelected ? dragGesture : nil)
-            .simultaneousGesture(isSelected ? magnificationGesture : nil)
-            .onTapGesture {
-                onSelect()
-            }
-            .onChange(of: isSelected) { _, selected in
-                if !selected {
-                    resetTransientGestureState()
-                }
-            }
-            .onChange(of: object.id) { _, _ in
-                resetTransientGestureState()
-            }
     }
 
     private var overlayImage: some View {
@@ -92,7 +115,6 @@ struct ImageOverlayObjectView: View {
             .resizable()
             .scaledToFit()
             .frame(width: activeLayoutSize.width, height: activeLayoutSize.height)
-            .opacity(object.opacity)
             .rotationEffect(.degrees(layout.rotationDegrees))
             .overlay {
                 if isSelected {
@@ -271,5 +293,28 @@ struct ImageOverlayObjectView: View {
         dragOffset = .zero
         dragOriginCenter = nil
         resetResizeState()
+    }
+
+    private func startPlacementAnimationIfNeeded() {
+        guard animatePlacement, !didStartPlacementAnimation else {
+            if !animatePlacement {
+                placementReveal = 1
+            }
+            return
+        }
+
+        didStartPlacementAnimation = true
+        placementReveal = 0
+
+        withAnimation(.easeOut(duration: OverlayPlacementAnimation.duration)) {
+            placementReveal = 1
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(
+                nanoseconds: UInt64(OverlayPlacementAnimation.duration * 1_000_000_000)
+            )
+            onPlacementAnimationFinished?()
+        }
     }
 }
