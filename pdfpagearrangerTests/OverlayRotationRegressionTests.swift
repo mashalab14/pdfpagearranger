@@ -94,6 +94,38 @@ final class OverlayRotationRegressionTests: XCTestCase {
         XCTAssertNotEqual(withoutRotation.pngData(), withRotation.pngData())
     }
 
+    func testExportRotatedPageWithOverlayPreservesSearchableText() throws {
+        let expectedText = "RotatedOverlayExportText"
+        let sourceURL = try PDFTestFactory.writeTextPDF(named: "rotated-overlay-text", text: expectedText)
+        tempURLs.append(sourceURL)
+        let imported = try pdfService.importPDF(from: sourceURL)
+        tempURLs.append(imported.localURL)
+
+        var pages = pdfService.makeInitialPages(pageCount: 1)
+        pages[0].rotation = 90
+        let page = pages[0]
+        let assetID = UUID()
+        let overlay = OverlayTestFactory.makeImageOverlay(
+            pageItemID: page.id,
+            assetID: assetID,
+            position: CGPoint(x: 0.9, y: 0.1)
+        )
+
+        let exportURL = try pdfService.exportPDF(
+            pages: pages,
+            sourceDocument: imported.document,
+            outputName: "rotated-overlay-export",
+            overlaysByPage: [page.id: [overlay]],
+            imageAssets: [assetID: PDFTestFactory.makeTestImage(color: .green)]
+        )
+        tempURLs.append(exportURL)
+
+        try ExportAssertions.assertPageCount(1, in: exportURL)
+        try ExportAssertions.assertPageContainsText(expectedText, at: 0, in: exportURL)
+        XCTAssertEqual(PDFDocument(url: exportURL)?.page(at: 0)?.rotation, 90)
+        try ExportAssertions.assertExportDoesNotUseRasterizedPageInitializer()
+    }
+
     func testExportRotatedPageWithOverlayCompletesAndPreservesRotation() throws {
         let sourceURL = try PDFTestFactory.url(for: .onePage)
         tempURLs.append(sourceURL)

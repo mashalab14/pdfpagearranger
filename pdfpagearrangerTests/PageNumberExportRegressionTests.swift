@@ -244,7 +244,8 @@ final class PageNumberExportRegressionTests: XCTestCase {
     }
 
     func testRotatedPagesHandlePageNumbersCorrectly() throws {
-        let sourceURL = try PDFTestFixtures.makeTextPDF(text: "RotatedPageNumber")
+        let expectedText = "RotatedPageNumber"
+        let sourceURL = try PDFTestFixtures.makeTextPDF(text: expectedText)
         tempURLs.append(sourceURL)
 
         let imported = try pdfService.importPDF(from: sourceURL)
@@ -264,8 +265,10 @@ final class PageNumberExportRegressionTests: XCTestCase {
         tempURLs.append(exportURL)
 
         try ExportAssertions.assertPageContainsText("Page 1", at: 0, in: exportURL)
+        try ExportAssertions.assertPageContainsText(expectedText, at: 0, in: exportURL)
 
         let exportedPage = try XCTUnwrap(PDFDocument(url: exportURL)?.page(at: 0))
+        XCTAssertEqual(exportedPage.rotation, 90)
         let mediaBox = exportedPage.bounds(for: .mediaBox)
         let anchor = PageNumberRenderer.pdfAnchor(
             position: .bottomCenter,

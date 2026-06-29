@@ -145,7 +145,11 @@ final class PDFService {
             return nil
         }
 
-        sourcePage.rotation = item.rotation
+        // Draw the source content stream without baking /Rotate into the new PDF.
+        // PDFPage.draw(with:to:) flattens text when the page carries a non-zero rotation;
+        // decorations are mapped with pageRotation and /Rotate is set on the output page.
+        let pageRotation = item.rotation
+        sourcePage.rotation = 0
         var mediaBox = sourcePage.bounds(for: .mediaBox)
         guard mediaBox.width > 0, mediaBox.height > 0 else { return nil }
 
@@ -166,7 +170,7 @@ final class PDFService {
                 overlays,
                 images: imageAssets,
                 in: mediaBox,
-                pageRotation: item.rotation,
+                pageRotation: pageRotation,
                 context: context
             )
         }
@@ -176,7 +180,7 @@ final class PDFService {
             PageNumberRenderer.drawInPDFContext(
                 context: context,
                 mediaBox: mediaBox,
-                pageRotation: item.rotation,
+                pageRotation: pageRotation,
                 settings: pageNumberSettings,
                 displayNumber: displayNumber,
                 totalPages: totalPages
@@ -191,6 +195,7 @@ final class PDFService {
             return nil
         }
 
+        page.rotation = pageRotation
         return page
     }
 

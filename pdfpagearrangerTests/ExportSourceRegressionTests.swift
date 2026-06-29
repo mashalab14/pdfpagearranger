@@ -14,5 +14,13 @@ final class ExportSourceRegressionTests: XCTestCase {
         )
         XCTAssertTrue(source.contains("sourcePage.draw(with: .mediaBox, to: context)"))
         XCTAssertTrue(source.contains("OverlayPDFExporter.drawOverlays"))
+        XCTAssertTrue(
+            source.contains("sourcePage.rotation = 0"),
+            "Decorated export must draw source content without baking /Rotate into the content stream."
+        )
+        XCTAssertTrue(
+            source.contains("page.rotation = pageRotation"),
+            "Decorated export must apply /Rotate on the output page after composition."
+        )
     }
 }

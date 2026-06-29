@@ -107,8 +107,9 @@ final class DocumentThumbnailLayoutRegressionTests: XCTestCase {
 
     func testExportRotationBehaviorRemainsUnchanged() throws {
         let exportSource = try TestSourceLoader.source(named: "PDFService.swift", subdirectory: "Services")
-        XCTAssertTrue(exportSource.contains("sourcePage.rotation = item.rotation"))
-        XCTAssertTrue(exportSource.contains("pageRotation: item.rotation"))
+        XCTAssertTrue(exportSource.contains("sourcePage.rotation = 0"))
+        XCTAssertTrue(exportSource.contains("page.rotation = pageRotation"))
+        XCTAssertTrue(exportSource.contains("pageRotation: pageRotation"))
     }
 }
 
