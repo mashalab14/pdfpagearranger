@@ -103,13 +103,13 @@ struct EditorView: View {
             }
         }
         .navigationDestination(item: $selectedPageRoute) { route in
-            if let document = viewModel.sourceDocument,
-               let index = viewModel.pageIndex(for: route.pageItemID),
-               let item = viewModel.pages.first(where: { $0.id == route.pageItemID }) {
+            if let document = viewModel.sourceDocument {
                 PageEditorView(
                     viewModel: viewModel,
-                    pageItem: item,
-                    pageNumber: index + 1,
+                    pageRoute: Binding(
+                        get: { selectedPageRoute ?? route },
+                        set: { selectedPageRoute = $0 }
+                    ),
                     document: document
                 )
             }

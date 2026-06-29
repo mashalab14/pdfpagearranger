@@ -8,17 +8,31 @@ struct PageOverlayCanvasView: View {
     let imageProvider: (UUID) -> UIImage?
     let onUpdate: (PageObject) -> Void
     let onDelete: (UUID) -> Void
+    let onPageSwipe: ((PageModeNavigationDirection) -> Void)?
 
     @State private var scale: CGFloat = 1
     @State private var steadyScale: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var steadyOffset: CGSize = .zero
+    @State private var overlayManipulationState = OverlayManipulationState()
 
     private let minScale: CGFloat = 1
     private let maxScale: CGFloat = 4
 
     private var pageZoomEnabled: Bool {
         selectedObjectID == nil
+    }
+
+    private var isPageZoomed: Bool {
+        scale > minScale + 0.01 || offset != .zero
+    }
+
+    private var pageSwipeEnabled: Bool {
+        onPageSwipe != nil
+            && PageModeNavigationEngine.shouldAllowPageSwipe(
+                overlayManipulationActive: overlayManipulationState.isActive,
+                isPageZoomed: isPageZoomed
+            )
     }
 
     var body: some View {
@@ -33,6 +47,9 @@ struct PageOverlayCanvasView: View {
                 .contentShape(Rectangle())
                 .gesture(pageZoomEnabled ? magnificationGesture : nil)
                 .simultaneousGesture(pageZoomEnabled ? panGesture : nil)
+                .simultaneousGesture(pageSwipeEnabled ? pageSwipeGesture : nil)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("pageModeCanvas")
                 .onTapGesture {
                     selectedObjectID = nil
                 }
@@ -75,7 +92,8 @@ struct PageOverlayCanvasView: View {
                             if selectedObjectID == object.id {
                                 selectedObjectID = nil
                             }
-                        }
+                        },
+                        manipulationState: overlayManipulationState
                     )
                 }
             }
@@ -84,6 +102,17 @@ struct PageOverlayCanvasView: View {
 
     private var sortedObjects: [PageObject] {
         objects.sorted { $0.zIndex < $1.zIndex }
+    }
+
+    private var pageSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 20)
+            .onEnded { value in
+                guard pageSwipeEnabled,
+                      let direction = PageModeNavigationEngine.direction(for: value.translation) else {
+                    return
+                }
+                onPageSwipe?(direction)
+            }
     }
 
     private var magnificationGesture: some Gesture {

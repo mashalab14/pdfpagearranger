@@ -8,9 +8,8 @@ struct PageEditorRoute: Hashable {
 
 struct PageEditorView: View {
     @Bindable var viewModel: PDFEditorViewModel
+    @Binding var pageRoute: PageEditorRoute
 
-    let pageItem: PageItem
-    let pageNumber: Int
     let document: PDFDocument
 
     @Environment(\.dismiss) private var dismiss
@@ -20,36 +19,41 @@ struct PageEditorView: View {
     @State private var showSignatureLibrary = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var selectedObjectID: UUID?
+    @State private var pageTransitionEdge: Edge = .trailing
 
     private let signatureLibraryStore: SignatureLibraryStore
 
     init(
         viewModel: PDFEditorViewModel,
-        pageItem: PageItem,
-        pageNumber: Int,
+        pageRoute: Binding<PageEditorRoute>,
         document: PDFDocument,
         signatureLibraryStore: SignatureLibraryStore
     ) {
         self._viewModel = Bindable(wrappedValue: viewModel)
-        self.pageItem = pageItem
-        self.pageNumber = pageNumber
+        self._pageRoute = pageRoute
         self.document = document
         self.signatureLibraryStore = signatureLibraryStore
     }
 
     init(
         viewModel: PDFEditorViewModel,
-        pageItem: PageItem,
-        pageNumber: Int,
+        pageRoute: Binding<PageEditorRoute>,
         document: PDFDocument
     ) {
         self.init(
             viewModel: viewModel,
-            pageItem: pageItem,
-            pageNumber: pageNumber,
+            pageRoute: pageRoute,
             document: document,
             signatureLibraryStore: Self.makeDefaultSignatureLibraryStore()
         )
+    }
+
+    private var pageItem: PageItem? {
+        viewModel.pages.first(where: { $0.id == pageRoute.pageItemID })
+    }
+
+    private var pageNumber: Int {
+        (viewModel.pageIndex(for: pageRoute.pageItemID) ?? 0) + 1
     }
 
     var body: some View {
@@ -65,6 +69,7 @@ struct PageEditorView: View {
         .navigationBarBackButtonHidden(false)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pageModeView")
+        .accessibilityValue("page \(pageNumber) of \(viewModel.pageCount)")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Done") {
@@ -91,6 +96,7 @@ struct PageEditorView: View {
         }
         .sheet(isPresented: $showSignatureLibrary) {
             SignatureLibraryView(store: signatureLibraryStore) { image in
+                guard let pageItem else { return }
                 viewModel.addSignatureOverlay(
                     to: pageItem.id,
                     image: image,
@@ -105,6 +111,9 @@ struct PageEditorView: View {
                 await importPhotoItem(newItem)
             }
         }
+        .onChange(of: pageRoute.pageItemID) { _, _ in
+            selectedObjectID = nil
+        }
         .task(id: renderTaskKey) {
             await loadPageImage()
         }
@@ -112,7 +121,7 @@ struct PageEditorView: View {
 
     @ViewBuilder
     private var pageContent: some View {
-        if let pageImage {
+        if let pageImage, let pageItem {
             PageOverlayCanvasView(
                 pageImage: pageImage,
                 pageRotation: pageItem.rotation,
@@ -120,9 +129,17 @@ struct PageEditorView: View {
                 selectedObjectID: $selectedObjectID,
                 imageProvider: { viewModel.imageAsset(for: $0) },
                 onUpdate: { viewModel.updateOverlay($0) },
-                onDelete: { viewModel.deleteOverlay(id: $0, pageItemID: pageItem.id) }
+                onDelete: { viewModel.deleteOverlay(id: $0, pageItemID: pageItem.id) },
+                onPageSwipe: { direction in
+                    navigateToAdjacentPage(direction: direction)
+                }
             )
             .padding()
+            .id(pageItem.id)
+            .transition(.asymmetric(
+                insertion: .move(edge: pageTransitionEdge),
+                removal: .move(edge: pageTransitionEdge == .trailing ? .leading : .trailing)
+            ))
         } else {
             ProgressView("Loading page…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -149,11 +166,14 @@ struct PageEditorView: View {
     }
 
     private var renderTaskKey: String {
-        "\(pageItem.id.uuidString)-\(pageItem.rotation)-\(viewModel.pageNumberSettings.thumbnailCacheKeySuffix)-\(pageNumber - 1)-\(viewModel.pageCount)"
+        guard let pageItem else { return "missing-page" }
+        let exportIndex = viewModel.pageIndex(for: pageItem.id) ?? (pageNumber - 1)
+        return "\(pageItem.id.uuidString)-\(pageItem.rotation)-\(viewModel.pageNumberSettings.thumbnailCacheKeySuffix)-\(exportIndex)-\(viewModel.pageCount)"
     }
 
     private var pageAspectRatio: CGFloat {
-        guard let page = document.page(at: pageItem.originalPageIndex) else {
+        guard let pageItem,
+              let page = document.page(at: pageItem.originalPageIndex) else {
             return 8.5 / 11.0
         }
         let bounds = page.bounds(for: .mediaBox)
@@ -161,6 +181,7 @@ struct PageEditorView: View {
     }
 
     private func loadPageImage() async {
+        guard let pageItem else { return }
         let exportIndex = viewModel.pageIndex(for: pageItem.id) ?? (pageNumber - 1)
         pageImage = await PageRenderService.shared.pageImage(
             for: pageItem,
@@ -172,7 +193,8 @@ struct PageEditorView: View {
     }
 
     private func importPhotoItem(_ item: PhotosPickerItem) async {
-        guard let data = try? await item.loadTransferable(type: Data.self),
+        guard let pageItem,
+              let data = try? await item.loadTransferable(type: Data.self),
               let image = UIImage(data: data) else {
             return
         }
@@ -186,9 +208,27 @@ struct PageEditorView: View {
     }
 
     private func deleteSelectedOverlay() {
-        guard let selectedObjectID else { return }
+        guard let pageItem, let selectedObjectID else { return }
         viewModel.deleteOverlay(id: selectedObjectID, pageItemID: pageItem.id)
         self.selectedObjectID = nil
+    }
+
+    private func navigateToAdjacentPage(direction: PageModeNavigationDirection) {
+        guard let currentIndex = viewModel.pageIndex(for: pageRoute.pageItemID),
+              let targetIndex = PageModeNavigationEngine.adjacentPageIndex(
+                currentIndex: currentIndex,
+                pageCount: viewModel.pageCount,
+                direction: direction
+              ) else {
+            return
+        }
+
+        selectedObjectID = nil
+        pageTransitionEdge = direction == .next ? .trailing : .leading
+
+        withAnimation(.easeInOut(duration: 0.25)) {
+            pageRoute = PageEditorRoute(pageItemID: viewModel.pages[targetIndex].id)
+        }
     }
 
     private static func makeDefaultSignatureLibraryStore() -> SignatureLibraryStore {
@@ -208,8 +248,7 @@ struct PageEditorView: View {
     NavigationStack {
         PageEditorView(
             viewModel: PDFEditorViewModel(),
-            pageItem: PageItem(originalPageIndex: 0),
-            pageNumber: 1,
+            pageRoute: .constant(PageEditorRoute(pageItemID: PageItem(originalPageIndex: 0).id)),
             document: PDFDocument()
         )
     }

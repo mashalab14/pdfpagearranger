@@ -10,6 +10,7 @@ struct ImageOverlayObjectView: View {
     let onSelect: () -> Void
     let onUpdate: (PageObject) -> Void
     let onDelete: () -> Void
+    let manipulationState: OverlayManipulationState
 
     @State private var dragOffset: CGSize = .zero
     @State private var dragOriginCenter: CGPoint?
@@ -131,6 +132,7 @@ struct ImageOverlayObjectView: View {
     private var dragGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                manipulationState.begin()
                 if dragOriginCenter == nil {
                     dragOriginCenter = layout.center
                 }
@@ -162,12 +164,14 @@ struct ImageOverlayObjectView: View {
 
                 dragOffset = .zero
                 dragOriginCenter = nil
+                manipulationState.end()
             }
     }
 
     private var resizeHandleGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                manipulationState.begin()
                 if resizeStartLayoutSize == nil {
                     resizeStartLayoutSize = layout.size
                 }
@@ -209,12 +213,14 @@ struct ImageOverlayObjectView: View {
                 )
 
                 resetResizeState()
+                manipulationState.end()
             }
     }
 
     private var magnificationGesture: some Gesture {
         MagnificationGesture()
             .onChanged { value in
+                manipulationState.begin()
                 resizeScale = max(steadyResizeScale * value, OverlayInteractionEngine.minMagnificationScale)
             }
             .onEnded { value in
@@ -230,6 +236,7 @@ struct ImageOverlayObjectView: View {
                 )
 
                 resetResizeState()
+                manipulationState.end()
             }
     }
 
