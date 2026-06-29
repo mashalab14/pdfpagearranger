@@ -176,7 +176,7 @@ struct PageEditorView: View {
     private var renderTaskKey: String {
         guard let pageItem else { return "missing-page" }
         let exportIndex = viewModel.pageIndex(for: pageItem.id) ?? (pageNumber - 1)
-        return "\(pageItem.id.uuidString)-\(pageItem.rotation)-\(viewModel.pageNumberSettings.thumbnailCacheKeySuffix)-\(exportIndex)-\(viewModel.pageCount)"
+        return "\(pageItem.id.uuidString)-\(pageItem.rotation)-\(viewModel.pageNumberSettings.thumbnailCacheKeySuffix)-\(viewModel.watermarkSettings.thumbnailCacheKeySuffix)-\(exportIndex)-\(viewModel.pageCount)"
     }
 
     private var pageAspectRatio: CGFloat {
@@ -195,6 +195,7 @@ struct PageEditorView: View {
             for: pageItem,
             document: document,
             pageNumberSettings: viewModel.pageNumberSettings,
+            watermarkSettings: viewModel.watermarkSettings,
             exportIndex: exportIndex,
             totalPages: viewModel.pageCount
         )

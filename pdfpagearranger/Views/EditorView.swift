@@ -9,6 +9,7 @@ struct EditorView: View {
     @State private var showShareSheet = false
     @State private var showCompression = false
     @State private var showPageNumbers = false
+    @State private var showWatermark = false
     @State private var exportURL: URL?
     @State private var exportError: String?
     @State private var draggedPageID: UUID?
@@ -64,6 +65,8 @@ struct EditorView: View {
                         showCompression = true
                     case .pageNumbers:
                         showPageNumbers = true
+                    case .watermark:
+                        showWatermark = true
                     case .export:
                         handleExportTap()
                     }
@@ -75,6 +78,9 @@ struct EditorView: View {
         }
         .sheet(isPresented: $showPageNumbers) {
             PageNumbersView(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showWatermark) {
+            WatermarkView(viewModel: viewModel)
         }
         .sheet(isPresented: $showPaywall) {
             PaywallView(pageCount: viewModel.pageCount) {
@@ -126,6 +132,7 @@ struct EditorView: View {
             overlayImages: viewModel.overlayImages(for: item.id),
             overlayRevision: viewModel.overlayRevision(for: item.id),
             pageNumberSettings: viewModel.pageNumberSettings,
+            watermarkSettings: viewModel.watermarkSettings,
             exportIndex: index,
             totalPages: viewModel.pageCount,
             onRotate: { viewModel.rotatePage(id: item.id) },

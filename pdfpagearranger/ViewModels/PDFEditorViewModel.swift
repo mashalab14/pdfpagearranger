@@ -18,6 +18,7 @@ final class PDFEditorViewModel {
     private var imageAssets: [UUID: UIImage] = [:]
     private var overlayRevisions: [UUID: Int] = [:]
     private(set) var pageNumberSettings: PageNumberSettings = .default
+    private(set) var watermarkSettings: WatermarkSettings = .default
     private let pdfService = PDFService()
     private let compressionService = CompressionService()
     let proGate = ProGate()
@@ -52,6 +53,7 @@ final class PDFEditorViewModel {
             pages = pdfService.makeInitialPages(pageCount: imported.pageCount)
             undoStack.removeAll()
             pageNumberSettings = .default
+            watermarkSettings = .default
             clearOverlays()
             await ThumbnailService.shared.clear()
         } catch {
@@ -85,6 +87,7 @@ final class PDFEditorViewModel {
         localSourceURL = nil
         undoStack.removeAll()
         pageNumberSettings = .default
+        watermarkSettings = .default
         errorMessage = nil
         clearOverlays()
     }
@@ -142,6 +145,7 @@ final class PDFEditorViewModel {
         overlayRevisions = snapshot.overlayRevisions
         imageAssets = snapshot.imageAssets
         pageNumberSettings = snapshot.pageNumberSettings
+        watermarkSettings = snapshot.watermarkSettings
         Task {
             await ThumbnailService.shared.clear()
         }
@@ -157,8 +161,27 @@ final class PDFEditorViewModel {
             outputName: documentName.isEmpty ? "document" : documentName,
             overlaysByPage: pageObjectsByPage,
             imageAssets: imageAssets,
-            pageNumberSettings: pageNumberSettings
+            pageNumberSettings: pageNumberSettings,
+            watermarkSettings: watermarkSettings
         )
+    }
+
+    func applyWatermark(_ settings: WatermarkSettings) {
+        pushUndoSnapshot()
+        watermarkSettings = settings
+        watermarkSettings.isEnabled = true
+        Task {
+            await ThumbnailService.shared.clear()
+        }
+    }
+
+    func removeWatermark() {
+        guard watermarkSettings.isEnabled else { return }
+        pushUndoSnapshot()
+        watermarkSettings = .default
+        Task {
+            await ThumbnailService.shared.clear()
+        }
     }
 
     func applyPageNumbers(_ settings: PageNumberSettings) {
@@ -395,7 +418,8 @@ final class PDFEditorViewModel {
             pageObjectsByPage: pageObjectsByPage,
             overlayRevisions: overlayRevisions,
             imageAssets: imageAssets,
-            pageNumberSettings: pageNumberSettings
+            pageNumberSettings: pageNumberSettings,
+            watermarkSettings: watermarkSettings
         ))
         if undoStack.count > 50 {
             undoStack.removeFirst()

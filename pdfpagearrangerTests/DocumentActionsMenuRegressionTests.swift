@@ -5,7 +5,7 @@ final class DocumentActionsMenuRegressionTests: XCTestCase {
     func testDocumentActionsMenuDefinesImplementedActions() {
         XCTAssertEqual(
             DocumentAction.implementedActions,
-            [.compress, .pageNumbers, .export]
+            [.compress, .pageNumbers, .watermark, .export]
         )
     }
 
@@ -13,6 +13,7 @@ final class DocumentActionsMenuRegressionTests: XCTestCase {
         let editorSource = try TestSourceLoader.source(named: "EditorView.swift")
 
         XCTAssertTrue(editorSource.contains("DocumentActionsMenu"))
+        XCTAssertTrue(editorSource.contains("showWatermark"))
         XCTAssertFalse(editorSource.contains("Button(\"Compress\")"))
         XCTAssertFalse(editorSource.contains("Button(\"Export\")"))
     }
@@ -24,6 +25,7 @@ final class DocumentActionsMenuRegressionTests: XCTestCase {
         XCTAssertTrue(menuSource.contains("static var implementedActions"))
         XCTAssertTrue(menuSource.contains("case compress"))
         XCTAssertTrue(menuSource.contains("case pageNumbers"))
+        XCTAssertTrue(menuSource.contains("case watermark"))
         XCTAssertTrue(menuSource.contains("case export"))
     }
 }

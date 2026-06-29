@@ -2,7 +2,7 @@
 
 This document describes **exactly how the app behaves today** from the user's perspective. It is intended for designers, product managers, QA engineers, and other agents who need to understand the product without reading source code.
 
-**Last verified against:** the codebase as of the current release (includes Document Mode, Page Mode, overlays, signatures with Quick Signature and default/favorite, signature stroke thickness, page numbers, compression, export, appearance settings, and horizontal Page Mode navigation).
+**Last verified against:** the codebase as of the current release (includes Document Mode, Page Mode, overlays, signatures with Quick Signature and default/favorite, signature stroke thickness, page numbers, text watermark, compression, export, appearance settings, and horizontal Page Mode navigation).
 
 ---
 
@@ -22,6 +22,7 @@ This document describes **exactly how the app behaves today** from the user's pe
 12. [Paywall (export limit)](#12-paywall-export-limit)
 13. [Compression](#13-compression)
 14. [Page Numbers](#14-page-numbers)
+14.5. [Text Watermark](#145-text-watermark)
 15. [Page Mode](#15-page-mode)
 16. [Page Mode navigation (swipe between pages)](#16-page-mode-navigation-swipe-between-pages)
 17. [Page Mode zoom and pan](#17-page-mode-zoom-and-pan)
@@ -51,6 +52,7 @@ This document describes **exactly how the app behaves today** from the user's pe
 - Open a single page for detailed editing (**Page Mode**)
 - Add image overlays and signatures on individual pages (including one-tap **Quick Signature** when a default is set)
 - Apply document-wide page numbers
+- Apply document-wide text watermarks
 - Compress the document
 - Export a new PDF reflecting all changes
 - Change app appearance (light / dark / device)
@@ -89,6 +91,7 @@ App
 │       └── Signature Capture (sheet, from library)
 ├── Compression (sheet, from Document Actions)
 ├── Page Numbers (sheet, from Document Actions)
+├── Watermark (sheet, from Document Actions)
 ├── Paywall (sheet, from Export when over free limit)
 └── Export share sheet (system share)
 ```
@@ -364,6 +367,7 @@ Tapping **New PDF**:
 |------|------|------------------|
 | **Compress** | arrow.down.doc | Compression sheet |
 | **Page Numbers** | number | Page Numbers sheet |
+| **Watermark** | drop.degreesign | Watermark sheet |
 | **Export** | square.and.arrow.up | Export flow (may show paywall) |
 
 ---
@@ -382,6 +386,7 @@ A **new PDF file** built from:
 - Per-page rotation
 - Image and signature overlays
 - Applied page numbers (if enabled)
+- Applied text watermark (if enabled)
 - Original PDF page content preserved as vector where possible (searchable text on supported paths)
 
 The exported file name: **`{documentName}-arranged.pdf`** (slashes and colons in the name replaced with hyphens).
@@ -595,6 +600,54 @@ After success:
 
 - Font size (fixed at 12 pt in product defaults)
 - Opacity (fixed at 100%)
+
+---
+
+## 14.5 Text Watermark
+
+### Entry point
+
+- **Watermark** in Document Actions menu
+
+### Sheet layout
+
+**Title:** Watermark  
+**Close** button (top-left)
+
+**Sections:**
+
+1. **Text** — watermark string (default **CONFIDENTIAL**)
+2. **Appearance**
+   - Opacity slider (**0.1…1.0**, default **0.35**)
+   - Font size stepper (**12…120**, default **48**; scales per page width on export/preview)
+   - Rotation stepper (**−180°…180°**, default **45°**)
+   - Color presets: Gray, Black, Blue, Red (default Gray)
+   - Position: Center (**default**), Top, Bottom
+3. **Apply To**
+   - **Entire document** (default)
+   - **Current page** — stepper to pick page number
+   - **Page range** — from/to steppers
+4. **Preview** — rotated sample of the watermark text
+5. **Actions**
+   - **Apply Watermark** — applies and dismisses (disabled if text empty)
+   - **Remove Watermark** (destructive) — only when watermark is active
+
+### Rendering
+
+- Document-level settings stored in session (not page overlays)
+- Vector text in export; raster composited on thumbnails and Page Mode preview
+- Drawn **behind** image/signature overlays; page numbers remain on top when both are enabled
+- Scales proportionally per page (reference width: US Letter)
+- Works with rotated pages and mixed page sizes
+
+### Undo
+
+- Apply, change, or remove watermark: **one undo entry** each
+
+### Remove Watermark
+
+- Clears watermark settings only
+- Does **not** remove signatures, images, page numbers, or original PDF content
 
 ---
 
@@ -1231,7 +1284,7 @@ After restart: user sees **home screen** and must **Import PDF** again. Saved si
 3. **Paywall is a placeholder** — "Continue for now" unlocks Pro for the session only; no real purchase.
 4. **Paywall lists "coming soon" features** (merge & split, batch tools) that are not in the app.
 5. **Text overlays** — shown in Add menu but disabled ("Coming soon").
-6. **No watermark, OCR, split, merge, password protect** in Document Actions (commented as future only).
+6. **No OCR, split, merge, password protect** in Document Actions (future only). Watermark is implemented.
 7. **Page number font size and opacity** — not user-configurable in UI.
 8. **Overlay opacity and rotation** — not user-configurable in UI.
 9. **No multi-select** for pages or overlays.
@@ -1255,7 +1308,6 @@ The following are **not** available in the current product (do not test for them
 - Save project / reopen project
 - Multiple open documents
 - Text overlay editing
-- Watermark
 - OCR
 - Split / merge PDFs
 - Password protect PDF

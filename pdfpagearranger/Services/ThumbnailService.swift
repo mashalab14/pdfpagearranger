@@ -20,10 +20,11 @@ actor ThumbnailService {
         overlayImages: [UUID: UIImage],
         revision: Int,
         pageNumberSettings: PageNumberSettings = .default,
+        watermarkSettings: WatermarkSettings = .default,
         exportIndex: Int = 0,
         totalPages: Int = 1
     ) async -> UIImage? {
-        let cacheKey = "\(item.id.uuidString)-\(item.rotation)-\(revision)-\(pageNumberSettings.thumbnailCacheKeySuffix)-\(exportIndex)-\(totalPages)" as NSString
+        let cacheKey = "\(item.id.uuidString)-\(item.rotation)-\(revision)-\(pageNumberSettings.thumbnailCacheKeySuffix)-\(watermarkSettings.thumbnailCacheKeySuffix)-\(exportIndex)-\(totalPages)" as NSString
         if let cached = cache.object(forKey: cacheKey) {
             return cached
         }
@@ -38,6 +39,7 @@ actor ThumbnailService {
             overlays: overlays,
             overlayImages: overlayImages,
             pageNumberSettings: pageNumberSettings,
+            watermarkSettings: watermarkSettings,
             exportIndex: exportIndex,
             totalPages: totalPages
         )
@@ -59,10 +61,12 @@ actor ThumbnailService {
         overlays: [PageObject],
         overlayImages: [UUID: UIImage],
         pageNumberSettings: PageNumberSettings,
+        watermarkSettings: WatermarkSettings,
         exportIndex: Int,
         totalPages: Int
     ) async -> UIImage? {
         let maxDimension = maxThumbnailDimension
+        let mediaBox = page.bounds(for: .mediaBox)
         return await Task.detached(priority: .utility) {
             guard var image = PDFPreviewRenderer.image(
                 from: page,
@@ -71,6 +75,15 @@ actor ThumbnailService {
                 maxScale: 1.0
             ) else {
                 return nil
+            }
+
+            if watermarkSettings.shouldApply(toExportIndex: exportIndex) {
+                image = WatermarkRenderer.compositeOnImage(
+                    baseImage: image,
+                    pageRotation: rotation,
+                    settings: watermarkSettings,
+                    mediaBoxWidth: mediaBox.width
+                )
             }
 
             if !overlays.isEmpty {

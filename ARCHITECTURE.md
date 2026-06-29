@@ -66,7 +66,7 @@ Examples (planned, not built):
 
 - Text overlays
 - Signature overlays
-- Page numbers, watermarks
+- Page numbers, watermarks *(text watermark V1 implemented)*
 
 **Current code:** Page Mode (`PageEditorView`) edits overlays for one `PageItem`. Overlays are stored in `pageObjectsByPage[pageItemID]`.
 
@@ -112,6 +112,8 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`PDFService`** | Import (copy to temp), export (assemble new PDF), initial `PageItem` list. |
 | **`PDFPreviewRenderer`** | On-screen PDF page rasterization via `PDFPage.thumbnail` (correct orientation). |
 | **`PageRenderService`** | High-resolution page image for Page Mode. |
+| **`WatermarkSettings`** | Document-level text watermark configuration (text, opacity, font, color, rotation, position, apply scope). |
+| **`WatermarkRenderer`** | Vector watermark text for PDF export; image compositing for thumbnails and Page Mode. |
 | **`PageModeLayoutSizing`** | Page Mode width-fill layout: safe area + 16 pt horizontal margins; height from page aspect ratio. |
 | **`ThumbnailService`** | Cached document thumbnails; composited with overlays when present. |
 | **`OverlayCompositor`** | Draws image overlays onto a thumbnail/page bitmap using `OverlayGeometryEngine`. |
@@ -129,10 +131,10 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **Document Mode** | `EditorView` | Page grid, page ops, export |
 | **Page Mode** | `PageEditorView` | Overlay editing on one page |
 
-### Export pipeline (overlays)
+### Export pipeline (overlays, watermark, page numbers)
 
-1. For pages **without** overlays: copy source `PDFPage`, apply rotation, insert.
-2. For pages **with** overlays: draw source page vector content with `PDFPage.draw`, then draw overlay images via `OverlayPDFExporter`.
+1. For pages **without** overlays, watermark, or page numbers: copy source `PDFPage`, apply rotation, insert.
+2. For pages **with** decorations: draw source page vector content with `PDFPage.draw`, then **watermark** (vector text), then overlay images via `OverlayPDFExporter`, then page numbers.
 3. **Do not** use `PDFPage(image:)` for export — that rasterizes the page and destroys selectable text.
 
 ---

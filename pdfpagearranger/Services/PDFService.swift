@@ -83,16 +83,22 @@ final class PDFService {
         outputName: String,
         overlaysByPage: [UUID: [PageObject]] = [:],
         imageAssets: [UUID: UIImage] = [:],
-        pageNumberSettings: PageNumberSettings = .default
+        pageNumberSettings: PageNumberSettings = .default,
+        watermarkSettings: WatermarkSettings = .default
     ) throws -> URL {
         let outputDocument = PDFDocument()
         let totalPages = pages.count
 
         for (exportIndex, item) in pages.enumerated() {
             let overlays = overlaysByPage[item.id] ?? []
-            let needsPageNumber = pageNumberSettings.shouldApply(toExportIndex: exportIndex)
+            let needsDecoration = Self.pageNeedsDecoration(
+                overlays: overlays,
+                exportIndex: exportIndex,
+                pageNumberSettings: pageNumberSettings,
+                watermarkSettings: watermarkSettings
+            )
 
-            if overlays.isEmpty, !needsPageNumber {
+            if !needsDecoration {
                 guard let sourcePage = sourceDocument.page(at: item.originalPageIndex)?.copy() as? PDFPage else {
                     continue
                 }
@@ -105,7 +111,8 @@ final class PDFService {
                 sourceDocument: sourceDocument,
                 overlays: overlays,
                 imageAssets: imageAssets,
-                pageNumberSettings: pageNumberSettings
+                pageNumberSettings: pageNumberSettings,
+                watermarkSettings: watermarkSettings
             ) {
                 outputDocument.insert(decoratedPage, at: outputDocument.pageCount)
             }
@@ -139,7 +146,8 @@ final class PDFService {
         sourceDocument: PDFDocument,
         overlays: [PageObject],
         imageAssets: [UUID: UIImage],
-        pageNumberSettings: PageNumberSettings
+        pageNumberSettings: PageNumberSettings,
+        watermarkSettings: WatermarkSettings
     ) -> PDFPage? {
         guard let sourcePage = sourceDocument.page(at: item.originalPageIndex)?.copy() as? PDFPage else {
             return nil
@@ -163,6 +171,15 @@ final class PDFService {
 
         // Draw original page content as vector PDF (preserves selectable text).
         sourcePage.draw(with: .mediaBox, to: context)
+
+        if watermarkSettings.shouldApply(toExportIndex: exportIndex) {
+            WatermarkRenderer.drawInPDFContext(
+                context: context,
+                mediaBox: mediaBox,
+                pageRotation: pageRotation,
+                settings: watermarkSettings
+            )
+        }
 
         if !overlays.isEmpty {
             // Draw image overlays on top in mapped PDF coordinates.
@@ -197,6 +214,17 @@ final class PDFService {
 
         page.rotation = pageRotation
         return page
+    }
+
+    private static func pageNeedsDecoration(
+        overlays: [PageObject],
+        exportIndex: Int,
+        pageNumberSettings: PageNumberSettings,
+        watermarkSettings: WatermarkSettings
+    ) -> Bool {
+        !overlays.isEmpty
+            || pageNumberSettings.shouldApply(toExportIndex: exportIndex)
+            || watermarkSettings.shouldApply(toExportIndex: exportIndex)
     }
 
     func page(at index: Int, in document: PDFDocument) -> PDFPage? {

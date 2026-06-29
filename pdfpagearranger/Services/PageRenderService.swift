@@ -10,6 +10,7 @@ actor PageRenderService {
         document: PDFDocument,
         maxDimension: CGFloat = 2048,
         pageNumberSettings: PageNumberSettings = .default,
+        watermarkSettings: WatermarkSettings = .default,
         exportIndex: Int = 0,
         totalPages: Int = 1
     ) async -> UIImage? {
@@ -22,6 +23,7 @@ actor PageRenderService {
             rotation: item.rotation,
             maxDimension: maxDimension,
             pageNumberSettings: pageNumberSettings,
+            watermarkSettings: watermarkSettings,
             exportIndex: exportIndex,
             totalPages: totalPages
         )
@@ -32,16 +34,27 @@ actor PageRenderService {
         rotation: Int,
         maxDimension: CGFloat,
         pageNumberSettings: PageNumberSettings,
+        watermarkSettings: WatermarkSettings,
         exportIndex: Int,
         totalPages: Int
     ) async -> UIImage? {
-        await Task.detached(priority: .userInitiated) {
+        let mediaBox = page.bounds(for: .mediaBox)
+        return await Task.detached(priority: .userInitiated) {
             guard var image = PDFPreviewRenderer.image(
                 from: page,
                 rotation: rotation,
                 maxDimension: maxDimension
             ) else {
                 return nil
+            }
+
+            if watermarkSettings.shouldApply(toExportIndex: exportIndex) {
+                image = WatermarkRenderer.compositeOnImage(
+                    baseImage: image,
+                    pageRotation: rotation,
+                    settings: watermarkSettings,
+                    mediaBoxWidth: mediaBox.width
+                )
             }
 
             if pageNumberSettings.shouldApply(toExportIndex: exportIndex) {
