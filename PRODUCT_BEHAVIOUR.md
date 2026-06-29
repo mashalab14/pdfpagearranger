@@ -609,7 +609,7 @@ After success:
 - Navigation title: **"Page N"** (N = position in current list, 1-based)
 - **Back** chevron (system) — returns to Document Mode
 - **Done** button (top-right) — same as back; returns to Document Mode
-- **Main area:** page preview with overlays (or loading spinner)
+- **Main area:** page preview scaled to **fill the maximum horizontal width** (16 pt margin from each safe-area edge); aspect ratio preserved; document centered horizontally; any extra vertical space remains below the page
 - **Bottom bar:** prominent **Add** button (plus.circle.fill)
 
 ### Loading state

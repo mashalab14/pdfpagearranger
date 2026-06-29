@@ -39,13 +39,18 @@ struct PageOverlayCanvasView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let fitSize = aspectFitSize(imageSize: pageImage.size, in: geometry.size)
+            let displaySize = PageModeLayoutSizing.displaySize(
+                imageSize: pageImage.size,
+                containerSize: geometry.size,
+                leadingSafeAreaInset: geometry.safeAreaInsets.leading,
+                trailingSafeAreaInset: geometry.safeAreaInsets.trailing
+            )
 
-            pageStack(fitSize: fitSize)
-                .frame(width: fitSize.width, height: fitSize.height)
+            pageStack(fitSize: displaySize)
+                .frame(width: displaySize.width, height: displaySize.height)
                 .scaleEffect(scale)
                 .offset(offset)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .contentShape(Rectangle())
                 .gesture(pageZoomEnabled ? magnificationGesture : nil)
                 .simultaneousGesture(pageZoomEnabled ? panGesture : nil)
@@ -62,6 +67,7 @@ struct PageOverlayCanvasView: View {
                     }
                 }
         }
+        .ignoresSafeArea(edges: .horizontal)
     }
 
     @ViewBuilder
@@ -165,19 +171,4 @@ struct PageOverlayCanvasView: View {
         onUpdate(updated)
     }
 
-    private func aspectFitSize(imageSize: CGSize, in containerSize: CGSize) -> CGSize {
-        guard imageSize.width > 0, imageSize.height > 0,
-              containerSize.width > 0, containerSize.height > 0 else {
-            return .zero
-        }
-
-        let widthScale = containerSize.width / imageSize.width
-        let heightScale = containerSize.height / imageSize.height
-        let fitScale = min(widthScale, heightScale)
-
-        return CGSize(
-            width: imageSize.width * fitScale,
-            height: imageSize.height * fitScale
-        )
-    }
 }

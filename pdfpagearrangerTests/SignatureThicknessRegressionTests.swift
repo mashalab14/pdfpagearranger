@@ -47,12 +47,12 @@ final class SignatureThicknessRegressionTests: XCTestCase {
 
     func testSelectingMediumUpdatesDrawingToolWidth() {
         let tool = SignatureInkThickness.medium.inkingTool(color: .black)
-        XCTAssertEqual(tool.width, 2.5, accuracy: 0.01)
+        XCTAssertEqual(tool.width, 3.0, accuracy: 0.01)
     }
 
     func testSelectingThickUpdatesDrawingToolWidth() {
         let tool = SignatureInkThickness.thick.inkingTool(color: .black)
-        XCTAssertEqual(tool.width, 4.0, accuracy: 0.01)
+        XCTAssertEqual(tool.width, 6.0, accuracy: 0.01)
     }
 
     func testThicknessPersistsAcrossCaptureSessions() {

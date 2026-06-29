@@ -24,9 +24,9 @@ enum SignatureInkThickness: String, CaseIterable, Identifiable, Codable, Equatab
         case .thin:
             return 1.5
         case .medium:
-            return 2.5
+            return 3.0
         case .thick:
-            return 4.0
+            return 6.0
         }
     }
 

@@ -143,7 +143,6 @@ struct PageEditorView: View {
                     navigateToAdjacentPage(direction: direction)
                 }
             )
-            .padding()
             .id(pageItem.id)
             .transition(.asymmetric(
                 insertion: .move(edge: pageTransitionEdge),

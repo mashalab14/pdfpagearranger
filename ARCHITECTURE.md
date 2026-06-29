@@ -112,6 +112,7 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`PDFService`** | Import (copy to temp), export (assemble new PDF), initial `PageItem` list. |
 | **`PDFPreviewRenderer`** | On-screen PDF page rasterization via `PDFPage.thumbnail` (correct orientation). |
 | **`PageRenderService`** | High-resolution page image for Page Mode. |
+| **`PageModeLayoutSizing`** | Page Mode width-fill layout: safe area + 16 pt horizontal margins; height from page aspect ratio. |
 | **`ThumbnailService`** | Cached document thumbnails; composited with overlays when present. |
 | **`OverlayCompositor`** | Draws image overlays onto a thumbnail/page bitmap using `OverlayGeometryEngine`. |
 | **`OverlayPDFExporter`** | Draws image overlays into a PDF `CGContext` using `OverlayGeometryEngine`. |
@@ -152,7 +153,7 @@ Page rotation (`PageItem.rotation`) is applied at **render time**, not by mutati
 
 ### SwiftUI / Page Mode *(top-left origin)*
 
-`ImageOverlayObjectView` uses `OverlayGeometryEngine.pageModeLayout` to convert normalized storage → pixel center, size, and rotation on the fitted page canvas.
+`PageEditorView` sizes the canvas with `PageModeLayoutSizing` (width fills safe area minus 16 pt margins; height from aspect ratio). `ImageOverlayObjectView` uses `OverlayGeometryEngine.pageModeLayout` to convert normalized storage → pixel center, size, and rotation on the fitted page canvas.
 
 ### Thumbnail coordinates *(top-left origin)*
 
