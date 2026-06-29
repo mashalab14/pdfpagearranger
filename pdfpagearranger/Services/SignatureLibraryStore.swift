@@ -152,21 +152,31 @@ final class SignatureLibraryStore {
     /// Resolves the signature used for Quick Signature.
     /// Uses the stored default when set; otherwise treats a single saved signature as default.
     func resolveQuickSignatureAsset() -> SignatureAsset? {
-        let signatures = loadMetadataRecords()
+        switch resolveQuickSignatureResolution() {
+        case .placeImmediately(let asset):
+            return asset
+        case .openLibrary:
+            return nil
+        }
+    }
+
+    func resolveQuickSignatureResolution() -> QuickSignatureResolution {
+        let signatures = loadMetadataRecords().filter { hasImageFile(for: $0) }
+
+        if signatures.isEmpty {
+            return .openLibrary(showDefaultGuidanceBanner: false)
+        }
 
         if let defaultID = sanitizedPreferences().defaultSignatureID,
-           let asset = signatures.first(where: { $0.id == defaultID }),
-           hasImageFile(for: asset) {
-            return asset
+           let asset = signatures.first(where: { $0.id == defaultID }) {
+            return .placeImmediately(asset)
         }
 
-        if signatures.count == 1,
-           let only = signatures.first,
-           hasImageFile(for: only) {
-            return only
+        if signatures.count == 1, let only = signatures.first {
+            return .placeImmediately(only)
         }
 
-        return nil
+        return .openLibrary(showDefaultGuidanceBanner: true)
     }
 
     func quickSignatureImage() -> UIImage? {

@@ -133,6 +133,46 @@ final class SignatureDefaultRegressionTests: XCTestCase {
         XCTAssertNil(store.defaultSignatureID())
         XCTAssertNil(store.resolveQuickSignatureAsset())
         XCTAssertNil(store.quickSignatureImage())
+        guard case .openLibrary(let showBanner) = store.resolveQuickSignatureResolution() else {
+            return XCTFail("Expected library to open when multiple signatures have no Default Signature")
+        }
+        XCTAssertTrue(showBanner)
+    }
+
+    func testQuickSignatureWithNoSignaturesOpensEmptyLibrary() {
+        guard case .openLibrary(let showBanner) = store.resolveQuickSignatureResolution() else {
+            return XCTFail("Expected library to open when no signatures exist")
+        }
+        XCTAssertFalse(showBanner)
+    }
+
+    func testQuickSignatureWithExplicitDefaultPlacesImmediately() throws {
+        let defaultAsset = try store.saveSignature(
+            imageData: SignatureAssetTestFactory.makePNGData(color: .red),
+            sourceType: .drawn
+        )
+        _ = try store.saveSignature(
+            imageData: SignatureAssetTestFactory.makePNGData(color: .blue),
+            sourceType: .drawn
+        )
+        try store.setDefaultSignature(id: defaultAsset.id)
+
+        guard case .placeImmediately(let resolved) = store.resolveQuickSignatureResolution() else {
+            return XCTFail("Expected immediate placement for explicit Default Signature")
+        }
+        XCTAssertEqual(resolved.id, defaultAsset.id)
+    }
+
+    func testQuickSignatureWithSingleSignatureAndNoDefaultPlacesImmediately() throws {
+        let only = try store.saveSignature(
+            imageData: SignatureAssetTestFactory.makePNGData(),
+            sourceType: .drawn
+        )
+
+        guard case .placeImmediately(let resolved) = store.resolveQuickSignatureResolution() else {
+            return XCTFail("Expected immediate placement for single saved signature")
+        }
+        XCTAssertEqual(resolved.id, only.id)
     }
 
     func testNonDefaultSignaturesRemainSelectable() throws {
@@ -236,17 +276,39 @@ final class SignatureDefaultUIRegressionTests: XCTestCase {
     func testSignatureLibraryShowsDefaultStarControls() throws {
         let source = try signatureLibraryViewSource()
         XCTAssertTrue(source.contains("star.fill"))
-        XCTAssertTrue(source.contains("setDefaultSignature"))
+        XCTAssertTrue(source.contains("setDefault"))
+        XCTAssertTrue(source.contains("@State private var defaultSignatureID"))
+        XCTAssertTrue(source.contains("defaultSignatureID = asset.id"))
+        XCTAssertTrue(source.contains("defaultSignatureID == asset.id"))
         XCTAssertTrue(source.contains("signatureLibraryDefaultButton_"))
         XCTAssertTrue(source.contains("signatureLibraryDefaultBadge_"))
+        XCTAssertTrue(source.contains("Default Signature"))
+        XCTAssertFalse(source.contains("\"Favorite\""))
+    }
+
+    func testSignatureLibraryShowsDefaultGuidanceBannerWhenRequested() throws {
+        let source = try signatureLibraryViewSource()
+        XCTAssertTrue(source.contains("showDefaultGuidanceBanner"))
+        XCTAssertTrue(source.contains("signatureLibraryDefaultGuidanceBanner"))
+        XCTAssertTrue(source.contains("Choose a default signature for one-tap signing."))
     }
 
     func testPageEditorSupportsQuickSignaturePlacement() throws {
         let source = try pageEditorViewSource()
         XCTAssertTrue(source.contains("handleQuickSignature"))
-        XCTAssertTrue(source.contains("quickSignatureImage"))
+        XCTAssertTrue(source.contains("resolveQuickSignatureResolution"))
+        XCTAssertTrue(source.contains("signatureLibraryShowsDefaultGuidance"))
         XCTAssertTrue(source.contains("placeSignature"))
         XCTAssertTrue(source.contains("selectedObjectID = overlayID"))
+    }
+
+    func testDefaultSignatureStateUpdatesImmediatelyWithoutStoreReadInTile() throws {
+        let source = try signatureLibraryViewSource()
+        let tileSection = source
+            .components(separatedBy: "signatureTile(for asset:")[1]
+            .components(separatedBy: "private var renameAlertIsPresented")[0]
+        XCTAssertTrue(tileSection.contains("let isDefault = defaultSignatureID == asset.id"))
+        XCTAssertFalse(tileSection.contains("store.isDefaultSignature"))
     }
 
     private func pageAddOptionsSheetSource() throws -> String {

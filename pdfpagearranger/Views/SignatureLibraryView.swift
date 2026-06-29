@@ -4,17 +4,30 @@ struct SignatureLibraryView: View {
     @Environment(\.dismiss) private var dismiss
 
     let store: SignatureLibraryStore
+    let showDefaultGuidanceBanner: Bool
     let onSelectSignature: (UIImage) -> Void
 
     @State private var signatures: [SignatureAsset] = []
+    @State private var defaultSignatureID: UUID?
     @State private var showCapture = false
     @State private var assetPendingRename: SignatureAsset?
     @State private var renameDraftName = ""
+    @State private var showDefaultSignatureError = false
 
     private let gridColumns = [
         GridItem(.flexible(), spacing: 16),
         GridItem(.flexible(), spacing: 16),
     ]
+
+    init(
+        store: SignatureLibraryStore,
+        showDefaultGuidanceBanner: Bool = false,
+        onSelectSignature: @escaping (UIImage) -> Void
+    ) {
+        self.store = store
+        self.showDefaultGuidanceBanner = showDefaultGuidanceBanner
+        self.onSelectSignature = onSelectSignature
+    }
 
     var body: some View {
         NavigationStack {
@@ -36,6 +49,7 @@ struct SignatureLibraryView: View {
             }
             .onAppear {
                 reloadSignatures()
+                syncDefaultSignatureIDFromStore()
             }
             .sheet(isPresented: $showCapture) {
                 SignatureCaptureView { image, strokeThickness in
@@ -52,6 +66,11 @@ struct SignatureLibraryView: View {
                 }
             } message: {
                 Text("Enter a name for this signature.")
+            }
+            .alert("Default Signature", isPresented: $showDefaultSignatureError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Could not save the default signature. Please try again.")
             }
         }
         .presentationDetents([.large])
@@ -88,6 +107,10 @@ struct SignatureLibraryView: View {
     private var signatureList: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                if showDefaultGuidanceBanner {
+                    defaultGuidanceBanner
+                }
+
                 Button {
                     showCapture = true
                 } label: {
@@ -108,9 +131,20 @@ struct SignatureLibraryView: View {
         }
     }
 
+    private var defaultGuidanceBanner: some View {
+        Text("Choose a default signature for one-tap signing.")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .accessibilityIdentifier("signatureLibraryDefaultGuidanceBanner")
+    }
+
     @ViewBuilder
     private func signatureTile(for asset: SignatureAsset) -> some View {
-        let isDefault = store.isDefaultSignature(id: asset.id)
+        let isDefault = defaultSignatureID == asset.id
 
         VStack(spacing: 8) {
             ZStack(alignment: .topTrailing) {
@@ -143,7 +177,7 @@ struct SignatureLibraryView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(6)
-                .accessibilityLabel(isDefault ? "Default signature" : "Set as default signature")
+                .accessibilityLabel(isDefault ? "Default Signature" : "Set as Default Signature")
                 .accessibilityIdentifier("signatureLibraryDefaultButton_\(asset.id.uuidString)")
             }
 
@@ -154,7 +188,7 @@ struct SignatureLibraryView: View {
                     .lineLimit(1)
 
                 if isDefault {
-                    Text("Default")
+                    Text("Default Signature")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 6)
@@ -211,6 +245,10 @@ struct SignatureLibraryView: View {
         signatures = store.listSignatures()
     }
 
+    private func syncDefaultSignatureIDFromStore() {
+        defaultSignatureID = store.defaultSignatureID()
+    }
+
     private func selectAsset(_ asset: SignatureAsset) {
         guard let data = store.loadImageData(for: asset),
               let image = UIImage(data: data) else {
@@ -251,13 +289,24 @@ struct SignatureLibraryView: View {
     }
 
     private func deleteAsset(_ asset: SignatureAsset) {
+        if defaultSignatureID == asset.id {
+            defaultSignatureID = nil
+        }
         store.deleteSignature(id: asset.id)
         reloadSignatures()
+        syncDefaultSignatureIDFromStore()
     }
 
     private func setDefault(_ asset: SignatureAsset) {
-        try? store.setDefaultSignature(id: asset.id)
-        reloadSignatures()
+        let previousDefaultID = defaultSignatureID
+        defaultSignatureID = asset.id
+
+        do {
+            try store.setDefaultSignature(id: asset.id)
+        } catch {
+            defaultSignatureID = previousDefaultID
+            showDefaultSignatureError = true
+        }
     }
 }
 

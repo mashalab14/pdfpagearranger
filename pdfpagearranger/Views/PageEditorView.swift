@@ -17,6 +17,7 @@ struct PageEditorView: View {
     @State private var showAddSheet = false
     @State private var showPhotosPicker = false
     @State private var showSignatureLibrary = false
+    @State private var signatureLibraryShowsDefaultGuidance = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var selectedObjectID: UUID?
     @State private var pageTransitionEdge: Edge = .trailing
@@ -93,12 +94,16 @@ struct PageEditorView: View {
                     handleQuickSignature()
                 },
                 onSignatureLibraryTapped: {
+                    signatureLibraryShowsDefaultGuidance = false
                     showSignatureLibrary = true
                 }
             )
         }
         .sheet(isPresented: $showSignatureLibrary) {
-            SignatureLibraryView(store: signatureLibraryStore) { image in
+            SignatureLibraryView(
+                store: signatureLibraryStore,
+                showDefaultGuidanceBanner: signatureLibraryShowsDefaultGuidance
+            ) { image in
                 placeSignature(image: image)
             }
         }
@@ -212,9 +217,17 @@ struct PageEditorView: View {
     }
 
     private func handleQuickSignature() {
-        if let image = signatureLibraryStore.quickSignatureImage() {
+        switch signatureLibraryStore.resolveQuickSignatureResolution() {
+        case .placeImmediately(let asset):
+            guard let data = signatureLibraryStore.loadImageData(for: asset),
+                  let image = UIImage(data: data) else {
+                signatureLibraryShowsDefaultGuidance = false
+                showSignatureLibrary = true
+                return
+            }
             placeSignature(image: image)
-        } else {
+        case .openLibrary(let showDefaultGuidanceBanner):
+            signatureLibraryShowsDefaultGuidance = showDefaultGuidanceBanner
             showSignatureLibrary = true
         }
     }

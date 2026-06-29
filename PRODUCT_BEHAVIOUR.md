@@ -742,9 +742,10 @@ After success:
 
 | Situation | Result |
 |-----------|--------|
-| User has a **default signature** set in the library | Signature is placed on the current page **immediately** (no library sheet). The placed overlay is **auto-selected** (resize handles visible). |
-| User has **exactly one** saved signature and **no** explicit default | That single signature is treated as the default for Quick Signature only (same immediate placement behaviour). |
-| User has **no** saved signatures, or **multiple** signatures with **no** default | **Signature Library** opens instead (empty state or grid, same as choosing Signature Library). |
+| **Case A** — User has an explicit **Default Signature** set | Signature is placed on the current page **immediately** (Add sheet dismisses; library does **not** open). Placed overlay is **auto-selected**. |
+| **Case B** — User has **exactly one** saved signature and **no** explicit Default Signature | That signature is placed **immediately** with the same auto-select behaviour. User is **not** required to mark it as default. |
+| **Case C** — User has **multiple** saved signatures and **no** explicit Default Signature | **Signature Library** opens with a guidance banner at the top: *"Choose a default signature for one-tap signing."* User can place any signature, set a Default Signature via the star, or create a new one. |
+| **Case D** — User has **no** saved signatures | **Signature Library** opens in the **empty state** (Create Signature). No guidance banner. |
 
 Quick Signature does **not** open the drawing capture screen directly.
 
@@ -804,16 +805,18 @@ See [Adding content in Page Mode — Quick Signature](#quick-signature). Uses th
 
 **With saved signatures:**
 
+- **Guidance banner** (only when opened via Quick Signature with multiple signatures and no Default Signature): *"Choose a default signature for one-tap signing."*
 - **Create New Signature** button at top
 - Grid (2 columns) of saved signatures with name labels
-- **Star button** (top-right of each tile) — tap to set that signature as **default** (see [Default signature](#default--favorite-signature))
+- **Star button** (top-right of each tile) — tap to set that signature as **Default Signature** (see [Default Signature](#default-signature))
 - Tap a signature tile (thumbnail area) → places on current page, **dismisses library**; placed overlay is **auto-selected**
 
-**Default signature visual state:**
+**Default Signature visual state** (updates **immediately** when the star is tapped — no need to close and reopen the library):
 
 - Filled **yellow star** on the tile
 - Accent-colour border around the thumbnail
-- **"Default"** badge beside the name label
+- **"Default Signature"** badge beside the name label
+- Previous Default Signature loses its star and badge at once
 
 **Toolbar:** **Cancel** — dismisses without placing
 
@@ -824,14 +827,15 @@ See [Adding content in Page Mode — Quick Signature](#quick-signature). Uses th
 
 **Rename failure** (e.g. empty name): rename silently fails; list unchanged
 
-### Default / favorite signature
+### Default Signature
 
-- Only **one** signature can be default at a time
+- Only **one** signature can be the Default Signature at a time
 - Set by tapping the **star** on a library tile (not via long-press menu)
-- Tapping a different star **replaces** the previous default
+- Tapping a different star **replaces** the previous Default Signature **immediately** in the UI, then persists to storage
+- If saving the Default Signature fails, the UI **reverts** and an alert is shown
 - Default preference is **persisted** across app launches (`library-preferences.json` in the signature library folder)
-- Quick Signature uses the stored default when set
-- If there is **exactly one** saved signature and **no** explicit default, Quick Signature still works using that signature (this fallback does **not** show the default star/badge until the user taps the star)
+- Quick Signature uses the stored Default Signature when set (Case A)
+- If there is **exactly one** saved signature and **no** explicit Default Signature, Quick Signature still places it immediately (Case B; star/badge remain unset until the user taps the star)
 
 ### Signature capture (drawing)
 
@@ -1001,7 +1005,7 @@ Three ways:
 | Gesture | Target | Effect |
 |---------|--------|--------|
 | **Tap** | Signature tile (thumbnail) | Use on page |
-| **Tap** | Star button on tile | Set as default signature |
+| **Tap** | Star button on tile | Set as Default Signature (immediate UI update) |
 | **Long press** | Signature tile | Context menu (Rename / Delete) |
 
 ### Signature capture
