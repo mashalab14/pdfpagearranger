@@ -2,7 +2,7 @@
 
 This document describes **exactly how the app behaves today** from the user's perspective. It is intended for designers, product managers, QA engineers, and other agents who need to understand the product without reading source code.
 
-**Last verified against:** the codebase as of the current release (includes Document Mode, Page Mode, overlays, signatures, page numbers, compression, export, appearance settings, and horizontal Page Mode navigation).
+**Last verified against:** the codebase as of the current release (includes Document Mode, Page Mode, overlays, signatures with Quick Signature and default/favorite, signature stroke thickness, page numbers, compression, export, appearance settings, and horizontal Page Mode navigation).
 
 ---
 
@@ -49,7 +49,7 @@ This document describes **exactly how the app behaves today** from the user's pe
 - View all pages in a scrollable grid (**Document Mode**)
 - Reorder, rotate, duplicate, and delete pages
 - Open a single page for detailed editing (**Page Mode**)
-- Add image overlays and signatures on individual pages
+- Add image overlays and signatures on individual pages (including one-tap **Quick Signature** when a default is set)
 - Apply document-wide page numbers
 - Compress the document
 - Export a new PDF reflecting all changes
@@ -83,7 +83,7 @@ App
 ├── Home (empty) OR Document Mode
 │   ├── Settings (sheet)
 │   └── Page Mode (pushed navigation)
-│       ├── Add options (sheet)
+│       ├── Add options (sheet: Image, Quick Signature, Signature Library)
 │       ├── Photos picker (system)
 │       ├── Signature Library (sheet)
 │       └── Signature Capture (sheet, from library)
@@ -733,7 +733,20 @@ After success:
 |--------|----------|----------|--------|
 | **Text** | Coming soon | **No** | — |
 | **Image** | Import from Photos or Files | **Yes** | Dismisses sheet → opens **Photos picker** |
-| **Signature** | Choose or create a signature | **Yes** | Dismisses sheet → opens **Signature Library** |
+| **Quick Signature** | Place your default signature | **Yes** | Dismisses sheet → places default signature immediately (see below), or opens **Signature Library** if none is available |
+| **Signature Library** | Choose, create, or manage signatures | **Yes** | Dismisses sheet → opens **Signature Library** |
+
+### Quick Signature
+
+**Entry:** Add → **Quick Signature**
+
+| Situation | Result |
+|-----------|--------|
+| User has a **default signature** set in the library | Signature is placed on the current page **immediately** (no library sheet). The placed overlay is **auto-selected** (resize handles visible). |
+| User has **exactly one** saved signature and **no** explicit default | That single signature is treated as the default for Quick Signature only (same immediate placement behaviour). |
+| User has **no** saved signatures, or **multiple** signatures with **no** default | **Signature Library** opens instead (empty state or grid, same as choosing Signature Library). |
+
+Quick Signature does **not** open the drawing capture screen directly.
 
 ### Image import
 
@@ -774,9 +787,13 @@ See [Signatures](#20-signatures--library-drawing-placement).
 
 ## 20. Signatures — library, drawing, placement
 
+### Quick Signature
+
+See [Adding content in Page Mode — Quick Signature](#quick-signature). Uses the on-device signature library’s default (or the lone saved signature when applicable).
+
 ### Signature library
 
-**Entry:** Add → Signature in Page Mode
+**Entry:** Add → **Signature Library** in Page Mode (also opened automatically by Quick Signature when no usable default exists)
 
 **Sheet:** large detent, drag indicator
 
@@ -789,25 +806,42 @@ See [Signatures](#20-signatures--library-drawing-placement).
 
 - **Create New Signature** button at top
 - Grid (2 columns) of saved signatures with name labels
-- Tap a signature → places on current page, **dismisses library**
+- **Star button** (top-right of each tile) — tap to set that signature as **default** (see [Default signature](#default--favorite-signature))
+- Tap a signature tile (thumbnail area) → places on current page, **dismisses library**; placed overlay is **auto-selected**
+
+**Default signature visual state:**
+
+- Filled **yellow star** on the tile
+- Accent-colour border around the thumbnail
+- **"Default"** badge beside the name label
 
 **Toolbar:** **Cancel** — dismisses without placing
 
-**Long-press (context menu) on a signature:**
+**Context menu** (system long-press on a signature tile):
 
 - **Rename** — alert with text field; **Save** / **Cancel**
-- **Delete** — deletes immediately (no confirmation)
+- **Delete** — deletes immediately (no confirmation). If the deleted signature was the default, the default is **cleared**.
 
 **Rename failure** (e.g. empty name): rename silently fails; list unchanged
 
+### Default / favorite signature
+
+- Only **one** signature can be default at a time
+- Set by tapping the **star** on a library tile (not via long-press menu)
+- Tapping a different star **replaces** the previous default
+- Default preference is **persisted** across app launches (`library-preferences.json` in the signature library folder)
+- Quick Signature uses the stored default when set
+- If there is **exactly one** saved signature and **no** explicit default, Quick Signature still works using that signature (this fallback does **not** show the default star/badge until the user taps the star)
+
 ### Signature capture (drawing)
 
-**Entry:** Create Signature / Create New Signature
+**Entry:** Create Signature / Create New Signature (from Signature Library)
 
 **What the user sees:**
 
 - Instruction: **"Draw your signature with your finger."**
 - White drawing canvas with border
+- **Thickness** row: three options — **Thin**, **Medium** (default), **Thick** — each shown as a labelled sample stroke; selected option has accent border and checkmark
 - **Color** row: horizontal scroll of color swatches — Black (default), Dark Gray, Blue, Red, Green, Purple
 - **Clear** — erases drawing
 - **Cancel** — dismisses without saving
@@ -816,27 +850,41 @@ See [Signatures](#20-signatures--library-drawing-placement).
 **Drawing input:**
 
 - Finger or Apple Pencil (`anyInput` policy)
-- Pen tool, width 2.5 pt, selected color
+- Pen tool with selected **color** and **thickness**:
+  - **Thin:** ~1.5 pt
+  - **Medium:** ~2.5 pt (default)
+  - **Thick:** ~4.0 pt
+- Changing color or thickness updates the active tool **immediately** and does **not** clear the current drawing
 - Canvas always **white background** (light appearance forced)
+
+**Thickness persistence:**
+
+- Last selected thickness is **remembered** across capture sessions and app restarts
+- New capture opens with the last used thickness (default **Medium** on first launch)
 
 **Save & Use:**
 
 1. Renders drawing to image (tight crop)
-2. Saves PNG to **on-device signature library** (persistent)
+2. Saves PNG to **on-device signature library** (persistent), including optional **stroke thickness metadata** on newly created assets
 3. Places signature on current PDF page
-4. Dismisses capture and library sheets
+4. Dismisses capture and library sheets; placed overlay is **auto-selected**
 
 ### Signature on page
 
 - Treated as an overlay of type **signature**
 - Initial width: **30%** of page width (slightly smaller than images)
 - Same move/resize/delete behaviour as image overlays
+- When placed from Quick Signature, Signature Library, or Save & Use, the new overlay is **selected automatically**
 
 ### Signature library persistence
 
 - Stored in app Application Support (`SignatureLibrary/`)
 - **Survives app restart**
 - **Separate** from per-document overlay image assets (library is reusable across documents and sessions)
+- Metadata file: `signatures.json` (signature list)
+- Preferences file: `library-preferences.json` (default signature ID)
+- New signatures may include optional `strokeThickness` in metadata; **older saved signatures without this field still load normally**
+- Last capture **ink thickness** preference is stored separately in app settings (`UserDefaults`), not per signature asset
 
 ---
 
@@ -851,6 +899,7 @@ Applies to **image overlays** and **signature overlays** (same UI).
 | **Tap overlay** (not selected) | Selects overlay; shows blue border, delete (×) top-right, resize handle bottom-right; brings overlay to **front** if it was behind another |
 | **Tap empty canvas** | Deselects |
 | **Select another overlay** | Switches selection |
+| **Place signature** (Quick Signature, library, or Save & Use) | New signature overlay is **auto-selected** |
 
 **Only one overlay selected at a time.** No multi-select.
 
@@ -951,7 +1000,8 @@ Three ways:
 
 | Gesture | Target | Effect |
 |---------|--------|--------|
-| **Tap** | Signature tile | Use on page |
+| **Tap** | Signature tile (thumbnail) | Use on page |
+| **Tap** | Star button on tile | Set as default signature |
 | **Long press** | Signature tile | Context menu (Rename / Delete) |
 
 ### Signature capture
@@ -959,7 +1009,8 @@ Three ways:
 | Gesture | Target | Effect |
 |---------|--------|--------|
 | **Draw** | Canvas | Ink strokes |
-| Tap | Color swatch | Change ink color |
+| Tap | Thickness option (Thin / Medium / Thick) | Change stroke width (does not clear drawing) |
+| Tap | Color swatch | Change ink color (does not clear drawing) |
 | Tap | Clear / Cancel / Save & Use | Actions |
 
 ### Sheets generally
@@ -1091,6 +1142,9 @@ Single snapshot of:
 - Thumbnail action buttons: accessibility labels **"Rotate"**, **"Duplicate"**, **"Delete"**
 - Overlay delete button: **"Delete image"**
 - Signature color swatches: per-color accessibility labels/identifiers
+- Signature thickness options: per-thickness accessibility labels/identifiers (`signatureThickness_thin`, etc.)
+- Signature library default star buttons: per-signature accessibility identifiers
+- Add menu: `addQuickSignatureOption`, `addSignatureLibraryOption`
 - Decorative icons on empty states: `accessibilityHidden(true)` where applied
 
 ### Not specially implemented
@@ -1106,13 +1160,15 @@ Single snapshot of:
 |------|--------------------------|
 | Appearance setting (Device/Light/Dark) | **Yes** |
 | Signature library (saved signatures) | **Yes** |
+| Default / favorite signature | **Yes** |
+| Last signature ink thickness (capture UI) | **Yes** |
 | Open document / pages / overlays | **No** |
 | Undo history | **No** |
 | Page number settings | **No** |
 | Pro unlock | **No** |
 | Import temp files | **No** (cleaned on New PDF / close) |
 
-After restart: user sees **home screen** and must **Import PDF** again. Saved signatures remain available next time they add a signature.
+After restart: user sees **home screen** and must **Import PDF** again. Saved signatures, default signature, and last ink thickness remain available next time they add or draw a signature.
 
 ---
 
@@ -1132,7 +1188,9 @@ After restart: user sees **home screen** and must **Import PDF** again. Saved si
 | Page numbers default font size | **12 pt** (not exposed in UI) |
 | Compression default preset | **Balanced** |
 | Appearance default | **Device** |
-| Signature ink default | **Black** |
+| Signature ink default color | **Black** |
+| Signature ink default thickness | **Medium** (~2.5 pt) |
+| Signature ink thickness options | **Thin** ~1.5 pt, **Medium** ~2.5 pt, **Thick** ~4.0 pt |
 | PDF import | **Single file**, PDF only |
 | Multi-page selection | **Not supported** |
 | Text overlays | **Not implemented** (shown as "Coming soon") |
@@ -1182,6 +1240,11 @@ The following are **not** available in the current product (do not test for them
 - Multi-selection (pages or overlays)
 - Keyboard shortcuts
 - Apple Pencil-only mode for signatures (Pencil works, but finger is equally accepted)
+- Import signature from photo or image file
+- Photo-based signature capture
+- Custom ink brushes, opacity, or pressure settings
+- Change stroke thickness after a signature is saved to the library
+- Signature categories, folders, or cloud sync
 - Custom page number font picker
 - Drag-and-drop import (import is via file picker button only)
 
