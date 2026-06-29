@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @Bindable var viewModel: PDFEditorViewModel
     @State private var showImporter = false
+    @State private var showSettings = false
     @State private var showError = false
     @State private var importErrorMessage: String?
 
@@ -24,6 +25,14 @@ struct ContentView: View {
                     loadingOverlay
                 }
             }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    settingsButton
+                }
+            }
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
         }
         .fileImporter(
             isPresented: $showImporter,
@@ -97,6 +106,16 @@ struct ContentView: View {
                 .padding(24)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
         }
+    }
+
+    private var settingsButton: some View {
+        Button {
+            showSettings = true
+        } label: {
+            Image(systemName: "gearshape")
+        }
+        .accessibilityLabel("Settings")
+        .accessibilityIdentifier("settingsButton")
     }
 }
 
