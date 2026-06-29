@@ -5,7 +5,7 @@ final class DocumentActionsMenuRegressionTests: XCTestCase {
     func testDocumentActionsMenuDefinesImplementedActions() {
         XCTAssertEqual(
             DocumentAction.implementedActions,
-            [.compress, .export]
+            [.compress, .pageNumbers, .export]
         )
     }
 
@@ -23,6 +23,7 @@ final class DocumentActionsMenuRegressionTests: XCTestCase {
         XCTAssertTrue(menuSource.contains("enum DocumentAction"))
         XCTAssertTrue(menuSource.contains("static var implementedActions"))
         XCTAssertTrue(menuSource.contains("case compress"))
+        XCTAssertTrue(menuSource.contains("case pageNumbers"))
         XCTAssertTrue(menuSource.contains("case export"))
     }
 }

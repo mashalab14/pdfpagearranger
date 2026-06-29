@@ -17,6 +17,7 @@ final class PDFEditorViewModel {
     private var pageObjectsByPage: [UUID: [PageObject]] = [:]
     private var imageAssets: [UUID: UIImage] = [:]
     private var overlayRevisions: [UUID: Int] = [:]
+    private(set) var pageNumberSettings: PageNumberSettings = .default
     private let pdfService = PDFService()
     private let compressionService = CompressionService()
     let proGate = ProGate()
@@ -50,6 +51,7 @@ final class PDFEditorViewModel {
             documentName = imported.displayName
             pages = pdfService.makeInitialPages(pageCount: imported.pageCount)
             undoStack.removeAll()
+            pageNumberSettings = .default
             clearOverlays()
             await ThumbnailService.shared.clear()
         } catch {
@@ -82,6 +84,7 @@ final class PDFEditorViewModel {
         sourceDocument = nil
         localSourceURL = nil
         undoStack.removeAll()
+        pageNumberSettings = .default
         errorMessage = nil
         clearOverlays()
     }
@@ -138,6 +141,10 @@ final class PDFEditorViewModel {
         pageObjectsByPage = snapshot.pageObjectsByPage
         overlayRevisions = snapshot.overlayRevisions
         imageAssets = snapshot.imageAssets
+        pageNumberSettings = snapshot.pageNumberSettings
+        Task {
+            await ThumbnailService.shared.clear()
+        }
     }
 
     func exportPDF() throws -> URL {
@@ -149,8 +156,27 @@ final class PDFEditorViewModel {
             sourceDocument: sourceDocument,
             outputName: documentName.isEmpty ? "document" : documentName,
             overlaysByPage: pageObjectsByPage,
-            imageAssets: imageAssets
+            imageAssets: imageAssets,
+            pageNumberSettings: pageNumberSettings
         )
+    }
+
+    func applyPageNumbers(_ settings: PageNumberSettings) {
+        pushUndoSnapshot()
+        pageNumberSettings = settings
+        pageNumberSettings.isEnabled = true
+        Task {
+            await ThumbnailService.shared.clear()
+        }
+    }
+
+    func removePageNumbers() {
+        guard pageNumberSettings.isEnabled else { return }
+        pushUndoSnapshot()
+        pageNumberSettings = .default
+        Task {
+            await ThumbnailService.shared.clear()
+        }
     }
 
     func shouldShowPaywallForExport() -> Bool {
@@ -352,7 +378,8 @@ final class PDFEditorViewModel {
             pages: pages,
             pageObjectsByPage: pageObjectsByPage,
             overlayRevisions: overlayRevisions,
-            imageAssets: imageAssets
+            imageAssets: imageAssets,
+            pageNumberSettings: pageNumberSettings
         ))
         if undoStack.count > 50 {
             undoStack.removeFirst()

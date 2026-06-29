@@ -18,9 +18,12 @@ actor ThumbnailService {
         document: PDFDocument,
         overlays: [PageObject],
         overlayImages: [UUID: UIImage],
-        revision: Int
+        revision: Int,
+        pageNumberSettings: PageNumberSettings = .default,
+        exportIndex: Int = 0,
+        totalPages: Int = 1
     ) async -> UIImage? {
-        let cacheKey = "\(item.id.uuidString)-\(item.rotation)-\(revision)" as NSString
+        let cacheKey = "\(item.id.uuidString)-\(item.rotation)-\(revision)-\(pageNumberSettings.thumbnailCacheKeySuffix)-\(exportIndex)-\(totalPages)" as NSString
         if let cached = cache.object(forKey: cacheKey) {
             return cached
         }
@@ -33,7 +36,10 @@ actor ThumbnailService {
             page: page,
             rotation: item.rotation,
             overlays: overlays,
-            overlayImages: overlayImages
+            overlayImages: overlayImages,
+            pageNumberSettings: pageNumberSettings,
+            exportIndex: exportIndex,
+            totalPages: totalPages
         )
 
         if let image {
@@ -51,11 +57,14 @@ actor ThumbnailService {
         page: PDFPage,
         rotation: Int,
         overlays: [PageObject],
-        overlayImages: [UUID: UIImage]
+        overlayImages: [UUID: UIImage],
+        pageNumberSettings: PageNumberSettings,
+        exportIndex: Int,
+        totalPages: Int
     ) async -> UIImage? {
         let maxDimension = maxThumbnailDimension
         return await Task.detached(priority: .utility) {
-            guard let baseImage = PDFPreviewRenderer.image(
+            guard var image = PDFPreviewRenderer.image(
                 from: page,
                 rotation: rotation,
                 maxDimension: maxDimension,
@@ -64,16 +73,27 @@ actor ThumbnailService {
                 return nil
             }
 
-            guard !overlays.isEmpty else {
-                return baseImage
+            if !overlays.isEmpty {
+                image = OverlayCompositor.composite(
+                    baseImage: image,
+                    objects: overlays,
+                    images: overlayImages,
+                    pageRotation: rotation
+                )
             }
 
-            return OverlayCompositor.composite(
-                baseImage: baseImage,
-                objects: overlays,
-                images: overlayImages,
-                pageRotation: rotation
-            )
+            if pageNumberSettings.shouldApply(toExportIndex: exportIndex) {
+                let displayNumber = pageNumberSettings.displayNumber(forExportIndex: exportIndex)
+                image = PageNumberRenderer.compositeOnImage(
+                    baseImage: image,
+                    pageRotation: rotation,
+                    settings: pageNumberSettings,
+                    displayNumber: displayNumber,
+                    totalPages: totalPages
+                )
+            }
+
+            return image
         }.value
     }
 }

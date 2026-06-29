@@ -8,6 +8,7 @@ struct EditorView: View {
     @State private var showPaywall = false
     @State private var showShareSheet = false
     @State private var showCompression = false
+    @State private var showPageNumbers = false
     @State private var exportURL: URL?
     @State private var exportError: String?
     @State private var draggedPageID: UUID?
@@ -61,6 +62,8 @@ struct EditorView: View {
                     switch action {
                     case .compress:
                         showCompression = true
+                    case .pageNumbers:
+                        showPageNumbers = true
                     case .export:
                         handleExportTap()
                     }
@@ -69,6 +72,9 @@ struct EditorView: View {
         }
         .sheet(isPresented: $showCompression) {
             CompressionView(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showPageNumbers) {
+            PageNumbersView(viewModel: viewModel)
         }
         .sheet(isPresented: $showPaywall) {
             PaywallView(pageCount: viewModel.pageCount) {
@@ -119,6 +125,9 @@ struct EditorView: View {
             overlays: viewModel.overlayObjects(for: item.id),
             overlayImages: viewModel.overlayImages(for: item.id),
             overlayRevision: viewModel.overlayRevision(for: item.id),
+            pageNumberSettings: viewModel.pageNumberSettings,
+            exportIndex: index,
+            totalPages: viewModel.pageCount,
             onRotate: { viewModel.rotatePage(id: item.id) },
             onDuplicate: { viewModel.duplicatePage(id: item.id) },
             onDelete: { viewModel.deletePage(id: item.id) },

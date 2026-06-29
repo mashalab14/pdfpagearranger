@@ -82,26 +82,32 @@ final class PDFService {
         sourceDocument: PDFDocument,
         outputName: String,
         overlaysByPage: [UUID: [PageObject]] = [:],
-        imageAssets: [UUID: UIImage] = [:]
+        imageAssets: [UUID: UIImage] = [:],
+        pageNumberSettings: PageNumberSettings = .default
     ) throws -> URL {
         let outputDocument = PDFDocument()
+        let totalPages = pages.count
 
-        for item in pages {
+        for (exportIndex, item) in pages.enumerated() {
             let overlays = overlaysByPage[item.id] ?? []
+            let needsPageNumber = pageNumberSettings.shouldApply(toExportIndex: exportIndex)
 
-            if overlays.isEmpty {
+            if overlays.isEmpty, !needsPageNumber {
                 guard let sourcePage = sourceDocument.page(at: item.originalPageIndex)?.copy() as? PDFPage else {
                     continue
                 }
                 sourcePage.rotation = item.rotation
                 outputDocument.insert(sourcePage, at: outputDocument.pageCount)
-            } else if let overlayPage = pageWithOverlays(
+            } else if let decoratedPage = pageWithDecorations(
                 for: item,
+                exportIndex: exportIndex,
+                totalPages: totalPages,
                 sourceDocument: sourceDocument,
                 overlays: overlays,
-                imageAssets: imageAssets
+                imageAssets: imageAssets,
+                pageNumberSettings: pageNumberSettings
             ) {
-                outputDocument.insert(overlayPage, at: outputDocument.pageCount)
+                outputDocument.insert(decoratedPage, at: outputDocument.pageCount)
             }
         }
 
@@ -126,11 +132,14 @@ final class PDFService {
         return outputURL
     }
 
-    private func pageWithOverlays(
+    private func pageWithDecorations(
         for item: PageItem,
+        exportIndex: Int,
+        totalPages: Int,
         sourceDocument: PDFDocument,
         overlays: [PageObject],
-        imageAssets: [UUID: UIImage]
+        imageAssets: [UUID: UIImage],
+        pageNumberSettings: PageNumberSettings
     ) -> PDFPage? {
         guard let sourcePage = sourceDocument.page(at: item.originalPageIndex)?.copy() as? PDFPage else {
             return nil
@@ -151,14 +160,28 @@ final class PDFService {
         // Draw original page content as vector PDF (preserves selectable text).
         sourcePage.draw(with: .mediaBox, to: context)
 
-        // Draw image overlays on top in mapped PDF coordinates.
-        OverlayPDFExporter.drawOverlays(
-            overlays,
-            images: imageAssets,
-            in: mediaBox,
-            pageRotation: item.rotation,
-            context: context
-        )
+        if !overlays.isEmpty {
+            // Draw image overlays on top in mapped PDF coordinates.
+            OverlayPDFExporter.drawOverlays(
+                overlays,
+                images: imageAssets,
+                in: mediaBox,
+                pageRotation: item.rotation,
+                context: context
+            )
+        }
+
+        if pageNumberSettings.shouldApply(toExportIndex: exportIndex) {
+            let displayNumber = pageNumberSettings.displayNumber(forExportIndex: exportIndex)
+            PageNumberRenderer.drawInPDFContext(
+                context: context,
+                mediaBox: mediaBox,
+                pageRotation: item.rotation,
+                settings: pageNumberSettings,
+                displayNumber: displayNumber,
+                totalPages: totalPages
+            )
+        }
 
         context.endPDFPage()
         context.closePDF()

@@ -2,11 +2,12 @@ import SwiftUI
 
 enum DocumentAction: String, CaseIterable, Identifiable {
     case compress
+    case pageNumbers
     case export
 
     // Future document-level actions:
     // renameDocument, documentInformation, passwordProtect, watermark,
-    // pageNumbers, splitDocument, mergeDocuments, duplicateDocument
+    // splitDocument, mergeDocuments, duplicateDocument
 
     var id: String { rawValue }
 
@@ -14,6 +15,8 @@ enum DocumentAction: String, CaseIterable, Identifiable {
         switch self {
         case .compress:
             return "Compress"
+        case .pageNumbers:
+            return "Page Numbers"
         case .export:
             return "Export"
         }
@@ -23,6 +26,8 @@ enum DocumentAction: String, CaseIterable, Identifiable {
         switch self {
         case .compress:
             return "arrow.down.doc"
+        case .pageNumbers:
+            return "number"
         case .export:
             return "square.and.arrow.up"
         }
@@ -32,6 +37,8 @@ enum DocumentAction: String, CaseIterable, Identifiable {
         switch self {
         case .compress:
             return "compressButton"
+        case .pageNumbers:
+            return "pageNumbersButton"
         case .export:
             return "documentActionExport"
         }
@@ -39,7 +46,7 @@ enum DocumentAction: String, CaseIterable, Identifiable {
 
     /// Actions currently exposed in the Document Actions menu.
     static var implementedActions: [DocumentAction] {
-        [.compress, .export]
+        [.compress, .pageNumbers, .export]
     }
 }
 

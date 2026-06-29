@@ -149,7 +149,7 @@ struct PageEditorView: View {
     }
 
     private var renderTaskKey: String {
-        "\(pageItem.id.uuidString)-\(pageItem.rotation)"
+        "\(pageItem.id.uuidString)-\(pageItem.rotation)-\(viewModel.pageNumberSettings.thumbnailCacheKeySuffix)-\(pageNumber - 1)-\(viewModel.pageCount)"
     }
 
     private var pageAspectRatio: CGFloat {
@@ -161,7 +161,14 @@ struct PageEditorView: View {
     }
 
     private func loadPageImage() async {
-        pageImage = await PageRenderService.shared.pageImage(for: pageItem, document: document)
+        let exportIndex = viewModel.pageIndex(for: pageItem.id) ?? (pageNumber - 1)
+        pageImage = await PageRenderService.shared.pageImage(
+            for: pageItem,
+            document: document,
+            pageNumberSettings: viewModel.pageNumberSettings,
+            exportIndex: exportIndex,
+            totalPages: viewModel.pageCount
+        )
     }
 
     private func importPhotoItem(_ item: PhotosPickerItem) async {

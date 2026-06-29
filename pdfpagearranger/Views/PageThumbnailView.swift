@@ -8,6 +8,9 @@ struct PageThumbnailView: View {
     let overlays: [PageObject]
     let overlayImages: [UUID: UIImage]
     let overlayRevision: Int
+    let pageNumberSettings: PageNumberSettings
+    let exportIndex: Int
+    let totalPages: Int
     let onRotate: () -> Void
     let onDuplicate: () -> Void
     let onDelete: () -> Void
@@ -53,7 +56,7 @@ struct PageThumbnailView: View {
     }
 
     private var taskKey: String {
-        "\(item.id.uuidString)-\(item.rotation)-\(overlayRevision)"
+        "\(item.id.uuidString)-\(item.rotation)-\(overlayRevision)-\(pageNumberSettings.thumbnailCacheKeySuffix)-\(exportIndex)-\(totalPages)"
     }
 
     @ViewBuilder
@@ -127,7 +130,10 @@ struct PageThumbnailView: View {
             document: document,
             overlays: overlays,
             overlayImages: overlayImages,
-            revision: overlayRevision
+            revision: overlayRevision,
+            pageNumberSettings: pageNumberSettings,
+            exportIndex: exportIndex,
+            totalPages: totalPages
         )
     }
 }
