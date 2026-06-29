@@ -878,6 +878,7 @@ See [Adding content in Page Mode — Quick Signature](#quick-signature). Uses th
 
 - Treated as an overlay of type **signature**
 - Initial width: **30%** of page width (slightly smaller than images)
+- Initial height: derived from the saved PNG aspect ratio so the overlay frame matches the signature image (`height = width × imageHeight / imageWidth` on the page); no vertical letterboxing inside the frame
 - Same move/resize/delete behaviour as image overlays
 - When placed from Quick Signature, Signature Library, or Save & Use, the new overlay is **selected automatically**
 

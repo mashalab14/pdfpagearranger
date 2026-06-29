@@ -275,15 +275,28 @@ final class PDFEditorViewModel {
         let assetID = UUID()
         imageAssets[assetID] = image
 
-        let imageAspect = image.size.width / max(image.size.height, 1)
-        let heightFraction = min((widthFraction / imageAspect) / max(pageAspectRatio, 0.01), 0.6)
+        let normalizedSize: CGSize
+        switch type {
+        case .signature:
+            normalizedSize = OverlayPlacementSizing.normalizedSignatureSize(
+                image: image,
+                pageAspectRatio: pageAspectRatio,
+                widthFraction: widthFraction
+            )
+        case .image, .text:
+            normalizedSize = OverlayPlacementSizing.normalizedImageSize(
+                image: image,
+                pageAspectRatio: pageAspectRatio,
+                widthFraction: widthFraction
+            )
+        }
 
         let nextZIndex = (pageObjectsByPage[pageItemID]?.map(\.zIndex).max() ?? -1) + 1
         let object = PageObject(
             pageItemID: pageItemID,
             type: type,
             position: CGPoint(x: 0.5, y: 0.5),
-            size: CGSize(width: widthFraction, height: heightFraction),
+            size: normalizedSize,
             zIndex: nextZIndex,
             imageAssetID: assetID
         )

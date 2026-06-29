@@ -115,6 +115,7 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`ThumbnailService`** | Cached document thumbnails; composited with overlays when present. |
 | **`OverlayCompositor`** | Draws image overlays onto a thumbnail/page bitmap using `OverlayGeometryEngine`. |
 | **`OverlayPDFExporter`** | Draws image overlays into a PDF `CGContext` using `OverlayGeometryEngine`. |
+| **`OverlayPlacementSizing`** | Initial normalized overlay size for signatures (PNG aspect–matched frame) and images (legacy formula). |
 | **`OverlayGeometryEngine`** | Shared normalized → concrete rect mapping for Page Mode, thumbnails, and PDF export (including page rotation). |
 | **`SignatureLibraryStore`** | On-device reusable signature assets (`signatures.json`), preferences (`library-preferences.json` for Default Signature ID), and `QuickSignatureResolution` for Quick Signature routing. |
 | **`SignatureLibraryView`** | Library UI; holds `@State defaultSignatureID` for immediate Default Signature feedback; optional guidance banner when Quick Signature opens the library with multiple signatures and no default. |
