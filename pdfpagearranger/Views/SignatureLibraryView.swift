@@ -108,29 +108,64 @@ struct SignatureLibraryView: View {
         }
     }
 
+    @ViewBuilder
     private func signatureTile(for asset: SignatureAsset) -> some View {
-        Button {
-            selectAsset(asset)
-        } label: {
-            VStack(spacing: 8) {
-                signatureThumbnail(for: asset)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 88)
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12)
-                            .strokeBorder(Color(.separator), lineWidth: 1)
-                    }
+        let isDefault = store.isDefaultSignature(id: asset.id)
 
+        VStack(spacing: 8) {
+            ZStack(alignment: .topTrailing) {
+                Button {
+                    selectAsset(asset)
+                } label: {
+                    signatureThumbnail(for: asset)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 88)
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12)
+                                .strokeBorder(
+                                    isDefault ? Color.accentColor : Color(.separator),
+                                    lineWidth: isDefault ? 2 : 1
+                                )
+                        }
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    setDefault(asset)
+                } label: {
+                    Image(systemName: isDefault ? "star.fill" : "star")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(isDefault ? Color.yellow : Color.secondary)
+                        .padding(8)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+                .accessibilityLabel(isDefault ? "Default signature" : "Set as default signature")
+                .accessibilityIdentifier("signatureLibraryDefaultButton_\(asset.id.uuidString)")
+            }
+
+            HStack(spacing: 4) {
                 Text(asset.displayName)
                     .font(.caption)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                    .frame(maxWidth: .infinity)
+
+                if isDefault {
+                    Text("Default")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color(.tertiarySystemFill))
+                        .clipShape(Capsule())
+                        .accessibilityIdentifier("signatureLibraryDefaultBadge_\(asset.id.uuidString)")
+                }
             }
+            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
         .contextMenu {
             Button("Rename") {
                 beginRename(for: asset)
@@ -213,6 +248,11 @@ struct SignatureLibraryView: View {
 
     private func deleteAsset(_ asset: SignatureAsset) {
         store.deleteSignature(id: asset.id)
+        reloadSignatures()
+    }
+
+    private func setDefault(_ asset: SignatureAsset) {
+        try? store.setDefaultSignature(id: asset.id)
         reloadSignatures()
     }
 }

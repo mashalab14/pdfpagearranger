@@ -4,7 +4,8 @@ struct PageAddOptionsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let onImageTapped: () -> Void
-    let onSignatureTapped: () -> Void
+    let onQuickSignatureTapped: () -> Void
+    let onSignatureLibraryTapped: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -16,13 +17,23 @@ struct PageAddOptionsSheet: View {
                 }
                 addOption(
                     icon: "signature",
-                    title: "Signature",
-                    subtitle: "Choose or create a signature",
+                    title: "Quick Signature",
+                    subtitle: "Place your default signature",
                     isEnabled: true,
-                    accessibilityIdentifier: "addSignatureOption"
+                    accessibilityIdentifier: "addQuickSignatureOption"
                 ) {
                     dismiss()
-                    onSignatureTapped()
+                    onQuickSignatureTapped()
+                }
+                addOption(
+                    icon: "books.vertical",
+                    title: "Signature Library",
+                    subtitle: "Choose, create, or manage signatures",
+                    isEnabled: true,
+                    accessibilityIdentifier: "addSignatureLibraryOption"
+                ) {
+                    dismiss()
+                    onSignatureLibraryTapped()
                 }
             }
             .navigationTitle("Add")
@@ -74,5 +85,5 @@ struct PageAddOptionsSheet: View {
 }
 
 #Preview {
-    PageAddOptionsSheet(onImageTapped: {}, onSignatureTapped: {})
+    PageAddOptionsSheet(onImageTapped: {}, onQuickSignatureTapped: {}, onSignatureLibraryTapped: {})
 }

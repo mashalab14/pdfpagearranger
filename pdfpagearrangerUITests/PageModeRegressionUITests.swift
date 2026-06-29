@@ -31,7 +31,9 @@ final class PageModeRegressionUITests: PDFPagesUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["pageModeView"].waitForExistence(timeout: 10))
 
         app.buttons["pageModeAddButton"].tap()
-        app.buttons["addSignatureOption"].tap()
+        XCTAssertTrue(app.buttons["addQuickSignatureOption"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["addSignatureLibraryOption"].exists)
+        app.buttons["addSignatureLibraryOption"].tap()
 
         XCTAssertTrue(app.descendants(matching: .any)["signatureLibraryView"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["No saved signatures"].waitForExistence(timeout: 5))

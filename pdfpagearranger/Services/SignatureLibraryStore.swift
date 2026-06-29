@@ -28,12 +28,14 @@ enum SignatureLibraryStoreError: LocalizedError, Equatable {
 /// Separate from in-memory PDF page overlay image assets.
 final class SignatureLibraryStore {
     static let metadataFileName = "signatures.json"
+    static let preferencesFileName = "library-preferences.json"
     static let imagesDirectoryName = "images"
     static let thumbnailsDirectoryName = "thumbnails"
 
     private let rootDirectory: URL
     private let fileManager: FileManager
     private let metadataURL: URL
+    private let preferencesURL: URL
     private let imagesDirectory: URL
     private let thumbnailsDirectory: URL
 
@@ -41,6 +43,7 @@ final class SignatureLibraryStore {
         self.rootDirectory = rootDirectory
         self.fileManager = fileManager
         metadataURL = rootDirectory.appendingPathComponent(Self.metadataFileName)
+        preferencesURL = rootDirectory.appendingPathComponent(Self.preferencesFileName)
         imagesDirectory = rootDirectory.appendingPathComponent(Self.imagesDirectoryName, isDirectory: true)
         thumbnailsDirectory = rootDirectory.appendingPathComponent(Self.thumbnailsDirectoryName, isDirectory: true)
     }
@@ -120,6 +123,58 @@ final class SignatureLibraryStore {
             }
     }
 
+    func defaultSignatureID() -> UUID? {
+        sanitizedPreferences().defaultSignatureID
+    }
+
+    func isDefaultSignature(id: UUID) -> Bool {
+        defaultSignatureID() == id
+    }
+
+    func setDefaultSignature(id: UUID) throws {
+        guard getSignature(id: id) != nil else {
+            throw SignatureLibraryStoreError.signatureNotFound
+        }
+
+        var preferences = loadPreferences()
+        preferences.defaultSignatureID = id
+        try persistPreferences(preferences)
+    }
+
+    func clearDefaultSignature() {
+        var preferences = loadPreferences()
+        preferences.defaultSignatureID = nil
+        try? persistPreferences(preferences)
+    }
+
+    /// Resolves the signature used for Quick Signature.
+    /// Uses the stored default when set; otherwise treats a single saved signature as default.
+    func resolveQuickSignatureAsset() -> SignatureAsset? {
+        let signatures = loadMetadataRecords()
+
+        if let defaultID = sanitizedPreferences().defaultSignatureID,
+           let asset = signatures.first(where: { $0.id == defaultID }),
+           hasImageFile(for: asset) {
+            return asset
+        }
+
+        if signatures.count == 1,
+           let only = signatures.first,
+           hasImageFile(for: only) {
+            return only
+        }
+
+        return nil
+    }
+
+    func quickSignatureImage() -> UIImage? {
+        guard let asset = resolveQuickSignatureAsset(),
+              let data = loadImageData(for: asset) else {
+            return nil
+        }
+        return UIImage(data: data)
+    }
+
     func getSignature(id: UUID) -> SignatureAsset? {
         loadMetadataRecords().first { $0.id == id }
     }
@@ -133,6 +188,10 @@ final class SignatureLibraryStore {
         let asset = assets.remove(at: index)
         try? persistMetadataRecords(assets)
         removeFiles(for: asset)
+
+        if loadPreferences().defaultSignatureID == id {
+            clearDefaultSignature()
+        }
     }
 
     @discardableResult
@@ -224,6 +283,33 @@ final class SignatureLibraryStore {
 
         let data = try encoder.encode(assets)
         try data.write(to: metadataURL, options: .atomic)
+    }
+
+    private func loadPreferences() -> SignatureLibraryPreferences {
+        guard fileManager.fileExists(atPath: preferencesURL.path),
+              let data = try? Data(contentsOf: preferencesURL),
+              let preferences = try? JSONDecoder().decode(SignatureLibraryPreferences.self, from: data) else {
+            return .empty
+        }
+        return preferences
+    }
+
+    private func sanitizedPreferences() -> SignatureLibraryPreferences {
+        var preferences = loadPreferences()
+        if let defaultID = preferences.defaultSignatureID,
+           getSignature(id: defaultID) == nil {
+            preferences.defaultSignatureID = nil
+            try? persistPreferences(preferences)
+        }
+        return preferences
+    }
+
+    private func persistPreferences(_ preferences: SignatureLibraryPreferences) throws {
+        try ensureDirectoriesExist()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(preferences)
+        try data.write(to: preferencesURL, options: .atomic)
     }
 
     private func removeFiles(for asset: SignatureAsset) {

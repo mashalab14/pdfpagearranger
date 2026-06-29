@@ -89,19 +89,17 @@ struct PageEditorView: View {
                 onImageTapped: {
                     showPhotosPicker = true
                 },
-                onSignatureTapped: {
+                onQuickSignatureTapped: {
+                    handleQuickSignature()
+                },
+                onSignatureLibraryTapped: {
                     showSignatureLibrary = true
                 }
             )
         }
         .sheet(isPresented: $showSignatureLibrary) {
             SignatureLibraryView(store: signatureLibraryStore) { image in
-                guard let pageItem else { return }
-                viewModel.addSignatureOverlay(
-                    to: pageItem.id,
-                    image: image,
-                    pageAspectRatio: pageAspectRatio
-                )
+                placeSignature(image: image)
             }
         }
         .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotoItem, matching: .images)
@@ -211,6 +209,24 @@ struct PageEditorView: View {
         guard let pageItem, let selectedObjectID else { return }
         viewModel.deleteOverlay(id: selectedObjectID, pageItemID: pageItem.id)
         self.selectedObjectID = nil
+    }
+
+    private func handleQuickSignature() {
+        if let image = signatureLibraryStore.quickSignatureImage() {
+            placeSignature(image: image)
+        } else {
+            showSignatureLibrary = true
+        }
+    }
+
+    private func placeSignature(image: UIImage) {
+        guard let pageItem else { return }
+        let overlayID = viewModel.addSignatureOverlay(
+            to: pageItem.id,
+            image: image,
+            pageAspectRatio: pageAspectRatio
+        )
+        selectedObjectID = overlayID
     }
 
     private func navigateToAdjacentPage(direction: PageModeNavigationDirection) {

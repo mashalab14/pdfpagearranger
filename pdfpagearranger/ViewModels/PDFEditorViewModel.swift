@@ -251,7 +251,8 @@ final class PDFEditorViewModel {
         )
     }
 
-    func addSignatureOverlay(to pageItemID: UUID, image: UIImage, pageAspectRatio: CGFloat) {
+    @discardableResult
+    func addSignatureOverlay(to pageItemID: UUID, image: UIImage, pageAspectRatio: CGFloat) -> UUID {
         addRasterOverlay(
             to: pageItemID,
             image: image,
@@ -267,7 +268,7 @@ final class PDFEditorViewModel {
         type: PageObjectType,
         pageAspectRatio: CGFloat,
         widthFraction: CGFloat
-    ) {
+    ) -> UUID {
         pushUndoSnapshot()
 
         let assetID = UUID()
@@ -288,6 +289,7 @@ final class PDFEditorViewModel {
 
         pageObjectsByPage[pageItemID, default: []].append(object)
         bumpOverlayRevision(for: pageItemID)
+        return object.id
     }
 
     func updateOverlay(_ object: PageObject) {
