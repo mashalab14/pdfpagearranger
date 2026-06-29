@@ -38,8 +38,8 @@ struct SignatureLibraryView: View {
                 reloadSignatures()
             }
             .sheet(isPresented: $showCapture) {
-                SignatureCaptureView { image in
-                    saveAndUse(image)
+                SignatureCaptureView { image, strokeThickness in
+                    saveAndUse(image, strokeThickness: strokeThickness)
                 }
             }
             .alert("Rename Signature", isPresented: renameAlertIsPresented) {
@@ -220,9 +220,13 @@ struct SignatureLibraryView: View {
         dismiss()
     }
 
-    private func saveAndUse(_ image: UIImage) {
+    private func saveAndUse(_ image: UIImage, strokeThickness: SignatureInkThickness) {
         if let pngData = image.pngData() {
-            try? store.saveSignature(imageData: pngData, sourceType: .drawn)
+            try? store.saveSignature(
+                imageData: pngData,
+                sourceType: .drawn,
+                strokeThickness: strokeThickness
+            )
             reloadSignatures()
         }
         onSelectSignature(image)

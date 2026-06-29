@@ -18,6 +18,8 @@ struct SignatureAsset: Identifiable, Equatable, Codable {
     let imageFileName: String
     /// File name relative to the store's thumbnails directory, when available.
     let thumbnailFileName: String?
+    /// Stroke thickness used when the signature was drawn, when available.
+    let strokeThickness: SignatureInkThickness?
 
     init(
         id: UUID = UUID(),
@@ -26,7 +28,8 @@ struct SignatureAsset: Identifiable, Equatable, Codable {
         updatedAt: Date = Date(),
         sourceType: SignatureAssetSourceType,
         imageFileName: String,
-        thumbnailFileName: String? = nil
+        thumbnailFileName: String? = nil,
+        strokeThickness: SignatureInkThickness? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -35,5 +38,6 @@ struct SignatureAsset: Identifiable, Equatable, Codable {
         self.sourceType = sourceType
         self.imageFileName = imageFileName
         self.thumbnailFileName = thumbnailFileName
+        self.strokeThickness = strokeThickness
     }
 }

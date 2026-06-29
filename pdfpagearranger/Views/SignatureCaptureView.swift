@@ -4,9 +4,10 @@ import SwiftUI
 struct SignatureCaptureView: View {
     @Environment(\.dismiss) private var dismiss
 
-    let onUseSignature: (UIImage) -> Void
+    let onUseSignature: (UIImage, SignatureInkThickness) -> Void
 
     @State private var selectedColor: SignatureInkColor = .defaultInk
+    @State private var selectedThickness: SignatureInkThickness = SignatureCaptureSettings.storedThickness()
     @State private var hasDrawing = false
     @State private var canvasView: PKCanvasView?
 
@@ -21,6 +22,7 @@ struct SignatureCaptureView: View {
 
                 SignatureCanvasRepresentable(
                     selectedColor: selectedColor,
+                    selectedThickness: selectedThickness,
                     hasDrawing: $hasDrawing,
                     canvasView: $canvasView
                 )
@@ -33,6 +35,9 @@ struct SignatureCaptureView: View {
                 }
                 .padding(.horizontal)
                 .accessibilityIdentifier("signatureCaptureView")
+
+                signatureThicknessPicker
+                    .padding(.horizontal)
 
                 signatureColorPicker
                     .padding(.horizontal)
@@ -65,6 +70,57 @@ struct SignatureCaptureView: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+    }
+
+    private var signatureThicknessPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Thickness")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 12) {
+                ForEach(SignatureInkThickness.allCases) { thickness in
+                    thicknessOption(for: thickness)
+                }
+            }
+        }
+    }
+
+    private func thicknessOption(for thickness: SignatureInkThickness) -> some View {
+        Button {
+            selectedThickness = thickness
+            SignatureCaptureSettings.setStoredThickness(thickness)
+        } label: {
+            VStack(spacing: 6) {
+                Capsule()
+                    .fill(Color.primary)
+                    .frame(width: 44, height: max(thickness.strokeWidth, 2))
+
+                Text(thickness.title)
+                    .font(.caption2)
+                    .foregroundStyle(.primary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background {
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(
+                        selectedThickness == thickness ? Color.accentColor : Color(.separator),
+                        lineWidth: selectedThickness == thickness ? 2 : 1
+                    )
+            }
+            .overlay(alignment: .topTrailing) {
+                if selectedThickness == thickness {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(Color.accentColor)
+                        .padding(4)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(thickness.title)
+        .accessibilityIdentifier(thickness.accessibilityIdentifier)
     }
 
     private var signatureColorPicker: some View {
@@ -130,13 +186,14 @@ struct SignatureCaptureView: View {
               let image = SignatureRenderer.image(from: canvasView.drawing) else {
             return
         }
-        onUseSignature(image)
+        onUseSignature(image, selectedThickness)
         dismiss()
     }
 }
 
 private struct SignatureCanvasRepresentable: UIViewRepresentable {
     let selectedColor: SignatureInkColor
+    let selectedThickness: SignatureInkThickness
     @Binding var hasDrawing: Bool
     @Binding var canvasView: PKCanvasView?
 
@@ -151,7 +208,7 @@ private struct SignatureCanvasRepresentable: UIViewRepresentable {
         canvas.backgroundColor = .white
         canvas.isOpaque = true
         canvas.overrideUserInterfaceStyle = .light
-        context.coordinator.applyInkColor(selectedColor, to: canvas)
+        context.coordinator.applyInkTool(to: canvas)
 
         DispatchQueue.main.async {
             canvasView = canvas
@@ -162,7 +219,7 @@ private struct SignatureCanvasRepresentable: UIViewRepresentable {
 
     func updateUIView(_ uiView: PKCanvasView, context: Context) {
         context.coordinator.parent = self
-        context.coordinator.applyInkColor(selectedColor, to: uiView)
+        context.coordinator.applyInkTool(to: uiView)
     }
 
     final class Coordinator: NSObject, PKCanvasViewDelegate {
@@ -176,8 +233,8 @@ private struct SignatureCanvasRepresentable: UIViewRepresentable {
             parent.hasDrawing = !canvasView.drawing.bounds.isEmpty
         }
 
-        func applyInkColor(_ color: SignatureInkColor, to canvasView: PKCanvasView) {
-            canvasView.tool = PKInkingTool(.pen, color: color.uiColor, width: 2.5)
+        func applyInkTool(to canvasView: PKCanvasView) {
+            canvasView.tool = parent.selectedThickness.inkingTool(color: parent.selectedColor)
         }
     }
 }

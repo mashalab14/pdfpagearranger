@@ -66,7 +66,8 @@ final class SignatureLibraryStore {
     func saveSignature(
         imageData: Data,
         sourceType: SignatureAssetSourceType,
-        displayName: String = SignatureAsset.defaultDisplayName
+        displayName: String = SignatureAsset.defaultDisplayName,
+        strokeThickness: SignatureInkThickness? = nil
     ) throws -> SignatureAsset {
         guard !imageData.isEmpty else {
             throw SignatureLibraryStoreError.emptyImageData
@@ -89,7 +90,8 @@ final class SignatureLibraryStore {
             updatedAt: now,
             sourceType: sourceType,
             imageFileName: imageFileName,
-            thumbnailFileName: thumbnailFileName
+            thumbnailFileName: thumbnailFileName,
+            strokeThickness: strokeThickness
         )
 
         let imageURL = imagesDirectory.appendingPathComponent(imageFileName)
