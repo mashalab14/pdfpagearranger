@@ -7,7 +7,7 @@
 - Image overlays
 - Signature library, Quick Signature, default signature, stroke thickness
 - Page numbers (document-level)
-- **Text watermark (document-level, V1)** — including above/behind content layer placement
+- **Text and image watermark (document-level)** — including above/behind content layer placement; image stored in session `imageAssets` via `imageAssetID`
 - Compression (metadata optimization)
 - Export with vector page preservation
 - Undo (single-level stack)
@@ -21,7 +21,6 @@
 - Document rename and information panel
 - Recent documents / project save
 - Redo
-- Image watermark
 - Custom watermark fonts
 - Batch tools
 - Real in-app purchase

@@ -196,6 +196,7 @@ struct PageEditorView: View {
             document: document,
             pageNumberSettings: viewModel.pageNumberSettings,
             watermarkSettings: viewModel.watermarkSettings,
+            watermarkImage: viewModel.watermarkImage,
             exportIndex: exportIndex,
             totalPages: viewModel.pageCount
         )

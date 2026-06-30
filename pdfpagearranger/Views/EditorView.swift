@@ -133,6 +133,7 @@ struct EditorView: View {
             overlayRevision: viewModel.overlayRevision(for: item.id),
             pageNumberSettings: viewModel.pageNumberSettings,
             watermarkSettings: viewModel.watermarkSettings,
+            watermarkImage: viewModel.watermarkImage,
             exportIndex: index,
             totalPages: viewModel.pageCount,
             onRotate: { viewModel.rotatePage(id: item.id) },

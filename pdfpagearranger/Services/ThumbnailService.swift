@@ -21,6 +21,7 @@ actor ThumbnailService {
         revision: Int,
         pageNumberSettings: PageNumberSettings = .default,
         watermarkSettings: WatermarkSettings = .default,
+        watermarkImage: UIImage? = nil,
         exportIndex: Int = 0,
         totalPages: Int = 1
     ) async -> UIImage? {
@@ -40,6 +41,7 @@ actor ThumbnailService {
             overlayImages: overlayImages,
             pageNumberSettings: pageNumberSettings,
             watermarkSettings: watermarkSettings,
+            watermarkImage: watermarkImage,
             exportIndex: exportIndex,
             totalPages: totalPages
         )
@@ -62,6 +64,7 @@ actor ThumbnailService {
         overlayImages: [UUID: UIImage],
         pageNumberSettings: PageNumberSettings,
         watermarkSettings: WatermarkSettings,
+        watermarkImage: UIImage?,
         exportIndex: Int,
         totalPages: Int
     ) async -> UIImage? {
@@ -82,7 +85,8 @@ actor ThumbnailService {
                     pageImage: image,
                     pageRotation: rotation,
                     settings: watermarkSettings,
-                    mediaBox: mediaBox
+                    mediaBox: mediaBox,
+                    watermarkImage: watermarkImage
                 )
             }
 

@@ -1,4 +1,5 @@
 import CoreGraphics
+import UIKit
 import XCTest
 @testable import pdfpagearranger
 
@@ -58,15 +59,15 @@ final class WatermarkGeometryRegressionTests: XCTestCase {
         settings: WatermarkSettings,
         mediaBox: CGRect,
         pageRotation: Int,
+        image: UIImage? = nil,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        let text = settings.text
         let expected = WatermarkGeometryEngine.normalizedLayout(
             settings: settings,
-            text: text,
             pageRotation: pageRotation,
-            mediaBox: mediaBox
+            mediaBox: mediaBox,
+            image: image
         )
         XCTAssertNotNil(expected, file: file, line: line)
         guard let expected else { return }
@@ -88,27 +89,27 @@ final class WatermarkGeometryRegressionTests: XCTestCase {
 
         let thumbnailLayout = WatermarkGeometryEngine.concreteLayout(
             settings: settings,
-            text: text,
             pageRotation: pageRotation,
             mediaBox: mediaBox,
             renderSize: thumbnailSize,
-            coordinateSpace: .topLeftOrigin
+            coordinateSpace: .topLeftOrigin,
+            image: image
         )
         let pageModeLayout = WatermarkGeometryEngine.concreteLayout(
             settings: settings,
-            text: text,
             pageRotation: pageRotation,
             mediaBox: mediaBox,
             renderSize: pageModeSize,
-            coordinateSpace: .topLeftOrigin
+            coordinateSpace: .topLeftOrigin,
+            image: image
         )
         let exportLayout = WatermarkGeometryEngine.concreteLayout(
             settings: settings,
-            text: text,
             pageRotation: pageRotation,
             mediaBox: mediaBox,
             renderSize: displaySize,
-            coordinateSpace: .pdfMediaBox
+            coordinateSpace: .pdfMediaBox,
+            image: image
         )
 
         XCTAssertNotNil(thumbnailLayout, file: file, line: line)
@@ -179,6 +180,28 @@ final class WatermarkGeometryRegressionTests: XCTestCase {
         )
     }
 
+    func testImageWatermarkNormalizedGeometryMatchesAcrossRenderTargets() {
+        let mediaBox = CGRect(x: 0, y: 0, width: 612, height: 792)
+        var imageSettings = WatermarkSettings.default
+        imageSettings.isEnabled = true
+        imageSettings.contentType = .image
+        imageSettings.imageAssetID = UUID()
+        imageSettings.normalizedScale = 0.35
+        imageSettings.rotationDegrees = 45
+
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 160, height: 80)).image { context in
+            UIColor.blue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 160, height: 80))
+        }
+
+        assertConsistentNormalizedGeometry(
+            settings: imageSettings,
+            mediaBox: mediaBox,
+            pageRotation: 0,
+            image: image
+        )
+    }
+
     func testMixedPageSizesUseSameNormalizedScale() {
         let letterBox = CGRect(x: 0, y: 0, width: 612, height: 792)
         let a4Box = CGRect(x: 0, y: 0, width: 595, height: 842)
@@ -186,13 +209,11 @@ final class WatermarkGeometryRegressionTests: XCTestCase {
 
         let letterLayout = WatermarkGeometryEngine.normalizedLayout(
             settings: watermarkSettings,
-            text: watermarkSettings.text,
             pageRotation: 0,
             mediaBox: letterBox
         )
         let a4Layout = WatermarkGeometryEngine.normalizedLayout(
             settings: watermarkSettings,
-            text: watermarkSettings.text,
             pageRotation: 0,
             mediaBox: a4Box
         )

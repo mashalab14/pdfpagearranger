@@ -1,11 +1,15 @@
+import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct WatermarkView: View {
     @Environment(\.dismiss) private var dismiss
 
     @Bindable var viewModel: PDFEditorViewModel
 
+    @State private var contentType: WatermarkContentType
     @State private var text: String
+    @State private var draftImage: UIImage?
     @State private var opacity: Double
     @State private var normalizedScale: Double
     @State private var color: WatermarkColor
@@ -16,11 +20,16 @@ struct WatermarkView: View {
     @State private var currentPageIndex: Int
     @State private var rangeStart: Int
     @State private var rangeEnd: Int
+    @State private var showPhotosPicker = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var showFileImporter = false
 
     init(viewModel: PDFEditorViewModel) {
         self._viewModel = Bindable(wrappedValue: viewModel)
         let settings = viewModel.watermarkSettings
+        _contentType = State(initialValue: settings.contentType)
         _text = State(initialValue: settings.text)
+        _draftImage = State(initialValue: viewModel.watermarkImage)
         _opacity = State(initialValue: Double(settings.opacity))
         _normalizedScale = State(initialValue: Double(settings.normalizedScale))
         _color = State(initialValue: settings.color)
@@ -36,10 +45,51 @@ struct WatermarkView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Text") {
-                    TextField("Watermark text", text: $text)
-                        .textInputAutocapitalization(.characters)
-                        .accessibilityIdentifier("watermarkTextField")
+                Section("Content") {
+                    Picker("Content", selection: $contentType) {
+                        ForEach(WatermarkContentType.allCases) { option in
+                            Text(option.title).tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("watermarkContentTypePicker")
+
+                    if contentType == .text {
+                        TextField("Watermark text", text: $text)
+                            .textInputAutocapitalization(.characters)
+                            .accessibilityIdentifier("watermarkTextField")
+                    } else {
+                        if let draftImage {
+                            Image(uiImage: draftImage)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxHeight: 160)
+                                .frame(maxWidth: .infinity)
+                                .accessibilityIdentifier("watermarkImagePreview")
+                        }
+
+                        Button("Choose Image") {
+                            showPhotosPicker = true
+                        }
+                        .accessibilityIdentifier("chooseWatermarkImageButton")
+
+                        Button("Choose from Files") {
+                            showFileImporter = true
+                        }
+                        .accessibilityIdentifier("chooseWatermarkFileButton")
+
+                        if draftImage != nil {
+                            Button("Replace Image") {
+                                showPhotosPicker = true
+                            }
+                            .accessibilityIdentifier("replaceWatermarkImageButton")
+
+                            Button("Remove Image", role: .destructive) {
+                                draftImage = nil
+                            }
+                            .accessibilityIdentifier("removeWatermarkImageButton")
+                        }
+                    }
                 }
 
                 Section("Appearance") {
@@ -58,13 +108,15 @@ struct WatermarkView: View {
                     }
                     .accessibilityIdentifier("watermarkRotationStepper")
 
-                    Picker("Color", selection: $color) {
-                        ForEach(WatermarkColor.presets, id: \.self) { preset in
-                            Text(colorTitle(for: preset)).tag(preset)
+                    if contentType == .text {
+                        Picker("Color", selection: $color) {
+                            ForEach(WatermarkColor.presets, id: \.self) { preset in
+                                Text(colorTitle(for: preset)).tag(preset)
+                            }
                         }
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("watermarkColorPicker")
                     }
-                    .pickerStyle(.segmented)
-                    .accessibilityIdentifier("watermarkColorPicker")
 
                     Picker("Position", selection: $position) {
                         ForEach(WatermarkPosition.allCases) { option in
@@ -135,7 +187,7 @@ struct WatermarkView: View {
                     Button("Apply Watermark") {
                         applyWatermark()
                     }
-                    .disabled(trimmedText.isEmpty)
+                    .disabled(!canApply)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .accessibilityIdentifier("applyWatermarkButton")
 
@@ -160,6 +212,20 @@ struct WatermarkView: View {
             }
         }
         .accessibilityIdentifier("watermarkView")
+        .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotoItem, matching: .images)
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: [.image],
+            allowsMultipleSelection: false
+        ) { result in
+            importFile(result)
+        }
+        .onChange(of: selectedPhotoItem) { _, newValue in
+            guard let newValue else { return }
+            Task {
+                await importPhotoItem(newValue)
+            }
+        }
         .onChange(of: rangeStart) { _, newValue in
             if rangeEnd < newValue {
                 rangeEnd = newValue
@@ -177,14 +243,25 @@ struct WatermarkView: View {
     }
 
     private var previewText: String? {
-        guard !trimmedText.isEmpty else { return nil }
+        guard contentType == .text, !trimmedText.isEmpty else { return nil }
         return trimmedText
+    }
+
+    private var canApply: Bool {
+        switch contentType {
+        case .text:
+            return !trimmedText.isEmpty
+        case .image:
+            return draftImage != nil
+        }
     }
 
     private var draftSettings: WatermarkSettings {
         WatermarkSettings(
             isEnabled: true,
-            text: trimmedText,
+            contentType: contentType,
+            text: trimmedText.isEmpty ? WatermarkSettings.default.text : trimmedText,
+            imageAssetID: nil,
             opacity: CGFloat(opacity),
             normalizedScale: CGFloat(normalizedScale),
             color: color,
@@ -199,8 +276,33 @@ struct WatermarkView: View {
     }
 
     private func applyWatermark() {
-        viewModel.applyWatermark(draftSettings)
+        let image = contentType == .image ? draftImage : nil
+        viewModel.applyWatermark(draftSettings, watermarkImage: image)
         dismiss()
+    }
+
+    private func importPhotoItem(_ item: PhotosPickerItem) async {
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              let image = UIImage(data: data) else {
+            return
+        }
+        draftImage = image
+        selectedPhotoItem = nil
+    }
+
+    private func importFile(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result,
+              let url = urls.first,
+              url.startAccessingSecurityScopedResource() else {
+            return
+        }
+        defer { url.stopAccessingSecurityScopedResource() }
+
+        guard let data = try? Data(contentsOf: url),
+              let image = UIImage(data: data) else {
+            return
+        }
+        draftImage = image
     }
 
     private func colorTitle(for color: WatermarkColor) -> String {

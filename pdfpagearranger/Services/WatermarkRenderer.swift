@@ -7,10 +7,10 @@ enum WatermarkRenderer {
         context: CGContext,
         mediaBox: CGRect,
         pageRotation: Int,
-        settings: WatermarkSettings
+        settings: WatermarkSettings,
+        watermarkImage: UIImage?
     ) {
-        let trimmed = settings.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard settings.hasRenderableContent else { return }
 
         let displaySize = OverlayGeometryEngine.displayRenderSize(
             for: pageRotation,
@@ -18,41 +18,55 @@ enum WatermarkRenderer {
         )
         guard let layout = WatermarkGeometryEngine.concreteLayout(
             settings: settings,
-            text: trimmed,
             pageRotation: pageRotation,
             mediaBox: mediaBox,
             renderSize: displaySize,
-            coordinateSpace: .pdfMediaBox
+            coordinateSpace: .pdfMediaBox,
+            image: watermarkImage
         ) else {
             return
         }
 
-        drawRotatedTextInPDFContext(
-            trimmed,
-            layout: layout,
-            color: settings.color.uiColor,
-            opacity: settings.opacity,
-            context: context
-        )
+        switch settings.contentType {
+        case .text:
+            let trimmed = settings.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, let fontSize = layout.fontSize else { return }
+            drawRotatedTextInPDFContext(
+                trimmed,
+                layout: layout,
+                fontSize: fontSize,
+                color: settings.color.uiColor,
+                opacity: settings.opacity,
+                context: context
+            )
+        case .image:
+            guard let watermarkImage, let cgImage = watermarkImage.cgImage else { return }
+            OverlayGeometryEngine.drawPDFImage(
+                cgImage,
+                layout: layout.overlayLayout,
+                opacity: settings.opacity,
+                in: context
+            )
+        }
     }
 
     static func compositeOnImage(
         pageImage: UIImage,
         pageRotation: Int,
         settings: WatermarkSettings,
-        mediaBox: CGRect
+        mediaBox: CGRect,
+        watermarkImage: UIImage?
     ) -> UIImage {
-        let trimmed = settings.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return pageImage }
+        guard settings.hasRenderableContent else { return pageImage }
 
         let renderSize = pageImage.size
         guard let layout = WatermarkGeometryEngine.concreteLayout(
             settings: settings,
-            text: trimmed,
             pageRotation: pageRotation,
             mediaBox: mediaBox,
             renderSize: renderSize,
-            coordinateSpace: .topLeftOrigin
+            coordinateSpace: .topLeftOrigin,
+            image: watermarkImage
         ) else {
             return pageImage
         }
@@ -60,40 +74,69 @@ enum WatermarkRenderer {
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = pageImage.scale
         return UIGraphicsImageRenderer(size: renderSize, format: format).image { rendererContext in
+            let context = rendererContext.cgContext
             switch settings.layer {
             case .aboveContent:
                 pageImage.draw(at: .zero)
-                drawRotatedTextInImageContext(
-                    trimmed,
+                drawWatermarkContent(
+                    settings: settings,
                     layout: layout,
-                    color: settings.color.uiColor,
-                    opacity: settings.opacity,
-                    context: rendererContext.cgContext
+                    watermarkImage: watermarkImage,
+                    context: context
                 )
             case .behindContent:
                 UIColor.white.setFill()
                 rendererContext.fill(CGRect(origin: .zero, size: renderSize))
-                drawRotatedTextInImageContext(
-                    trimmed,
+                drawWatermarkContent(
+                    settings: settings,
                     layout: layout,
-                    color: settings.color.uiColor,
-                    opacity: settings.opacity,
-                    context: rendererContext.cgContext
+                    watermarkImage: watermarkImage,
+                    context: context
                 )
                 pageImage.draw(at: .zero)
             }
         }
     }
 
+    private static func drawWatermarkContent(
+        settings: WatermarkSettings,
+        layout: WatermarkGeometryEngine.ConcreteLayout,
+        watermarkImage: UIImage?,
+        context: CGContext
+    ) {
+        switch settings.contentType {
+        case .text:
+            let trimmed = settings.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, let fontSize = layout.fontSize else { return }
+            drawRotatedTextInImageContext(
+                trimmed,
+                layout: layout,
+                fontSize: fontSize,
+                color: settings.color.uiColor,
+                opacity: settings.opacity,
+                context: context
+            )
+        case .image:
+            guard let watermarkImage else { return }
+            OverlayGeometryEngine.drawUIImage(
+                watermarkImage,
+                layout: layout.overlayLayout,
+                opacity: settings.opacity,
+                in: context
+            )
+        }
+    }
+
     private static func drawRotatedTextInPDFContext(
         _ text: String,
         layout: WatermarkGeometryEngine.ConcreteLayout,
+        fontSize: CGFloat,
         color: UIColor,
         opacity: CGFloat,
         context: CGContext
     ) {
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: layout.fontSize),
+            .font: UIFont.systemFont(ofSize: fontSize),
             .foregroundColor: color
         ]
         let attributed = NSAttributedString(string: text, attributes: attributes)
@@ -139,6 +182,7 @@ enum WatermarkRenderer {
     private static func drawRotatedTextInImageContext(
         _ text: String,
         layout: WatermarkGeometryEngine.ConcreteLayout,
+        fontSize: CGFloat,
         color: UIColor,
         opacity: CGFloat,
         context: CGContext
@@ -149,7 +193,7 @@ enum WatermarkRenderer {
         context.rotate(by: layout.rotationDegrees * .pi / 180)
 
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: layout.fontSize),
+            .font: UIFont.systemFont(ofSize: fontSize),
             .foregroundColor: color
         ]
         let textSize = (text as NSString).size(withAttributes: attributes)

@@ -84,7 +84,8 @@ final class PDFService {
         overlaysByPage: [UUID: [PageObject]] = [:],
         imageAssets: [UUID: UIImage] = [:],
         pageNumberSettings: PageNumberSettings = .default,
-        watermarkSettings: WatermarkSettings = .default
+        watermarkSettings: WatermarkSettings = .default,
+        watermarkImage: UIImage? = nil
     ) throws -> URL {
         let outputDocument = PDFDocument()
         let totalPages = pages.count
@@ -112,7 +113,8 @@ final class PDFService {
                 overlays: overlays,
                 imageAssets: imageAssets,
                 pageNumberSettings: pageNumberSettings,
-                watermarkSettings: watermarkSettings
+                watermarkSettings: watermarkSettings,
+                watermarkImage: watermarkImage
             ) {
                 outputDocument.insert(decoratedPage, at: outputDocument.pageCount)
             }
@@ -147,7 +149,8 @@ final class PDFService {
         overlays: [PageObject],
         imageAssets: [UUID: UIImage],
         pageNumberSettings: PageNumberSettings,
-        watermarkSettings: WatermarkSettings
+        watermarkSettings: WatermarkSettings,
+        watermarkImage: UIImage?
     ) -> PDFPage? {
         guard let sourcePage = sourceDocument.page(at: item.originalPageIndex)?.copy() as? PDFPage else {
             return nil
@@ -175,7 +178,8 @@ final class PDFService {
                 context: context,
                 mediaBox: mediaBox,
                 pageRotation: pageRotation,
-                settings: watermarkSettings
+                settings: watermarkSettings,
+                watermarkImage: watermarkImage
             )
         }
 
@@ -187,7 +191,8 @@ final class PDFService {
                 context: context,
                 mediaBox: mediaBox,
                 pageRotation: pageRotation,
-                settings: watermarkSettings
+                settings: watermarkSettings,
+                watermarkImage: watermarkImage
             )
         }
 

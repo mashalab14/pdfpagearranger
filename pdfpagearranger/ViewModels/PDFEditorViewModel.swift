@@ -162,14 +162,45 @@ final class PDFEditorViewModel {
             overlaysByPage: pageObjectsByPage,
             imageAssets: imageAssets,
             pageNumberSettings: pageNumberSettings,
-            watermarkSettings: watermarkSettings
+            watermarkSettings: watermarkSettings,
+            watermarkImage: watermarkImage
         )
     }
 
-    func applyWatermark(_ settings: WatermarkSettings) {
+    var watermarkImage: UIImage? {
+        guard let assetID = watermarkSettings.imageAssetID else { return nil }
+        return imageAssets[assetID]
+    }
+
+    func applyWatermark(_ settings: WatermarkSettings, watermarkImage newImage: UIImage? = nil) {
         pushUndoSnapshot()
+        let previousAssetID = watermarkSettings.imageAssetID
+
         watermarkSettings = settings
         watermarkSettings.isEnabled = true
+
+        switch watermarkSettings.contentType {
+        case .text:
+            watermarkSettings.imageAssetID = nil
+        case .image:
+            if let newImage {
+                let assetID = UUID()
+                imageAssets[assetID] = newImage
+                watermarkSettings.imageAssetID = assetID
+            }
+        }
+
+        if watermarkSettings.contentType == .image,
+           watermarkSettings.imageAssetID == nil {
+            watermarkSettings.isEnabled = false
+        }
+
+        if let previousAssetID,
+           previousAssetID != watermarkSettings.imageAssetID,
+           !isImageAssetReferenced(previousAssetID) {
+            imageAssets.removeValue(forKey: previousAssetID)
+        }
+
         Task {
             await ThumbnailService.shared.clear()
         }
@@ -178,7 +209,11 @@ final class PDFEditorViewModel {
     func removeWatermark() {
         guard watermarkSettings.isEnabled else { return }
         pushUndoSnapshot()
+        let orphanedAssetID = watermarkSettings.imageAssetID
         watermarkSettings = .default
+        if let orphanedAssetID, !isImageAssetReferenced(orphanedAssetID) {
+            imageAssets.removeValue(forKey: orphanedAssetID)
+        }
         Task {
             await ThumbnailService.shared.clear()
         }
@@ -397,6 +432,9 @@ final class PDFEditorViewModel {
     }
 
     private func isImageAssetReferenced(_ assetID: UUID, excludingObjectID: UUID? = nil) -> Bool {
+        if watermarkSettings.imageAssetID == assetID {
+            return true
+        }
         for objects in pageObjectsByPage.values {
             for object in objects {
                 if object.id == excludingObjectID { continue }

@@ -11,6 +11,7 @@ final class WatermarkSettingsTests: XCTestCase {
         XCTAssertEqual(settings.normalizedScale, 0.35, accuracy: 0.001)
         XCTAssertEqual(settings.rotationDegrees, 45, accuracy: 0.001)
         XCTAssertEqual(settings.position, .center)
+        XCTAssertEqual(settings.contentType, .text)
         XCTAssertEqual(settings.layer, .aboveContent)
         XCTAssertEqual(settings.applyScope, .allPages)
     }
@@ -52,13 +53,11 @@ final class WatermarkSettingsTests: XCTestCase {
 
         let letterLayout = WatermarkGeometryEngine.normalizedLayout(
             settings: settings,
-            text: text,
             pageRotation: 0,
             mediaBox: letterBox
         )
         let a4Layout = WatermarkGeometryEngine.normalizedLayout(
             settings: settings,
-            text: text,
             pageRotation: 0,
             mediaBox: a4Box
         )
@@ -140,7 +139,8 @@ final class WatermarkExportRegressionTests: XCTestCase {
             context: context,
             mediaBox: mediaBox,
             pageRotation: 0,
-            settings: settings
+            settings: settings,
+            watermarkImage: nil
         )
 
         context.endPDFPage()

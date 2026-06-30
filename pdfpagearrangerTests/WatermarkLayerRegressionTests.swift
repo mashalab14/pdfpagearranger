@@ -104,7 +104,7 @@ final class WatermarkLayerRegressionTests: XCTestCase {
             return
         }
         let behindSection = String(source[behindStart...])
-        let watermarkDraw = try XCTUnwrap(behindSection.range(of: "drawRotatedTextInImageContext"))
+        let watermarkDraw = try XCTUnwrap(behindSection.range(of: "drawWatermarkContent"))
         let pageDraw = try XCTUnwrap(behindSection.range(of: "pageImage.draw(at: .zero)"))
         XCTAssertLessThan(watermarkDraw.lowerBound, pageDraw.lowerBound)
     }
@@ -120,7 +120,7 @@ final class WatermarkLayerRegressionTests: XCTestCase {
         }
         let aboveSection = String(source[aboveStart...])
         let pageDraw = try XCTUnwrap(aboveSection.range(of: "pageImage.draw(at: .zero)"))
-        let watermarkDraw = try XCTUnwrap(aboveSection.range(of: "drawRotatedTextInImageContext"))
+        let watermarkDraw = try XCTUnwrap(aboveSection.range(of: "drawWatermarkContent"))
         XCTAssertLessThan(pageDraw.lowerBound, watermarkDraw.lowerBound)
     }
 
@@ -131,13 +131,11 @@ final class WatermarkLayerRegressionTests: XCTestCase {
 
         let aboveLayout = WatermarkGeometryEngine.normalizedLayout(
             settings: above,
-            text: above.text,
             pageRotation: 0,
             mediaBox: mediaBox
         )
         let behindLayout = WatermarkGeometryEngine.normalizedLayout(
             settings: behind,
-            text: behind.text,
             pageRotation: 0,
             mediaBox: mediaBox
         )

@@ -10,6 +10,7 @@ struct PageThumbnailView: View {
     let overlayRevision: Int
     let pageNumberSettings: PageNumberSettings
     let watermarkSettings: WatermarkSettings
+    let watermarkImage: UIImage?
     let exportIndex: Int
     let totalPages: Int
     let onRotate: () -> Void
@@ -134,6 +135,7 @@ struct PageThumbnailView: View {
             revision: overlayRevision,
             pageNumberSettings: pageNumberSettings,
             watermarkSettings: watermarkSettings,
+            watermarkImage: watermarkImage,
             exportIndex: exportIndex,
             totalPages: totalPages
         )

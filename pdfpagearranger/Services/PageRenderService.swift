@@ -11,6 +11,7 @@ actor PageRenderService {
         maxDimension: CGFloat = 2048,
         pageNumberSettings: PageNumberSettings = .default,
         watermarkSettings: WatermarkSettings = .default,
+        watermarkImage: UIImage? = nil,
         exportIndex: Int = 0,
         totalPages: Int = 1
     ) async -> UIImage? {
@@ -24,6 +25,7 @@ actor PageRenderService {
             maxDimension: maxDimension,
             pageNumberSettings: pageNumberSettings,
             watermarkSettings: watermarkSettings,
+            watermarkImage: watermarkImage,
             exportIndex: exportIndex,
             totalPages: totalPages
         )
@@ -35,6 +37,7 @@ actor PageRenderService {
         maxDimension: CGFloat,
         pageNumberSettings: PageNumberSettings,
         watermarkSettings: WatermarkSettings,
+        watermarkImage: UIImage?,
         exportIndex: Int,
         totalPages: Int
     ) async -> UIImage? {
@@ -53,7 +56,8 @@ actor PageRenderService {
                     pageImage: image,
                     pageRotation: rotation,
                     settings: watermarkSettings,
-                    mediaBox: mediaBox
+                    mediaBox: mediaBox,
+                    watermarkImage: watermarkImage
                 )
             }
 

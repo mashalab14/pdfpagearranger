@@ -2,7 +2,7 @@
 
 This document describes **exactly how the app behaves today** from the user's perspective. It is intended for designers, product managers, QA engineers, and other agents who need to understand the product without reading source code.
 
-**Last verified against:** the codebase as of the current release (includes Document Mode, Page Mode, overlays, signatures with Quick Signature and default/favorite, signature stroke thickness, page numbers, text watermark, compression, export, appearance settings, and horizontal Page Mode navigation).
+**Last verified against:** the codebase as of the current release (includes Document Mode, Page Mode, overlays, signatures with Quick Signature and default/favorite, signature stroke thickness, page numbers, text and image watermark, compression, export, appearance settings, and horizontal Page Mode navigation).
 
 ---
 
@@ -22,7 +22,7 @@ This document describes **exactly how the app behaves today** from the user's pe
 12. [Paywall (export limit)](#12-paywall-export-limit)
 13. [Compression](#13-compression)
 14. [Page Numbers](#14-page-numbers)
-14.5. [Text Watermark](#145-text-watermark)
+14.5. [Document Watermark](#145-document-watermark)
 15. [Page Mode](#15-page-mode)
 16. [Page Mode navigation (swipe between pages)](#16-page-mode-navigation-swipe-between-pages)
 17. [Page Mode zoom and pan](#17-page-mode-zoom-and-pan)
@@ -52,7 +52,7 @@ This document describes **exactly how the app behaves today** from the user's pe
 - Open a single page for detailed editing (**Page Mode**)
 - Add image overlays and signatures on individual pages (including one-tap **Quick Signature** when a default is set)
 - Apply document-wide page numbers
-- Apply document-wide text watermarks
+- Apply document-wide text or image watermarks
 - Compress the document
 - Export a new PDF reflecting all changes
 - Change app appearance (light / dark / device)
@@ -386,7 +386,7 @@ A **new PDF file** built from:
 - Per-page rotation
 - Image and signature overlays
 - Applied page numbers (if enabled)
-- Applied text watermark (if enabled)
+- Applied watermark (text or image, if enabled)
 - Original PDF page content preserved as vector where possible (searchable text on supported paths)
 
 The exported file name: **`{documentName}-arranged.pdf`** (slashes and colons in the name replaced with hyphens).
@@ -603,7 +603,7 @@ After success:
 
 ---
 
-## 14.5 Text Watermark
+## 14.5 Document Watermark
 
 ### Entry point
 
@@ -616,12 +616,21 @@ After success:
 
 **Sections:**
 
-1. **Text** — watermark string (default **CONFIDENTIAL**)
+1. **Content**
+   - **Text** or **Image** (segmented control; default **Text**)
+   - When **Text** is selected:
+     - Watermark string (default **CONFIDENTIAL**)
+   - When **Image** is selected:
+     - **Choose Image** — Photos picker
+     - **Choose from Files** — file importer (image types)
+     - **Replace Image** — when an image is already selected
+     - **Remove Image** — clears the draft image (destructive)
+     - Inline preview of the selected image
 2. **Appearance**
    - Opacity slider (**0.1…1.0**, default **0.35**)
-   - Size stepper (**5%…80%** of page width, default **35%**; same relative size in thumbnails, Page Mode, and export)
+   - Size stepper (**5%…80%** of page width, default **35%**; same relative size in thumbnails, Page Mode, and export; image watermarks preserve aspect ratio and are never stretched)
    - Rotation stepper (**−180°…180°**, default **45°**)
-   - Color presets: Gray, Black, Blue, Red (default Gray)
+   - Color presets (text only): Gray, Black, Blue, Red (default Gray)
    - Position: Center (**default**), Top, Bottom
    - Layer: **Above content** (**default**), Behind content
      - Helper when Behind content is selected: *"Behind content may be hidden by page text, images, or filled backgrounds."*
@@ -629,16 +638,19 @@ After success:
    - **Entire document** (default)
    - **Current page** — stepper to pick page number
    - **Page range** — from/to steppers
-4. **Preview** — rotated sample of the watermark text
+4. **Preview** — rotated sample of the watermark text (text content only)
 5. **Actions**
-   - **Apply Watermark** — applies and dismisses (disabled if text empty)
+   - **Apply Watermark** — applies and dismisses (disabled if text is empty or no image is selected)
    - **Remove Watermark** (destructive) — only when watermark is active
 
 ### Rendering
 
 - Document-level settings stored in session (not page overlays)
-- **`WatermarkGeometryEngine`** computes normalized position, scale, rotation, and bounds once; all renderers derive font size from the active canvas width
-- Vector text in export; raster composited on thumbnails and Page Mode preview
+- Single `WatermarkSettings` model for both text and image content (`contentType`, `text`, `imageAssetID`)
+- Image bytes stored in the session `imageAssets` dictionary (same storage as overlay images); settings hold only a UUID reference
+- **`WatermarkGeometryEngine`** computes normalized position, scale, rotation, and bounds once for both content types; text derives font size from render width, image derives height from aspect ratio
+- **Text:** vector text in export; raster composited on thumbnails and Page Mode preview
+- **Image:** raster watermark image in export (original page content remains vector); raster composited on thumbnails and Page Mode preview via `OverlayGeometryEngine` draw helpers
 - **Layer** controls stacking relative to original page content:
   - **Above content** — page vector/text first, then watermark, then manual overlays, then page numbers
   - **Behind content** — watermark first, then page content, then manual overlays, then page numbers
@@ -648,11 +660,11 @@ After success:
 
 ### Undo
 
-- Apply, change, or remove watermark: **one undo entry** each
+- Apply, change content type, change image, or remove watermark: **one undo entry** each
 
 ### Remove Watermark
 
-- Clears watermark settings only
+- Clears watermark settings and orphaned image asset reference
 - Does **not** remove signatures, images, page numbers, or original PDF content
 
 ---

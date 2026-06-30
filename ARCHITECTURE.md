@@ -66,7 +66,7 @@ Examples (planned, not built):
 
 - Text overlays
 - Signature overlays
-- Page numbers, watermarks *(text watermark V1 implemented)*
+- Page numbers, watermarks *(text and image watermark implemented)*
 
 **Current code:** Page Mode (`PageEditorView`) edits overlays for one `PageItem`. Overlays are stored in `pageObjectsByPage[pageItemID]`.
 
@@ -112,9 +112,9 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`PDFService`** | Import (copy to temp), export (assemble new PDF), initial `PageItem` list. |
 | **`PDFPreviewRenderer`** | On-screen PDF page rasterization via `PDFPage.thumbnail` (correct orientation). |
 | **`PageRenderService`** | High-resolution page image for Page Mode. |
-| **`WatermarkSettings`** | Document-level text watermark configuration (text, opacity, normalized scale, color, rotation, position, layer, apply scope). |
-| **`WatermarkGeometryEngine`** | Single source of truth for watermark normalized position, scale, rotation, and bounds; derives concrete font size from render target width. |
-| **`WatermarkRenderer`** | Vector watermark text for PDF export; image compositing for thumbnails and Page Mode (delegates all placement to `WatermarkGeometryEngine`). |
+| **`WatermarkSettings`** | Document-level watermark configuration (`contentType` text or image, text, `imageAssetID`, opacity, normalized scale, color, rotation, position, layer, apply scope). |
+| **`WatermarkGeometryEngine`** | Single source of truth for watermark normalized position, scale, rotation, and bounds; derives text font size or image content size from render target width. |
+| **`WatermarkRenderer`** | Text: vector watermark in PDF export. Image: raster watermark via `OverlayGeometryEngine` draw helpers. Preview compositing for thumbnails and Page Mode (delegates placement to `WatermarkGeometryEngine`). |
 | **`PageModeLayoutSizing`** | Page Mode width-fill layout: safe area + 16 pt horizontal margins; height from page aspect ratio. |
 | **`ThumbnailService`** | Cached document thumbnails; composited with overlays when present. |
 | **`OverlayCompositor`** | Draws image overlays onto a thumbnail/page bitmap using `OverlayGeometryEngine`. |
@@ -136,9 +136,9 @@ Never edit the imported source bytes in place. Never assume export output overwr
 
 1. For pages **without** overlays, watermark, or page numbers: copy source `PDFPage`, apply rotation, insert.
 2. For pages **with** decorations:
-   - **Behind content** watermark (if enabled): vector watermark text
+   - **Behind content** watermark (if enabled): text (vector) or image (raster)
    - Source page vector content via `PDFPage.draw` (preserves selectable text)
-   - **Above content** watermark (if enabled): vector watermark text
+   - **Above content** watermark (if enabled): text (vector) or image (raster)
    - Overlay images via `OverlayPDFExporter`
    - Page numbers
 3. **Do not** use `PDFPage(image:)` for export — that rasterizes the page and destroys selectable text.

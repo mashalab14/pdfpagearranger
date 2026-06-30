@@ -19,9 +19,10 @@ enum WatermarkGeometryEngine {
     /// Concrete watermark placement for a specific render target.
     struct ConcreteLayout: Equatable {
         let center: CGPoint
-        let fontSize: CGFloat
         let rotationDegrees: CGFloat
         let bounds: CGRect
+        let contentSize: CGSize
+        let fontSize: CGFloat?
     }
 
     static let marginFraction: CGFloat = 0.08
@@ -29,12 +30,11 @@ enum WatermarkGeometryEngine {
 
     static func normalizedLayout(
         settings: WatermarkSettings,
-        text: String,
         pageRotation: Int,
-        mediaBox: CGRect
+        mediaBox: CGRect,
+        image: UIImage? = nil
     ) -> NormalizedLayout? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
+        guard settings.hasRenderableContent else { return nil }
 
         let displaySize = OverlayGeometryEngine.displayRenderSize(
             for: pageRotation,
@@ -44,11 +44,11 @@ enum WatermarkGeometryEngine {
 
         guard let displayConcrete = buildConcreteLayout(
             settings: settings,
-            text: trimmed,
             pageRotation: pageRotation,
             mediaBox: mediaBox,
             renderSize: displaySize,
-            coordinateSpace: .topLeftOrigin
+            coordinateSpace: .topLeftOrigin,
+            image: image
         ) else {
             return nil
         }
@@ -72,25 +72,46 @@ enum WatermarkGeometryEngine {
 
     static func concreteLayout(
         settings: WatermarkSettings,
-        text: String,
         pageRotation: Int,
         mediaBox: CGRect,
         renderSize: CGSize,
-        coordinateSpace: CoordinateSpace
+        coordinateSpace: CoordinateSpace,
+        image: UIImage? = nil
     ) -> ConcreteLayout? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, renderSize.width > 0, renderSize.height > 0 else {
+        guard settings.hasRenderableContent, renderSize.width > 0, renderSize.height > 0 else {
             return nil
         }
 
         return buildConcreteLayout(
             settings: settings,
-            text: trimmed,
             pageRotation: pageRotation,
             mediaBox: mediaBox,
             renderSize: renderSize,
-            coordinateSpace: coordinateSpace
+            coordinateSpace: coordinateSpace,
+            image: image
         )
+    }
+
+    static func contentSize(
+        settings: WatermarkSettings,
+        renderWidth: CGFloat,
+        image: UIImage?
+    ) -> CGSize? {
+        guard renderWidth > 0, settings.normalizedScale > 0 else { return nil }
+
+        let width = renderWidth * settings.normalizedScale
+        switch settings.contentType {
+        case .text:
+            let trimmed = settings.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+            let unitTextSize = measuredTextSize(text: trimmed, fontSize: 1)
+            let height = width * unitTextSize.height / max(unitTextSize.width, 1)
+            return CGSize(width: width, height: height)
+        case .image:
+            guard let image, image.size.width > 0 else { return nil }
+            let aspect = image.size.height / image.size.width
+            return CGSize(width: width, height: width * aspect)
+        }
     }
 
     static func fontSize(
@@ -116,25 +137,35 @@ enum WatermarkGeometryEngine {
 
     private static func buildConcreteLayout(
         settings: WatermarkSettings,
-        text: String,
         pageRotation: Int,
         mediaBox: CGRect,
         renderSize: CGSize,
-        coordinateSpace: CoordinateSpace
+        coordinateSpace: CoordinateSpace,
+        image: UIImage?
     ) -> ConcreteLayout? {
+        guard let contentSize = contentSize(
+            settings: settings,
+            renderWidth: renderSize.width,
+            image: image
+        ) else {
+            return nil
+        }
+
         let normalizedCenter = settings.position.normalizedDisplayPoint(
             marginFraction: marginFraction
         )
-        let normalizedScale = settings.normalizedScale
-        let fontSize = fontSize(
-            for: text,
-            normalizedScale: normalizedScale,
-            renderWidth: renderSize.width
-        )
-        let unitTextSize = measuredTextSize(text: text, fontSize: 1)
-        let textWidth = renderSize.width * normalizedScale
-        let textHeight = textWidth * unitTextSize.height / max(unitTextSize.width, 1)
-        let textSize = CGSize(width: textWidth, height: textHeight)
+        let fontSize: CGFloat?
+        switch settings.contentType {
+        case .text:
+            let trimmed = settings.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            fontSize = Self.fontSize(
+                for: trimmed,
+                normalizedScale: settings.normalizedScale,
+                renderWidth: renderSize.width
+            )
+        case .image:
+            fontSize = nil
+        }
 
         let displayCenter = CGPoint(
             x: normalizedCenter.x * renderSize.width,
@@ -142,7 +173,7 @@ enum WatermarkGeometryEngine {
         )
         let concreteBounds = concreteBounds(
             center: displayCenter,
-            textSize: textSize,
+            contentSize: contentSize,
             rotationDegrees: settings.rotationDegrees
         )
 
@@ -150,9 +181,10 @@ enum WatermarkGeometryEngine {
         case .topLeftOrigin:
             return ConcreteLayout(
                 center: displayCenter,
-                fontSize: fontSize,
                 rotationDegrees: settings.rotationDegrees,
-                bounds: concreteBounds
+                bounds: concreteBounds,
+                contentSize: contentSize,
+                fontSize: fontSize
             )
         case .pdfMediaBox:
             let pdfCenter = CGPoint(
@@ -167,20 +199,21 @@ enum WatermarkGeometryEngine {
             )
             return ConcreteLayout(
                 center: pdfCenter,
-                fontSize: fontSize,
                 rotationDegrees: settings.rotationDegrees,
-                bounds: pdfBounds
+                bounds: pdfBounds,
+                contentSize: contentSize,
+                fontSize: fontSize
             )
         }
     }
 
     private static func concreteBounds(
         center: CGPoint,
-        textSize: CGSize,
+        contentSize: CGSize,
         rotationDegrees: CGFloat
     ) -> CGRect {
-        let halfWidth = textSize.width / 2
-        let halfHeight = textSize.height / 2
+        let halfWidth = contentSize.width / 2
+        let halfHeight = contentSize.height / 2
         let corners = [
             CGPoint(x: -halfWidth, y: -halfHeight),
             CGPoint(x: halfWidth, y: -halfHeight),
@@ -205,6 +238,16 @@ enum WatermarkGeometryEngine {
         return CGPoint(
             x: point.x * cosValue - point.y * sinValue,
             y: point.x * sinValue + point.y * cosValue
+        )
+    }
+}
+
+extension WatermarkGeometryEngine.ConcreteLayout {
+    var overlayLayout: OverlayGeometryEngine.Layout {
+        OverlayGeometryEngine.Layout(
+            center: center,
+            size: contentSize,
+            rotationDegrees: rotationDegrees
         )
     }
 }
