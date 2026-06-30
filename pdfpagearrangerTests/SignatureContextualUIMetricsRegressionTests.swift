@@ -46,10 +46,15 @@ final class ContextualControlMetricsRegressionTests: XCTestCase {
         )
     }
 
-    func testSharedChromeUsesElevatedShadow() {
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.shadowOpacity, 0.20)
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.shadowRadius, 10)
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.shadowYOffset, 4)
+    func testSharedGlassUsesSoftFloatingShadow() {
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.glassShadowOpacity, 0.10)
+        XCTAssertLessThanOrEqual(ContextualControlMetrics.glassShadowOpacity, 0.18)
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.glassShadowRadius, 8)
+        XCTAssertLessThanOrEqual(ContextualControlMetrics.glassShadowRadius, 12)
+    }
+
+    func testGlassCornerRadiusIsLargeAndContinuous() {
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.glassCornerRadius, 18)
     }
 }
 

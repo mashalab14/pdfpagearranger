@@ -61,7 +61,7 @@ struct SignatureOverlayContextMenu: View {
             .accessibilityLabel("More Signature Actions")
             .accessibilityIdentifier("signatureMenuMore")
         }
-        .contextualControlChrome()
+        .contextualGlassContainer()
         .position(anchorPoint)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("signatureOverlayContextMenu")

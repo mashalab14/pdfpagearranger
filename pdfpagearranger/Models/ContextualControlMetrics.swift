@@ -3,14 +3,18 @@ import SwiftUI
 
 /// Shared visual language for floating contextual controls (signatures, highlights, comments, etc.).
 enum ContextualControlMetrics {
-    static let cornerRadius: CGFloat = 12
+    static let glassCornerRadius: CGFloat = 20
+    static let glassBorderWidth: CGFloat = 0.5
+    static let glassHighlightOpacity: CGFloat = 0.42
+    static let glassHighlightFadeOpacity: CGFloat = 0.10
+    static let glassShadowOpacity: CGFloat = 0.14
+    static let glassShadowRadius: CGFloat = 10
+    static let glassShadowYOffset: CGFloat = 4
+
+    /// Layout anchor calculations use the glass corner radius.
+    static let cornerRadius: CGFloat = glassCornerRadius
     static let horizontalPadding: CGFloat = 12
     static let verticalPadding: CGFloat = 10
-    static let borderOpacity: CGFloat = 0.10
-    static let borderWidth: CGFloat = 0.5
-    static let shadowOpacity: CGFloat = 0.22
-    static let shadowRadius: CGFloat = 12
-    static let shadowYOffset: CGFloat = 6
     static let symbolFont: Font = .body
     static let symbolWeight: Font.Weight = .semibold
 

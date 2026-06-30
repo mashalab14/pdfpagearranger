@@ -54,7 +54,7 @@ final class SignatureOverlayContextMenuUIRegressionTests: XCTestCase {
         XCTAssertTrue(menu.contains("Delete Signature"))
         XCTAssertTrue(menu.contains("More Signature Actions"))
         XCTAssertTrue(menu.contains("signatureOverlayContextMenu"))
-        XCTAssertTrue(menu.contains("contextualControlChrome()"))
+        XCTAssertTrue(menu.contains("contextualGlassContainer()"))
         XCTAssertTrue(menu.contains("foregroundStyle: Color.red"))
         XCTAssertTrue(menu.contains("foregroundStyle: Color.primary"))
         XCTAssertTrue(menu.contains("ContextualControlMetrics.minimumTapTarget"))

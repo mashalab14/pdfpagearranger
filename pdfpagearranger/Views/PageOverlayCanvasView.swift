@@ -34,6 +34,7 @@ struct PageOverlayCanvasView: View {
     @State private var steadyOffset: CGSize = .zero
     @State private var overlayManipulationState = OverlayManipulationState()
     @State private var pdfTextSelectionLayerActive = false
+    @Namespace private var contextualGlassNamespace
 
     private let minScale: CGFloat = 1
     private let maxScale: CGFloat = 4
@@ -220,110 +221,123 @@ struct PageOverlayCanvasView: View {
                     }
                 }
 
-                if let textSelection = pageSelection.pdfTextSelection, !signaturePlacementActive {
-                    PDFTextSelectionContextMenu(
-                        anchorRect: textSelection.anchorRect,
-                        onCopy: { onPDFTextMenuCopy(textSelection.text) },
-                        onHighlight: {},
-                        onComment: {},
-                        onMore: {}
-                    )
-                }
+                GlassEffectContainer {
+                    if let textSelection = pageSelection.pdfTextSelection, !signaturePlacementActive {
+                        PDFTextSelectionContextMenu(
+                            anchorRect: textSelection.anchorRect,
+                            onCopy: { onPDFTextMenuCopy(textSelection.text) },
+                            onHighlight: {},
+                            onComment: {},
+                            onMore: {}
+                        )
+                        .glassEffectID("pdfTextContextual", in: contextualGlassNamespace)
+                        .transition(.contextualGlass)
+                    }
 
-                if let signature = selectedSignatureOverlay, showsSignatureContextMenu {
-                    let layout = OverlayGeometryEngine.pageModeLayout(
-                        for: signature,
-                        pageRotation: pageRotation,
-                        renderSize: fitSize
-                    )
-                    SignatureOverlayContextMenu(
-                        anchorPoint: SignatureOverlayMenuEngine.anchorPoint(
-                            for: layout,
-                            pageSize: fitSize
-                        ),
-                        showReset: signature.signatureAppearanceDiffersFromBaseline,
-                        showSaveToLibrary: signature.canSavePlacedSignatureToLibrary,
-                        onEdit: {
-                            signatureEditOverlayID = signature.id
-                        },
-                        onDelete: { deleteSelectedSignature(signature.id) },
-                        onReset: {
-                            onResetSignatureAppearance(signature.id)
-                        },
-                        onSaveToLibrary: {
-                            onSaveSignatureToLibrary(signature.id)
-                        }
-                    )
-                }
-
-                if let editingSignature = editingSignatureOverlay {
-                    let layout = OverlayGeometryEngine.pageModeLayout(
-                        for: editingSignature,
-                        pageRotation: pageRotation,
-                        renderSize: fitSize
-                    )
-                    PlacedSignatureEditPopover(
-                        overlay: editingSignature,
-                        anchorPoint: SignatureEditPopoverEngine.anchorPoint(
-                            for: layout,
-                            pageSize: fitSize
-                        ),
-                        onSelectPresetColor: { color in
-                            onUpdateSignatureAppearance(
-                                editingSignature.id,
-                                color,
-                                editingSignature.effectiveSignatureStrokeWidthPoints
-                            )
-                        },
-                        onSelectCustomColor: { uiColor in
-                            onUpdateSignatureCustomColor(
-                                editingSignature.id,
-                                uiColor,
-                                editingSignature.effectiveSignatureStrokeWidthPoints
-                            )
-                        },
-                        onDecreaseThickness: {
-                            guard let decreased = PlacedSignatureStrokeWidth.decreased(
-                                from: editingSignature.effectiveSignatureStrokeWidthPoints
-                            ) else {
-                                return
+                    if let signature = selectedSignatureOverlay, showsSignatureContextMenu {
+                        let layout = OverlayGeometryEngine.pageModeLayout(
+                            for: signature,
+                            pageRotation: pageRotation,
+                            renderSize: fitSize
+                        )
+                        SignatureOverlayContextMenu(
+                            anchorPoint: SignatureOverlayMenuEngine.anchorPoint(
+                                for: layout,
+                                pageSize: fitSize
+                            ),
+                            showReset: signature.signatureAppearanceDiffersFromBaseline,
+                            showSaveToLibrary: signature.canSavePlacedSignatureToLibrary,
+                            onEdit: {
+                                withAnimation(ContextualGlassAnimation.presentation) {
+                                    signatureEditOverlayID = signature.id
+                                }
+                            },
+                            onDelete: { deleteSelectedSignature(signature.id) },
+                            onReset: {
+                                onResetSignatureAppearance(signature.id)
+                            },
+                            onSaveToLibrary: {
+                                onSaveSignatureToLibrary(signature.id)
                             }
-                            if let custom = editingSignature.signatureCustomInkRGBA {
-                                onUpdateSignatureCustomColor(
-                                    editingSignature.id,
-                                    custom.uiColor,
-                                    decreased
-                                )
-                            } else {
+                        )
+                        .glassEffectID("signatureContextual", in: contextualGlassNamespace)
+                        .transition(.contextualGlass)
+                    }
+
+                    if let editingSignature = editingSignatureOverlay {
+                        let layout = OverlayGeometryEngine.pageModeLayout(
+                            for: editingSignature,
+                            pageRotation: pageRotation,
+                            renderSize: fitSize
+                        )
+                        PlacedSignatureEditPopover(
+                            overlay: editingSignature,
+                            anchorPoint: SignatureEditPopoverEngine.anchorPoint(
+                                for: layout,
+                                pageSize: fitSize
+                            ),
+                            onSelectPresetColor: { color in
                                 onUpdateSignatureAppearance(
                                     editingSignature.id,
-                                    editingSignature.effectiveSignatureInkColor,
-                                    decreased
+                                    color,
+                                    editingSignature.effectiveSignatureStrokeWidthPoints
                                 )
-                            }
-                        },
-                        onIncreaseThickness: {
-                            guard let increased = PlacedSignatureStrokeWidth.increased(
-                                from: editingSignature.effectiveSignatureStrokeWidthPoints
-                            ) else {
-                                return
-                            }
-                            if let custom = editingSignature.signatureCustomInkRGBA {
+                            },
+                            onSelectCustomColor: { uiColor in
                                 onUpdateSignatureCustomColor(
                                     editingSignature.id,
-                                    custom.uiColor,
-                                    increased
+                                    uiColor,
+                                    editingSignature.effectiveSignatureStrokeWidthPoints
                                 )
-                            } else {
-                                onUpdateSignatureAppearance(
-                                    editingSignature.id,
-                                    editingSignature.effectiveSignatureInkColor,
-                                    increased
-                                )
+                            },
+                            onDecreaseThickness: {
+                                guard let decreased = PlacedSignatureStrokeWidth.decreased(
+                                    from: editingSignature.effectiveSignatureStrokeWidthPoints
+                                ) else {
+                                    return
+                                }
+                                if let custom = editingSignature.signatureCustomInkRGBA {
+                                    onUpdateSignatureCustomColor(
+                                        editingSignature.id,
+                                        custom.uiColor,
+                                        decreased
+                                    )
+                                } else {
+                                    onUpdateSignatureAppearance(
+                                        editingSignature.id,
+                                        editingSignature.effectiveSignatureInkColor,
+                                        decreased
+                                    )
+                                }
+                            },
+                            onIncreaseThickness: {
+                                guard let increased = PlacedSignatureStrokeWidth.increased(
+                                    from: editingSignature.effectiveSignatureStrokeWidthPoints
+                                ) else {
+                                    return
+                                }
+                                if let custom = editingSignature.signatureCustomInkRGBA {
+                                    onUpdateSignatureCustomColor(
+                                        editingSignature.id,
+                                        custom.uiColor,
+                                        increased
+                                    )
+                                } else {
+                                    onUpdateSignatureAppearance(
+                                        editingSignature.id,
+                                        editingSignature.effectiveSignatureInkColor,
+                                        increased
+                                    )
+                                }
                             }
-                        }
-                    )
+                        )
+                        .glassEffectID("signatureContextual", in: contextualGlassNamespace)
+                        .transition(.contextualGlass)
+                    }
                 }
+                .animation(ContextualGlassAnimation.presentation, value: showsSignatureContextMenu)
+                .animation(ContextualGlassAnimation.presentation, value: signatureEditOverlayID)
+                .animation(ContextualGlassAnimation.presentation, value: pageSelection.pdfTextSelection != nil)
             }
             .id(pageLoadKey)
             .transition(.asymmetric(

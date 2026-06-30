@@ -84,7 +84,7 @@ struct PlacedSignatureEditPopover: View {
             .frame(width: ContextualControlMetrics.popoverContentWidth)
             .padding(.vertical, ContextualControlMetrics.thicknessRowVerticalInset)
         }
-        .contextualControlChrome()
+        .contextualGlassContainer()
         .position(anchorPoint)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("placedSignatureEditPopover")

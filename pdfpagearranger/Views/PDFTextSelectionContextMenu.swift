@@ -7,6 +7,9 @@ struct PDFTextSelectionContextMenu: View {
     let onComment: () -> Void
     let onMore: () -> Void
 
+    private let horizontalPadding: CGFloat = 4
+    private let verticalPadding: CGFloat = 2
+
     var body: some View {
         HStack(spacing: 0) {
             menuButton(title: "Copy", accessibilityIdentifier: "pdfTextMenuCopy", action: onCopy)
@@ -17,7 +20,8 @@ struct PDFTextSelectionContextMenu: View {
             divider
             Button(action: onMore) {
                 Image(systemName: "chevron.right")
-                    .font(.subheadline.weight(.semibold))
+                    .font(ContextualControlMetrics.symbolFont.weight(ContextualControlMetrics.symbolWeight))
+                    .foregroundStyle(.primary)
                     .frame(width: 36, height: 32)
             }
             .buttonStyle(.plain)
@@ -25,10 +29,10 @@ struct PDFTextSelectionContextMenu: View {
             .accessibilityIdentifier("pdfTextMenuMore")
         }
         .font(.subheadline)
-        .padding(.horizontal, 4)
-        .padding(.vertical, 2)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+        .contextualGlassContainer(
+            horizontalPadding: horizontalPadding,
+            verticalPadding: verticalPadding
+        )
         .position(
             x: anchorRect.midX,
             y: max(anchorRect.minY - 28, 24)
@@ -38,7 +42,7 @@ struct PDFTextSelectionContextMenu: View {
 
     private var divider: some View {
         Rectangle()
-            .fill(Color.secondary.opacity(0.25))
+            .fill(Color.secondary.opacity(0.2))
             .frame(width: 1, height: 20)
     }
 
@@ -49,6 +53,7 @@ struct PDFTextSelectionContextMenu: View {
     ) -> some View {
         Button(title, action: action)
             .buttonStyle(.plain)
+            .foregroundStyle(.primary)
             .padding(.horizontal, 12)
             .frame(height: 32)
             .accessibilityIdentifier(accessibilityIdentifier)
