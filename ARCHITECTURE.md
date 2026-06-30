@@ -112,8 +112,9 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`PDFService`** | Import (copy to temp), export (assemble new PDF), initial `PageItem` list. |
 | **`PDFPreviewRenderer`** | On-screen PDF page rasterization via `PDFPage.thumbnail` (correct orientation). |
 | **`PageRenderService`** | High-resolution page image for Page Mode. |
-| **`WatermarkSettings`** | Document-level text watermark configuration (text, opacity, font, color, rotation, position, apply scope). |
-| **`WatermarkRenderer`** | Vector watermark text for PDF export; image compositing for thumbnails and Page Mode. |
+| **`WatermarkSettings`** | Document-level text watermark configuration (text, opacity, normalized scale, color, rotation, position, apply scope). |
+| **`WatermarkGeometryEngine`** | Single source of truth for watermark normalized position, scale, rotation, and bounds; derives concrete font size from render target width. |
+| **`WatermarkRenderer`** | Vector watermark text for PDF export; image compositing for thumbnails and Page Mode (delegates all placement to `WatermarkGeometryEngine`). |
 | **`PageModeLayoutSizing`** | Page Mode width-fill layout: safe area + 16 pt horizontal margins; height from page aspect ratio. |
 | **`ThumbnailService`** | Cached document thumbnails; composited with overlays when present. |
 | **`OverlayCompositor`** | Draws image overlays onto a thumbnail/page bitmap using `OverlayGeometryEngine`. |

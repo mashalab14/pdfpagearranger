@@ -3,40 +3,6 @@ import CoreText
 import UIKit
 
 enum WatermarkRenderer {
-    struct Anchor {
-        let point: CGPoint
-    }
-
-    static func displayAnchor(
-        position: WatermarkPosition,
-        renderSize: CGSize,
-        marginFraction: CGFloat = 0.08
-    ) -> Anchor {
-        let normalized = position.normalizedDisplayPoint(marginFraction: marginFraction)
-        return Anchor(
-            point: CGPoint(
-                x: normalized.x * renderSize.width,
-                y: normalized.y * renderSize.height
-            )
-        )
-    }
-
-    static func pdfAnchor(
-        position: WatermarkPosition,
-        mediaBox: CGRect,
-        pageRotation: Int,
-        marginFraction: CGFloat = 0.08
-    ) -> Anchor {
-        let displaySize = OverlayGeometryEngine.displayRenderSize(for: pageRotation, mediaBox: mediaBox)
-        let displayAnchor = displayAnchor(position: position, renderSize: displaySize, marginFraction: marginFraction)
-        return Anchor(
-            point: CGPoint(
-                x: mediaBox.minX + displayAnchor.point.x,
-                y: mediaBox.maxY - displayAnchor.point.y
-            )
-        )
-    }
-
     static func drawInPDFContext(
         context: CGContext,
         mediaBox: CGRect,
@@ -46,19 +12,26 @@ enum WatermarkRenderer {
         let trimmed = settings.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let fontSize = settings.scaledFontSize(forPageWidth: mediaBox.width)
-        let anchor = pdfAnchor(
-            position: settings.position,
-            mediaBox: mediaBox,
-            pageRotation: pageRotation
+        let displaySize = OverlayGeometryEngine.displayRenderSize(
+            for: pageRotation,
+            mediaBox: mediaBox
         )
+        guard let layout = WatermarkGeometryEngine.concreteLayout(
+            settings: settings,
+            text: trimmed,
+            pageRotation: pageRotation,
+            mediaBox: mediaBox,
+            renderSize: displaySize,
+            coordinateSpace: .pdfMediaBox
+        ) else {
+            return
+        }
+
         drawRotatedTextInPDFContext(
             trimmed,
-            anchor: anchor,
-            fontSize: fontSize,
+            layout: layout,
             color: settings.color.uiColor,
             opacity: settings.opacity,
-            rotationDegrees: settings.rotationDegrees,
             context: context
         )
     }
@@ -67,14 +40,22 @@ enum WatermarkRenderer {
         baseImage: UIImage,
         pageRotation: Int,
         settings: WatermarkSettings,
-        mediaBoxWidth: CGFloat
+        mediaBox: CGRect
     ) -> UIImage {
         let trimmed = settings.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return baseImage }
 
         let renderSize = baseImage.size
-        let fontSize = max(settings.scaledFontSize(forPageWidth: mediaBoxWidth > 0 ? mediaBoxWidth : renderSize.width), 8)
-        let anchor = displayAnchor(position: settings.position, renderSize: renderSize)
+        guard let layout = WatermarkGeometryEngine.concreteLayout(
+            settings: settings,
+            text: trimmed,
+            pageRotation: pageRotation,
+            mediaBox: mediaBox,
+            renderSize: renderSize,
+            coordinateSpace: .topLeftOrigin
+        ) else {
+            return baseImage
+        }
 
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = baseImage.scale
@@ -82,11 +63,9 @@ enum WatermarkRenderer {
             baseImage.draw(at: .zero)
             drawRotatedTextInImageContext(
                 trimmed,
-                anchor: anchor,
-                fontSize: fontSize,
+                layout: layout,
                 color: settings.color.uiColor,
                 opacity: settings.opacity,
-                rotationDegrees: settings.rotationDegrees,
                 context: rendererContext.cgContext
             )
         }
@@ -94,15 +73,13 @@ enum WatermarkRenderer {
 
     private static func drawRotatedTextInPDFContext(
         _ text: String,
-        anchor: Anchor,
-        fontSize: CGFloat,
+        layout: WatermarkGeometryEngine.ConcreteLayout,
         color: UIColor,
         opacity: CGFloat,
-        rotationDegrees: CGFloat,
         context: CGContext
     ) {
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: fontSize),
+            .font: UIFont.systemFont(ofSize: layout.fontSize),
             .foregroundColor: color
         ]
         let attributed = NSAttributedString(string: text, attributes: attributes)
@@ -111,13 +88,13 @@ enum WatermarkRenderer {
         context.saveGState()
         context.setAlpha(opacity)
 
-        if rotationDegrees != 0 {
-            context.translateBy(x: anchor.point.x, y: anchor.point.y)
-            context.rotate(by: -rotationDegrees * .pi / 180)
+        if layout.rotationDegrees != 0 {
+            context.translateBy(x: layout.center.x, y: layout.center.y)
+            context.rotate(by: -layout.rotationDegrees * .pi / 180)
         }
 
         let textRect: CGRect
-        if rotationDegrees != 0 {
+        if layout.rotationDegrees != 0 {
             textRect = CGRect(
                 x: -textSize.width / 2,
                 y: -textSize.height / 2,
@@ -126,8 +103,8 @@ enum WatermarkRenderer {
             )
         } else {
             textRect = CGRect(
-                x: anchor.point.x - textSize.width / 2,
-                y: anchor.point.y - textSize.height / 2,
+                x: layout.center.x - textSize.width / 2,
+                y: layout.center.y - textSize.height / 2,
                 width: textSize.width,
                 height: textSize.height
             )
@@ -147,20 +124,18 @@ enum WatermarkRenderer {
 
     private static func drawRotatedTextInImageContext(
         _ text: String,
-        anchor: Anchor,
-        fontSize: CGFloat,
+        layout: WatermarkGeometryEngine.ConcreteLayout,
         color: UIColor,
         opacity: CGFloat,
-        rotationDegrees: CGFloat,
         context: CGContext
     ) {
         context.saveGState()
         context.setAlpha(opacity)
-        context.translateBy(x: anchor.point.x, y: anchor.point.y)
-        context.rotate(by: rotationDegrees * .pi / 180)
+        context.translateBy(x: layout.center.x, y: layout.center.y)
+        context.rotate(by: layout.rotationDegrees * .pi / 180)
 
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: fontSize),
+            .font: UIFont.systemFont(ofSize: layout.fontSize),
             .foregroundColor: color
         ]
         let textSize = (text as NSString).size(withAttributes: attributes)

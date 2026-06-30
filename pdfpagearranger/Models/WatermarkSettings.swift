@@ -66,7 +66,8 @@ struct WatermarkSettings: Equatable, Codable {
     var isEnabled: Bool
     var text: String
     var opacity: CGFloat
-    var fontSize: CGFloat
+    /// Text width as a fraction of page display width (0–1).
+    var normalizedScale: CGFloat
     var color: WatermarkColor
     var rotationDegrees: CGFloat
     var position: WatermarkPosition
@@ -75,13 +76,11 @@ struct WatermarkSettings: Equatable, Codable {
     var rangeStart: Int
     var rangeEnd: Int
 
-    static let referencePageWidth: CGFloat = 612
-
     static let `default` = WatermarkSettings(
         isEnabled: false,
         text: "CONFIDENTIAL",
         opacity: 0.35,
-        fontSize: 48,
+        normalizedScale: 0.35,
         color: .defaultGray,
         rotationDegrees: 45,
         position: .center,
@@ -93,7 +92,7 @@ struct WatermarkSettings: Equatable, Codable {
 
     var thumbnailCacheKeySuffix: String {
         guard isEnabled else { return "watermark-off" }
-        return "watermark-\(text)-\(opacity)-\(fontSize)-\(color.red)-\(color.green)-\(color.blue)-\(rotationDegrees)-\(position.rawValue)-\(applyScope.rawValue)-\(currentPageIndex)-\(rangeStart)-\(rangeEnd)"
+        return "watermark-\(text)-\(opacity)-\(normalizedScale)-\(color.red)-\(color.green)-\(color.blue)-\(rotationDegrees)-\(position.rawValue)-\(applyScope.rawValue)-\(currentPageIndex)-\(rangeStart)-\(rangeEnd)"
     }
 
     func shouldApply(toExportIndex exportIndex: Int) -> Bool {
@@ -112,10 +111,5 @@ struct WatermarkSettings: Equatable, Codable {
             let upper = max(rangeStart, rangeEnd)
             return pagePosition >= lower && pagePosition <= upper
         }
-    }
-
-    func scaledFontSize(forPageWidth pageWidth: CGFloat) -> CGFloat {
-        guard pageWidth > 0 else { return fontSize }
-        return fontSize * (pageWidth / Self.referencePageWidth)
     }
 }

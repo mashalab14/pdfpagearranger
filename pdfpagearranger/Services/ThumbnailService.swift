@@ -82,7 +82,7 @@ actor ThumbnailService {
                     baseImage: image,
                     pageRotation: rotation,
                     settings: watermarkSettings,
-                    mediaBoxWidth: mediaBox.width
+                    mediaBox: mediaBox
                 )
             }
 

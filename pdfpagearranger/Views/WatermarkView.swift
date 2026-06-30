@@ -7,7 +7,7 @@ struct WatermarkView: View {
 
     @State private var text: String
     @State private var opacity: Double
-    @State private var fontSize: Double
+    @State private var normalizedScale: Double
     @State private var color: WatermarkColor
     @State private var rotationDegrees: Double
     @State private var position: WatermarkPosition
@@ -21,7 +21,7 @@ struct WatermarkView: View {
         let settings = viewModel.watermarkSettings
         _text = State(initialValue: settings.text)
         _opacity = State(initialValue: Double(settings.opacity))
-        _fontSize = State(initialValue: Double(settings.fontSize))
+        _normalizedScale = State(initialValue: Double(settings.normalizedScale))
         _color = State(initialValue: settings.color)
         _rotationDegrees = State(initialValue: Double(settings.rotationDegrees))
         _position = State(initialValue: settings.position)
@@ -46,10 +46,10 @@ struct WatermarkView: View {
                     }
                     .accessibilityIdentifier("watermarkOpacitySlider")
 
-                    Stepper(value: $fontSize, in: 12...120, step: 2) {
-                        Text("Font size: \(Int(fontSize))")
+                    Stepper(value: $normalizedScale, in: 0.05...0.80, step: 0.05) {
+                        Text("Size: \(Int(normalizedScale * 100))% of page width")
                     }
-                    .accessibilityIdentifier("watermarkFontSizeStepper")
+                    .accessibilityIdentifier("watermarkScaleStepper")
 
                     Stepper(value: $rotationDegrees, in: -180...180, step: 5) {
                         Text("Rotation: \(Int(rotationDegrees))°")
@@ -168,7 +168,7 @@ struct WatermarkView: View {
             isEnabled: true,
             text: trimmedText,
             opacity: CGFloat(opacity),
-            fontSize: CGFloat(fontSize),
+            normalizedScale: CGFloat(normalizedScale),
             color: color,
             rotationDegrees: CGFloat(rotationDegrees),
             position: position,

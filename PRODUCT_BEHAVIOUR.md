@@ -619,7 +619,7 @@ After success:
 1. **Text** — watermark string (default **CONFIDENTIAL**)
 2. **Appearance**
    - Opacity slider (**0.1…1.0**, default **0.35**)
-   - Font size stepper (**12…120**, default **48**; scales per page width on export/preview)
+   - Size stepper (**5%…80%** of page width, default **35%**; same relative size in thumbnails, Page Mode, and export)
    - Rotation stepper (**−180°…180°**, default **45°**)
    - Color presets: Gray, Black, Blue, Red (default Gray)
    - Position: Center (**default**), Top, Bottom
@@ -635,9 +635,10 @@ After success:
 ### Rendering
 
 - Document-level settings stored in session (not page overlays)
+- **`WatermarkGeometryEngine`** computes normalized position, scale, rotation, and bounds once; all renderers derive font size from the active canvas width
 - Vector text in export; raster composited on thumbnails and Page Mode preview
 - Drawn **behind** image/signature overlays; page numbers remain on top when both are enabled
-- Scales proportionally per page (reference width: US Letter)
+- Occupies the same relative percentage of every page regardless of page size, thumbnail size, Page Mode zoom, or export resolution
 - Works with rotated pages and mixed page sizes
 
 ### Undo

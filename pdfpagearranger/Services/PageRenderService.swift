@@ -53,7 +53,7 @@ actor PageRenderService {
                     baseImage: image,
                     pageRotation: rotation,
                     settings: watermarkSettings,
-                    mediaBoxWidth: mediaBox.width
+                    mediaBox: mediaBox
                 )
             }
 
