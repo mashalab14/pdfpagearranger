@@ -34,6 +34,7 @@ struct PageOverlayCanvasView: View {
     @State private var steadyOffset: CGSize = .zero
     @State private var overlayManipulationState = OverlayManipulationState()
     @State private var pdfTextSelectionLayerActive = false
+    @Namespace private var contextualGlassNamespace
 
     private let minScale: CGFloat = 1
     private let maxScale: CGFloat = 4
@@ -220,7 +221,7 @@ struct PageOverlayCanvasView: View {
                     }
                 }
 
-                Group {
+                GlassEffectContainer {
                     if let textSelection = pageSelection.pdfTextSelection, !signaturePlacementActive {
                         PDFTextSelectionContextMenu(
                             anchorRect: textSelection.anchorRect,
@@ -229,6 +230,7 @@ struct PageOverlayCanvasView: View {
                             onComment: {},
                             onMore: {}
                         )
+                        .glassEffectID("pdfTextContextual", in: contextualGlassNamespace)
                         .transition(.contextualGlass)
                     }
 
@@ -258,6 +260,7 @@ struct PageOverlayCanvasView: View {
                                 onSaveSignatureToLibrary(signature.id)
                             }
                         )
+                        .glassEffectID("signatureContextual", in: contextualGlassNamespace)
                         .transition(.contextualGlass)
                     }
 
@@ -328,6 +331,7 @@ struct PageOverlayCanvasView: View {
                                 }
                             }
                         )
+                        .glassEffectID("signatureContextual", in: contextualGlassNamespace)
                         .transition(.contextualGlass)
                     }
                 }

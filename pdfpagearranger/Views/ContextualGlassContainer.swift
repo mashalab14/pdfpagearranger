@@ -18,37 +18,32 @@ struct ContextualGlassContainerModifier: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        ZStack {
-            floatingPanelBackground
-
-            content
-                .padding(.horizontal, horizontalPadding)
-                .padding(.vertical, verticalPadding)
-        }
-        .shadow(
-            color: .black.opacity(ContextualControlMetrics.floatingPanelShadowOpacity),
-            radius: ContextualControlMetrics.floatingPanelShadowRadius,
-            y: ContextualControlMetrics.floatingPanelShadowYOffset
-        )
-        .shadow(
-            color: .black.opacity(ContextualControlMetrics.floatingPanelShadowOpacity * 0.5),
-            radius: ContextualControlMetrics.floatingPanelShadowRadius * 0.55,
-            y: ContextualControlMetrics.floatingPanelShadowYOffset * 0.45
-        )
-    }
-
-    private var floatingPanelBackground: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(.clear)
-            .glassEffect(
-                ContextualControlMetrics.floatingPanelGlass,
-                in: .rect(cornerRadius: cornerRadius, style: .continuous)
-            )
+        content
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
+            .background {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(.clear)
+                    .glassEffect(
+                        ContextualControlMetrics.floatingPanelGlass,
+                        in: .rect(cornerRadius: cornerRadius, style: .continuous)
+                    )
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(highlightGradient, lineWidth: ContextualControlMetrics.glassBorderWidth)
+                    .allowsHitTesting(false)
             }
-            .allowsHitTesting(false)
+            .shadow(
+                color: .black.opacity(ContextualControlMetrics.floatingPanelShadowOpacity),
+                radius: ContextualControlMetrics.floatingPanelShadowRadius,
+                y: ContextualControlMetrics.floatingPanelShadowYOffset
+            )
+            .shadow(
+                color: .black.opacity(ContextualControlMetrics.floatingPanelShadowOpacity * 0.5),
+                radius: ContextualControlMetrics.floatingPanelShadowRadius * 0.55,
+                y: ContextualControlMetrics.floatingPanelShadowYOffset * 0.45
+            )
     }
 
     private var highlightGradient: LinearGradient {
