@@ -1,5 +1,6 @@
 import PDFKit
 import SwiftUI
+import UIKit
 
 struct PageOverlayCanvasView: View {
     let pageImage: UIImage
@@ -19,7 +20,12 @@ struct PageOverlayCanvasView: View {
     let onDelete: (UUID) -> Void
     let onPageSwipe: ((PageModeNavigationDirection) -> Void)?
     let onPDFTextMenuCopy: (String) -> Void
-    let onEditSignature: (UUID) -> Void
+    @Binding var signatureEditOverlayID: UUID?
+    let pageItemID: UUID
+    let onUpdateSignatureAppearance: (UUID, SignatureInkColor, SignatureInkThickness) -> Void
+    let onUpdateSignatureCustomColor: (UUID, UIColor, SignatureInkThickness) -> Void
+    let onResetSignatureAppearance: (UUID) -> Void
+    let onSaveSignatureToLibrary: (UUID) -> Void
     let pageTransitionEdge: Edge
 
     @State private var scale: CGFloat = 1
@@ -60,8 +66,14 @@ struct PageOverlayCanvasView: View {
 
     private var showsSignatureContextMenu: Bool {
         selectedSignatureOverlay != nil
+            && signatureEditOverlayID == nil
             && !signaturePlacementActive
             && !overlayManipulationState.isActive
+    }
+
+    private var editingSignatureOverlay: PageObject? {
+        guard let overlayID = signatureEditOverlayID else { return nil }
+        return objects.first(where: { $0.id == overlayID && $0.type == .signature })
     }
 
     var body: some View {
@@ -117,6 +129,14 @@ struct PageOverlayCanvasView: View {
             .onChange(of: pageSelection) { _, newValue in
                 if newValue.pdfTextSelection == nil {
                     pdfTextSelectionLayerActive = false
+                }
+                if newValue.selectedOverlayID != signatureEditOverlayID {
+                    signatureEditOverlayID = nil
+                }
+            }
+            .onChange(of: signatureEditOverlayID) { _, newValue in
+                if newValue != nil {
+                    deactivatePDFTextSelectionLayer()
                 }
             }
             .onTapGesture(count: 2) {
@@ -176,13 +196,14 @@ struct PageOverlayCanvasView: View {
                             pageSize: fitSize,
                             canvasScale: scale,
                             isSelected: pageSelection.selectedOverlayID == object.id,
-                            isInteractionEnabled: !signaturePlacementActive,
+                            isInteractionEnabled: !signaturePlacementActive && signatureEditOverlayID == nil,
                             animatePlacement: placementAnimatingOverlayIDs.contains(object.id),
                             onPlacementAnimationFinished: {
                                 onPlacementAnimationFinished(object.id)
                             },
                             onSelect: {
                                 guard !signaturePlacementActive else { return }
+                                signatureEditOverlayID = nil
                                 deactivatePDFTextSelectionLayer()
                                 pageSelection = .overlay(object.id)
                                 bringToFront(object)
@@ -220,8 +241,83 @@ struct PageOverlayCanvasView: View {
                             for: layout,
                             pageSize: fitSize
                         ),
-                        onEdit: { onEditSignature(signature.id) },
-                        onDelete: { deleteSelectedSignature(signature.id) }
+                        showReset: signature.signatureAppearanceDiffersFromBaseline,
+                        showSaveToLibrary: signature.canSavePlacedSignatureToLibrary,
+                        onEdit: {
+                            signatureEditOverlayID = signature.id
+                        },
+                        onDelete: { deleteSelectedSignature(signature.id) },
+                        onReset: {
+                            onResetSignatureAppearance(signature.id)
+                        },
+                        onSaveToLibrary: {
+                            onSaveSignatureToLibrary(signature.id)
+                        }
+                    )
+                }
+
+                if let editingSignature = editingSignatureOverlay {
+                    let layout = OverlayGeometryEngine.pageModeLayout(
+                        for: editingSignature,
+                        pageRotation: pageRotation,
+                        renderSize: fitSize
+                    )
+                    PlacedSignatureEditPopover(
+                        overlay: editingSignature,
+                        anchorPoint: SignatureEditPopoverEngine.anchorPoint(
+                            for: layout,
+                            pageSize: fitSize
+                        ),
+                        onSelectPresetColor: { color in
+                            onUpdateSignatureAppearance(
+                                editingSignature.id,
+                                color,
+                                editingSignature.effectiveSignatureStrokeThickness
+                            )
+                        },
+                        onSelectCustomColor: { uiColor in
+                            onUpdateSignatureCustomColor(
+                                editingSignature.id,
+                                uiColor,
+                                editingSignature.effectiveSignatureStrokeThickness
+                            )
+                        },
+                        onDecreaseThickness: {
+                            guard let stepped = editingSignature.effectiveSignatureStrokeThickness.steppedDown() else {
+                                return
+                            }
+                            if let custom = editingSignature.signatureCustomInkRGBA {
+                                onUpdateSignatureCustomColor(
+                                    editingSignature.id,
+                                    custom.uiColor,
+                                    stepped
+                                )
+                            } else {
+                                onUpdateSignatureAppearance(
+                                    editingSignature.id,
+                                    editingSignature.effectiveSignatureInkColor,
+                                    stepped
+                                )
+                            }
+                        },
+                        onIncreaseThickness: {
+                            guard let stepped = editingSignature.effectiveSignatureStrokeThickness.steppedUp() else {
+                                return
+                            }
+                            if let custom = editingSignature.signatureCustomInkRGBA {
+                                onUpdateSignatureCustomColor(
+                                    editingSignature.id,
+                                    custom.uiColor,
+                                    stepped
+                                )
+                            } else {
+                                onUpdateSignatureAppearance(
+                                    editingSignature.id,
+                                    editingSignature.effectiveSignatureInkColor,
+                                    stepped
+                                )
+                            }
+                        }
                     )
                 }
             }
@@ -278,6 +374,11 @@ struct PageOverlayCanvasView: View {
     }
 
     private func handlePageTap(at location: CGPoint, displaySize: CGSize) {
+        if signatureEditOverlayID != nil {
+            signatureEditOverlayID = nil
+            return
+        }
+
         if signaturePlacementActive {
             guard SignaturePlacementEngine.isDisplayTapInsidePage(location, displayPageSize: displaySize) else {
                 return
@@ -291,6 +392,11 @@ struct PageOverlayCanvasView: View {
     }
 
     private func handleCanvasBackgroundTap() {
+        if signatureEditOverlayID != nil {
+            signatureEditOverlayID = nil
+            return
+        }
+
         if signaturePlacementActive {
             onSignaturePlacementDismiss?()
             return
@@ -321,6 +427,9 @@ struct PageOverlayCanvasView: View {
     }
 
     private func deleteSelectedSignature(_ overlayID: UUID) {
+        if signatureEditOverlayID == overlayID {
+            signatureEditOverlayID = nil
+        }
         onDelete(overlayID)
         if pageSelection.selectedOverlayID == overlayID {
             pageSelection = .none

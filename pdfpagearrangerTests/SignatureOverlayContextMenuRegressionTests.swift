@@ -42,7 +42,7 @@ final class SignatureOverlayContextMenuUIRegressionTests: XCTestCase {
         XCTAssertTrue(canvas.contains("showsSignatureContextMenu"))
         XCTAssertTrue(canvas.contains("SignatureOverlayContextMenu"))
         XCTAssertTrue(canvas.contains("overlayManipulationState.isActive"))
-        XCTAssertTrue(canvas.contains("onEditSignature"))
+        XCTAssertTrue(canvas.contains("signatureEditOverlayID"))
     }
 
     func testSignatureMenuUsesIconActionsAndAccessibilityLabels() throws {
@@ -63,13 +63,12 @@ final class SignatureOverlayContextMenuUIRegressionTests: XCTestCase {
         XCTAssertTrue(overlayView.contains("object.type != .signature"))
     }
 
-    func testEditPlacedSignatureSheetShowsRequiredSections() throws {
-        let sheet = try projectSource(named: "EditPlacedSignatureSheet.swift", subdirectory: "Views")
-        XCTAssertTrue(sheet.contains("Edit Signature"))
-        XCTAssertTrue(sheet.contains("Color"))
-        XCTAssertTrue(sheet.contains("Thickness"))
-        XCTAssertTrue(sheet.contains("Reset"))
-        XCTAssertTrue(sheet.contains("Save to Library"))
+    func testMoreMenuHostsResetAndSaveActions() throws {
+        let menu = try projectSource(named: "SignatureOverlayContextMenu.swift", subdirectory: "Views")
+        XCTAssertTrue(menu.contains("Reset"))
+        XCTAssertTrue(menu.contains("Save to Library"))
+        XCTAssertTrue(menu.contains("signatureMenuReset"))
+        XCTAssertTrue(menu.contains("signatureMenuSaveToLibrary"))
     }
 
     private func projectSource(named fileName: String, subdirectory: String) throws -> String {

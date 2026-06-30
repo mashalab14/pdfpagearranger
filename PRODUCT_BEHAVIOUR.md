@@ -1041,22 +1041,30 @@ When a **signature overlay** is selected (and the user is not dragging/resizing 
 
 | Control | Behaviour |
 |---------|-----------|
-| **Edit** (pencil icon) | Opens **Edit Signature** sheet for this **placed** signature only (not the library asset) |
+| **Edit** (pencil icon) | Opens a **floating edit popover** anchored near the signature (placed signature only — not the library asset) |
 | **Delete** (trash icon) | Deletes the selected signature overlay (undo supported) |
-| **More** (… icon) | Placeholder menu: Duplicate, Replace Signature, Bring Forward, Send Backward (disabled for now) |
+| **More** (… icon) | **Reset** and **Save to Library** when appearance differs from baseline; plus placeholder items (Duplicate, Replace Signature, layer order — disabled for now) |
 
-The menu is positioned above the signature, clamped within the visible page area. It **hides** while the signature is being moved or resized, and when selection is cleared, another object is selected, PDF text is selected, the Add sheet opens, or Signature Placement Mode starts.
+The menu is positioned above the signature, clamped within the visible page area. It **hides** while the signature is being moved or resized, while the edit popover is open, and when selection is cleared, another object is selected, PDF text is selected, the Add sheet opens, or Signature Placement Mode starts.
 
 ### Edit placed signature
 
-Editing affects **only the selected placement** on the current page. The saved library signature is never modified in place.
+Editing affects **only the selected placement** on the current page. The saved library signature is never modified in place. The document stays in focus — there is **no bottom sheet**, modal, or dimmed background.
+
+**Floating popover** (single row, anchored above or below the signature depending on available space):
 
 | Control | Behaviour |
 |---------|-----------|
-| **Color** | Recolors the placed signature on the page |
-| **Thickness** | Adjusts stroke weight of the placed signature |
-| **Reset** | Shown only when appearance differs from the original library placement; restores original color and thickness for this placement |
-| **Save to Library** | Shown only when appearance differs from the original library signature **and** the placement came from the library; creates a **new** library signature with the current appearance without overwriting the original |
+| **Preset colors** | Black, Gray, Blue, Red, Green, Purple — live recolor |
+| **Advanced color** (palette icon) | Presents Apple's native **UIColorPickerViewController**; live recolor with alpha preserved |
+| **Thickness − / value / +** | Steps through supported thickness values (e.g. `2 pt`); live update |
+
+Changes apply **immediately** — no Apply or Done button. Tap outside, select another overlay, delete the signature, or navigate away to dismiss.
+
+| More menu action | Behaviour |
+|------------------|-----------|
+| **Reset** | Shown only when appearance differs from original placement; restores baseline color and thickness |
+| **Save to Library** | Shown only when appearance differs **and** placement came from the library; creates a **new** library signature without overwriting the original |
 
 Image overlays are unchanged: inline × delete and toolbar **Delete** remain available.
 
@@ -1321,7 +1329,8 @@ Single snapshot of:
 - Thumbnail action buttons: accessibility labels **"Rotate"**, **"Duplicate"**, **"Delete"**
 - Overlay delete button: **"Delete image"** (image overlays only)
 - Signature contextual menu: **"Edit Signature"**, **"Delete Signature"**, **"More Signature Actions"**
-- Edit placed signature sheet: `editPlacedSignatureSheet`, `editSignatureDoneButton`, `editSignatureResetButton`, `editSignatureSaveToLibraryButton`, `editSignatureThicknessPicker`
+- Edit placed signature popover: `placedSignatureEditPopover`, `signatureEditAdvancedColorButton`, `signatureEditThicknessMinus`, `signatureEditThicknessValue`, `signatureEditThicknessPlus`, per-preset color identifiers
+- More menu: `signatureMenuReset`, `signatureMenuSaveToLibrary`
 - Signature color swatches: per-color accessibility labels/identifiers
 - Signature thickness options: per-thickness accessibility labels/identifiers (`signatureThickness_thin`, etc.)
 - Signature library default star buttons: per-signature accessibility identifiers

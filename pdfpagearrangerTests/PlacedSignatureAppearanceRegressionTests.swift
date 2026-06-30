@@ -26,7 +26,7 @@ final class PlacedSignatureAppearanceRegressionTests: XCTestCase {
 
     func testRecolorChangesInkPixels() {
         let image = OverlayTestFactory.makeSignatureImage()
-        let recolored = SignatureAppearanceEngine.recolor(image, to: .red)
+        let recolored = SignatureAppearanceEngine.recolor(image, to: SignatureInkColor.red)
         XCTAssertNotEqual(recolored.pngData(), image.pngData())
     }
 
@@ -174,24 +174,18 @@ final class PlacedSignatureAppearanceRegressionTests: XCTestCase {
 }
 
 final class PlacedSignatureEditorUIRegressionTests: XCTestCase {
-    func testEditSheetShowsColorThicknessAndConditionalActions() throws {
-        let editor = try projectSource(named: "EditPlacedSignatureSheet.swift", subdirectory: "Views")
-        XCTAssertTrue(editor.contains("Edit Signature"))
-        XCTAssertTrue(editor.contains("SignatureInkColorPicker"))
-        XCTAssertTrue(editor.contains("SignatureInkThicknessPicker"))
-        XCTAssertTrue(editor.contains("Reset"))
-        XCTAssertTrue(editor.contains("Save to Library"))
-        XCTAssertTrue(editor.contains("signatureAppearanceDiffersFromBaseline"))
-        XCTAssertTrue(editor.contains("canSavePlacedSignatureToLibrary"))
-        XCTAssertFalse(editor.contains("Opacity"))
-        XCTAssertFalse(editor.contains("Replace Signature"))
+    func testCanvasDismissesEditPopoverOnSelectionChange() throws {
+        let canvas = try projectSource(named: "PageOverlayCanvasView.swift", subdirectory: "Views")
+        XCTAssertTrue(canvas.contains("signatureEditOverlayID = nil"))
+        XCTAssertTrue(canvas.contains("PlacedSignatureEditPopover"))
     }
 
-    func testPageEditorHostsPlacedSignatureEditor() throws {
+    func testPageEditorWiresSignatureAppearanceCallbacks() throws {
         let source = try projectSource(named: "PageEditorView.swift", subdirectory: "Views")
-        XCTAssertTrue(source.contains("EditPlacedSignatureSheet"))
-        XCTAssertTrue(source.contains("editingSignatureOverlayID"))
-        XCTAssertTrue(source.contains("onEditSignature"))
+        XCTAssertTrue(source.contains("onUpdateSignatureAppearance"))
+        XCTAssertTrue(source.contains("onUpdateSignatureCustomColor"))
+        XCTAssertTrue(source.contains("onResetSignatureAppearance"))
+        XCTAssertTrue(source.contains("onSaveSignatureToLibrary"))
     }
 
     private func projectSource(named fileName: String, subdirectory: String) throws -> String {

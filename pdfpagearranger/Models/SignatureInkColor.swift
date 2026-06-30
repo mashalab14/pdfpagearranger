@@ -37,4 +37,19 @@ enum SignatureInkColor: String, CaseIterable, Identifiable, Codable {
     }
 
     static let defaultInk: SignatureInkColor = .black
+
+    static let presetDisplayOrder: [SignatureInkColor] = [
+        .black, .darkGray, .blue, .red, .green, .purple
+    ]
+
+    var markupTitle: String {
+        switch self {
+        case .black: return "Black"
+        case .darkGray: return "Gray"
+        case .blue: return "Blue"
+        case .red: return "Red"
+        case .green: return "Green"
+        case .purple: return "Purple"
+        }
+    }
 }

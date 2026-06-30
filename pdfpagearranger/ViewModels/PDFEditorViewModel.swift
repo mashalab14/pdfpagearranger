@@ -382,7 +382,8 @@ final class PDFEditorViewModel {
     func updatePlacedSignatureAppearance(
         overlayID: UUID,
         pageItemID: UUID,
-        inkColor: SignatureInkColor,
+        presetInkColor: SignatureInkColor,
+        customInkRGBA: SignatureInkRGBA?,
         strokeThickness: SignatureInkThickness
     ) {
         guard var objects = pageObjectsByPage[pageItemID],
@@ -390,7 +391,7 @@ final class PDFEditorViewModel {
             return
         }
 
-        var object = objects[index]
+        let object = objects[index]
         guard object.type == .signature,
               let sourceAssetID = object.signatureSourceImageAssetID ?? object.imageAssetID,
               let sourceImage = imageAssets[sourceAssetID],
@@ -399,9 +400,16 @@ final class PDFEditorViewModel {
             return
         }
 
+        let inkUIColor: UIColor
+        if let customInkRGBA {
+            inkUIColor = customInkRGBA.uiColor
+        } else {
+            inkUIColor = presetInkColor.uiColor
+        }
+
         let rendered = SignatureAppearanceEngine.renderDisplayImage(
             source: sourceImage,
-            inkColor: inkColor,
+            inkColor: inkUIColor,
             thickness: strokeThickness,
             baselineThickness: baselineThickness
         )
@@ -418,7 +426,8 @@ final class PDFEditorViewModel {
             imageAssetID: object.imageAssetID,
             signatureLibrarySourceID: object.signatureLibrarySourceID,
             signatureSourceImageAssetID: object.signatureSourceImageAssetID,
-            signatureInkColor: inkColor,
+            signatureInkColor: presetInkColor,
+            signatureCustomInkRGBA: customInkRGBA,
             signatureStrokeThickness: strokeThickness,
             signatureBaselineInkColor: object.signatureBaselineInkColor,
             signatureBaselineStrokeThickness: object.signatureBaselineStrokeThickness
@@ -431,6 +440,40 @@ final class PDFEditorViewModel {
         objects[index] = updated
         pageObjectsByPage[pageItemID] = objects
         bumpOverlayRevision(for: pageItemID)
+    }
+
+    func updatePlacedSignatureAppearance(
+        overlayID: UUID,
+        pageItemID: UUID,
+        inkColor: SignatureInkColor,
+        strokeThickness: SignatureInkThickness
+    ) {
+        updatePlacedSignatureAppearance(
+            overlayID: overlayID,
+            pageItemID: pageItemID,
+            presetInkColor: inkColor,
+            customInkRGBA: nil,
+            strokeThickness: strokeThickness
+        )
+    }
+
+    func updatePlacedSignatureCustomColor(
+        overlayID: UUID,
+        pageItemID: UUID,
+        color: UIColor,
+        strokeThickness: SignatureInkThickness
+    ) {
+        guard let object = overlayObjects(for: pageItemID).first(where: { $0.id == overlayID }) else {
+            return
+        }
+
+        updatePlacedSignatureAppearance(
+            overlayID: overlayID,
+            pageItemID: pageItemID,
+            presetInkColor: object.effectiveSignatureInkColor,
+            customInkRGBA: SignatureInkRGBA(uiColor: color),
+            strokeThickness: strokeThickness
+        )
     }
 
     func resetPlacedSignatureAppearance(overlayID: UUID, pageItemID: UUID) {
@@ -568,6 +611,7 @@ final class PDFEditorViewModel {
                 signatureLibrarySourceID: overlay.signatureLibrarySourceID,
                 signatureSourceImageAssetID: overlay.signatureSourceImageAssetID,
                 signatureInkColor: overlay.signatureInkColor,
+                signatureCustomInkRGBA: overlay.signatureCustomInkRGBA,
                 signatureStrokeThickness: overlay.signatureStrokeThickness,
                 signatureBaselineInkColor: overlay.signatureBaselineInkColor,
                 signatureBaselineStrokeThickness: overlay.signatureBaselineStrokeThickness

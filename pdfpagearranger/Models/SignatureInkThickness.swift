@@ -36,6 +36,31 @@ enum SignatureInkThickness: String, CaseIterable, Identifiable, Codable, Equatab
 
     static let defaultThickness: SignatureInkThickness = .medium
 
+    static let orderedSteps: [SignatureInkThickness] = [.thin, .medium, .thick]
+
+    var pointsLabel: String {
+        let width = strokeWidth
+        if width.rounded() == width {
+            return String(format: "%.0f pt", width)
+        }
+        return String(format: "%.1f pt", width)
+    }
+
+    func steppedDown() -> SignatureInkThickness? {
+        guard let index = Self.orderedSteps.firstIndex(of: self), index > 0 else {
+            return nil
+        }
+        return Self.orderedSteps[index - 1]
+    }
+
+    func steppedUp() -> SignatureInkThickness? {
+        guard let index = Self.orderedSteps.firstIndex(of: self),
+              index < Self.orderedSteps.count - 1 else {
+            return nil
+        }
+        return Self.orderedSteps[index + 1]
+    }
+
     func inkingTool(color: SignatureInkColor) -> PKInkingTool {
         PKInkingTool(.pen, color: color.uiColor, width: strokeWidth)
     }

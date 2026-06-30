@@ -128,6 +128,9 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`SignaturePlacementContext`** | Baseline ink color/thickness and optional library source ID captured at placement time. |
 | **`SignatureOverlayMenuEngine`** | Positions the signature contextual menu above the selected overlay within page bounds. |
 | **`SignatureOverlayContextMenu`** | Floating Edit / Delete / More menu for selected signature overlays in Page Mode. |
+| **`SignatureEditPopoverEngine`** | Positions the floating signature edit popover above or below the selected overlay within page bounds. |
+| **`PlacedSignatureEditPopover`** | Markup-style floating row: preset colors, native advanced color picker, thickness steppers; live preview. |
+| **`SignatureUIColorPicker`** | SwiftUI wrapper for `UIColorPickerViewController`. |
 | **`SignaturePlacementEngine`** | Validates page-bound taps and converts Page Mode display coordinates to clamped normalized signature position (invisible tap-to-place arming). |
 | **`SignatureLibraryStore`** | On-device reusable signature assets (`signatures.json`), preferences (`library-preferences.json` for Default Signature ID), and `QuickSignatureResolution` for Quick Signature routing. |
 | **`SignatureLibraryView`** | Library UI; holds `@State defaultSignatureID` for immediate Default Signature feedback; optional guidance banner when Quick Signature opens the library with multiple signatures and no default. |

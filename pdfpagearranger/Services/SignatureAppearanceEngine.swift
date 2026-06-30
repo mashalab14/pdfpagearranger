@@ -4,7 +4,7 @@ import UIKit
 enum SignatureAppearanceEngine {
     static func renderDisplayImage(
         source: UIImage,
-        inkColor: SignatureInkColor,
+        inkColor: UIColor,
         thickness: SignatureInkThickness,
         baselineThickness: SignatureInkThickness
     ) -> UIImage {
@@ -12,7 +12,25 @@ enum SignatureAppearanceEngine {
         return adjustThickness(recolored, from: baselineThickness, to: thickness)
     }
 
+    static func renderDisplayImage(
+        source: UIImage,
+        inkColor: SignatureInkColor,
+        thickness: SignatureInkThickness,
+        baselineThickness: SignatureInkThickness
+    ) -> UIImage {
+        renderDisplayImage(
+            source: source,
+            inkColor: inkColor.uiColor,
+            thickness: thickness,
+            baselineThickness: baselineThickness
+        )
+    }
+
     static func recolor(_ image: UIImage, to color: SignatureInkColor) -> UIImage {
+        recolor(image, to: color.uiColor)
+    }
+
+    static func recolor(_ image: UIImage, to color: UIColor) -> UIImage {
         guard let cgImage = image.cgImage else { return image }
 
         let width = cgImage.width
@@ -36,7 +54,7 @@ enum SignatureAppearanceEngine {
         guard let data = context.data else { return image }
 
         let pixels = data.bindMemory(to: UInt8.self, capacity: width * height * 4)
-        let target = color.uiColor
+        let target = color
         var red: CGFloat = 0
         var green: CGFloat = 0
         var blue: CGFloat = 0

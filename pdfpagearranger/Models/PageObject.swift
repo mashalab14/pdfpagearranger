@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import UIKit
 
 enum PageObjectType: String, Codable, CaseIterable {
     case image
@@ -24,6 +25,7 @@ struct PageObject: Identifiable, Equatable, Codable {
     /// Immutable raster used to re-render placed signature appearance.
     var signatureSourceImageAssetID: UUID?
     var signatureInkColor: SignatureInkColor?
+    var signatureCustomInkRGBA: SignatureInkRGBA?
     var signatureStrokeThickness: SignatureInkThickness?
     var signatureBaselineInkColor: SignatureInkColor?
     var signatureBaselineStrokeThickness: SignatureInkThickness?
@@ -36,18 +38,37 @@ struct PageObject: Identifiable, Equatable, Codable {
         signatureInkColor ?? signatureBaselineInkColor ?? .defaultInk
     }
 
+    var effectiveSignatureInkUIColor: UIColor {
+        if let custom = signatureCustomInkRGBA {
+            return custom.uiColor
+        }
+        return effectiveSignatureInkColor.uiColor
+    }
+
     var effectiveSignatureStrokeThickness: SignatureInkThickness {
         signatureStrokeThickness ?? signatureBaselineStrokeThickness ?? .defaultThickness
     }
 
     var signatureAppearanceDiffersFromBaseline: Bool {
         guard type == .signature,
-              let baselineColor = signatureBaselineInkColor,
-              let baselineThickness = signatureBaselineStrokeThickness else {
+              signatureBaselineInkColor != nil,
+              signatureBaselineStrokeThickness != nil else {
             return false
         }
+        return inkColorDiffersFromBaseline || thicknessDiffersFromBaseline
+    }
+
+    private var inkColorDiffersFromBaseline: Bool {
+        guard let baselineColor = signatureBaselineInkColor else { return false }
+        if signatureCustomInkRGBA != nil {
+            return true
+        }
         return effectiveSignatureInkColor != baselineColor
-            || effectiveSignatureStrokeThickness != baselineThickness
+    }
+
+    private var thicknessDiffersFromBaseline: Bool {
+        guard let baselineThickness = signatureBaselineStrokeThickness else { return false }
+        return effectiveSignatureStrokeThickness != baselineThickness
     }
 
     var canSavePlacedSignatureToLibrary: Bool {
@@ -67,6 +88,7 @@ struct PageObject: Identifiable, Equatable, Codable {
         signatureLibrarySourceID: UUID? = nil,
         signatureSourceImageAssetID: UUID? = nil,
         signatureInkColor: SignatureInkColor? = nil,
+        signatureCustomInkRGBA: SignatureInkRGBA? = nil,
         signatureStrokeThickness: SignatureInkThickness? = nil,
         signatureBaselineInkColor: SignatureInkColor? = nil,
         signatureBaselineStrokeThickness: SignatureInkThickness? = nil
@@ -83,6 +105,7 @@ struct PageObject: Identifiable, Equatable, Codable {
         self.signatureLibrarySourceID = signatureLibrarySourceID
         self.signatureSourceImageAssetID = signatureSourceImageAssetID
         self.signatureInkColor = signatureInkColor
+        self.signatureCustomInkRGBA = signatureCustomInkRGBA
         self.signatureStrokeThickness = signatureStrokeThickness
         self.signatureBaselineInkColor = signatureBaselineInkColor
         self.signatureBaselineStrokeThickness = signatureBaselineStrokeThickness

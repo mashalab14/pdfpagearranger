@@ -25,7 +25,8 @@ struct PageEditorView: View {
     @State private var pendingSignaturePlacement: SignaturePlacementContext?
     @State private var pageTransitionEdge: Edge = .trailing
     @State private var lastPageNavigationUptime: TimeInterval = 0
-    @State private var editingSignatureOverlayID: UUID?
+    @State private var signatureEditOverlayID: UUID?
+    @State private var signatureSaveErrorMessage: String?
 
     private let signatureLibraryStore: SignatureLibraryStore
 
@@ -119,26 +120,6 @@ struct PageEditorView: View {
                 beginSignaturePlacement(context: context)
             }
         }
-        .sheet(isPresented: Binding(
-            get: { editingSignatureOverlayID != nil },
-            set: { isPresented in
-                if !isPresented {
-                    editingSignatureOverlayID = nil
-                }
-            }
-        )) {
-            if let pageItem,
-               let overlayID = editingSignatureOverlayID,
-               let overlay = viewModel.overlayObjects(for: pageItem.id).first(where: { $0.id == overlayID }) {
-                EditPlacedSignatureSheet(
-                    overlayID: overlayID,
-                    pageItemID: pageItem.id,
-                    overlay: overlay,
-                    viewModel: viewModel,
-                    libraryStore: signatureLibraryStore
-                )
-            }
-        }
         .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotoItem, matching: .images)
         .onChange(of: selectedPhotoItem) { _, newItem in
             guard let newItem else { return }
@@ -151,12 +132,12 @@ struct PageEditorView: View {
                 cancelSignaturePlacement()
                 clearPDFTextSelection()
                 pageSelection = .none
-                editingSignatureOverlayID = nil
+                signatureEditOverlayID = nil
             }
         }
         .onChange(of: pageRoute.pageItemID) { _, _ in
             cancelSignaturePlacement()
-            editingSignatureOverlayID = nil
+            signatureEditOverlayID = nil
             pageSelection = .none
             bumpPDFSelectionClearToken()
             placementAnimatingOverlayIDs.removeAll()
@@ -168,6 +149,14 @@ struct PageEditorView: View {
         }
         .task(id: renderTaskKey) {
             await loadPageImage()
+        }
+        .alert("Could Not Save Signature", isPresented: Binding(
+            get: { signatureSaveErrorMessage != nil },
+            set: { if !$0 { signatureSaveErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(signatureSaveErrorMessage ?? "")
         }
     }
 
@@ -200,8 +189,32 @@ struct PageEditorView: View {
                     navigateToAdjacentPage(direction: direction)
                 },
                 onPDFTextMenuCopy: copySelectedPDFText,
-                onEditSignature: { overlayID in
-                    editingSignatureOverlayID = overlayID
+                signatureEditOverlayID: $signatureEditOverlayID,
+                pageItemID: pageItem.id,
+                onUpdateSignatureAppearance: { overlayID, color, thickness in
+                    viewModel.updatePlacedSignatureAppearance(
+                        overlayID: overlayID,
+                        pageItemID: pageItem.id,
+                        inkColor: color,
+                        strokeThickness: thickness
+                    )
+                },
+                onUpdateSignatureCustomColor: { overlayID, uiColor, thickness in
+                    viewModel.updatePlacedSignatureCustomColor(
+                        overlayID: overlayID,
+                        pageItemID: pageItem.id,
+                        color: uiColor,
+                        strokeThickness: thickness
+                    )
+                },
+                onResetSignatureAppearance: { overlayID in
+                    viewModel.resetPlacedSignatureAppearance(
+                        overlayID: overlayID,
+                        pageItemID: pageItem.id
+                    )
+                },
+                onSaveSignatureToLibrary: { overlayID in
+                    savePlacedSignatureToLibrary(overlayID: overlayID, pageItemID: pageItem.id)
                 },
                 pageTransitionEdge: pageTransitionEdge
             )
@@ -282,7 +295,7 @@ struct PageEditorView: View {
 
     private func deleteSelectedOverlay() {
         guard let pageItem, let overlayID = pageSelection.selectedOverlayID else { return }
-        editingSignatureOverlayID = nil
+        signatureEditOverlayID = nil
         viewModel.deleteOverlay(id: overlayID, pageItemID: pageItem.id)
         pageSelection = .none
     }
@@ -307,7 +320,7 @@ struct PageEditorView: View {
 
     private func beginSignaturePlacement(context: SignaturePlacementContext) {
         clearPDFTextSelection()
-        editingSignatureOverlayID = nil
+        signatureEditOverlayID = nil
         pendingSignaturePlacement = context
         pageSelection = .none
     }
@@ -384,6 +397,18 @@ struct PageEditorView: View {
 
         withAnimation(.easeInOut(duration: 0.25)) {
             pageRoute = PageEditorRoute(pageItemID: viewModel.pages[targetIndex].id)
+        }
+    }
+
+    private func savePlacedSignatureToLibrary(overlayID: UUID, pageItemID: UUID) {
+        do {
+            _ = try viewModel.savePlacedSignatureToLibrary(
+                overlayID: overlayID,
+                pageItemID: pageItemID,
+                store: signatureLibraryStore
+            )
+        } catch {
+            signatureSaveErrorMessage = error.localizedDescription
         }
     }
 

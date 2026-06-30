@@ -2,8 +2,12 @@ import SwiftUI
 
 struct SignatureOverlayContextMenu: View {
     let anchorPoint: CGPoint
+    let showReset: Bool
+    let showSaveToLibrary: Bool
     let onEdit: () -> Void
     let onDelete: () -> Void
+    let onReset: () -> Void
+    let onSaveToLibrary: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
@@ -22,6 +26,21 @@ struct SignatureOverlayContextMenu: View {
             )
             divider
             Menu {
+                if showReset {
+                    Button("Reset") {
+                        onReset()
+                    }
+                    .accessibilityIdentifier("signatureMenuReset")
+                }
+                if showSaveToLibrary {
+                    Button("Save to Library") {
+                        onSaveToLibrary()
+                    }
+                    .accessibilityIdentifier("signatureMenuSaveToLibrary")
+                }
+                if showReset || showSaveToLibrary {
+                    Divider()
+                }
                 Button("Duplicate") {}.disabled(true)
                 Button("Replace Signature") {}.disabled(true)
                 Button("Bring Forward") {}.disabled(true)
