@@ -7,32 +7,35 @@ final class ContextualGlassContainerRegressionTests: XCTestCase {
         XCTAssertTrue(menu.contains("contextualGlassContainer()"))
         XCTAssertTrue(menu.contains("contextualExpandedTapTarget"))
         XCTAssertFalse(menu.contains("Color.white.opacity"))
+        XCTAssertFalse(menu.contains(".capsule"))
     }
 
-    func testSignatureEditPopoverUsesRoundedRectangleGlass() throws {
+    func testSignatureEditPopoverUsesSameFloatingPanelContainer() throws {
         let popover = try projectSource(named: "PlacedSignatureEditPopover.swift", subdirectory: "Views")
         XCTAssertTrue(popover.contains("contextualGlassContainer("))
-        XCTAssertTrue(popover.contains(".roundedRectangle(cornerRadius: ContextualControlMetrics.popoverCornerRadius)"))
         XCTAssertTrue(popover.contains("contextualExpandedTapTarget"))
         XCTAssertFalse(popover.contains(".background(.regularMaterial"))
+        XCTAssertFalse(popover.contains(".capsule"))
     }
 
-    func testContextualGlassContainerSupportsCapsuleAndRoundedRectangle() throws {
+    func testUnifiedFloatingPanelUsesClearGlassAndRoundedRectangle() throws {
         let container = try projectSource(named: "ContextualGlassContainer.swift", subdirectory: "Views")
-        XCTAssertTrue(container.contains("case capsule"))
-        XCTAssertTrue(container.contains("case roundedRectangle"))
-        XCTAssertTrue(container.contains("glassEffect(.regular, in: .capsule)"))
+        let metrics = try projectSource(named: "ContextualControlMetrics.swift", subdirectory: "Models")
+        XCTAssertTrue(container.contains("floatingPanelCornerRadius"))
+        XCTAssertTrue(container.contains("glassEffect("))
         XCTAssertTrue(container.contains(".rect(cornerRadius: cornerRadius, style: .continuous)"))
-        XCTAssertTrue(container.contains("contextualExpandedTapTarget"))
+        XCTAssertTrue(metrics.contains("floatingPanelGlass: Glass = .clear"))
+        XCTAssertFalse(container.contains("Capsule()"))
+        XCTAssertFalse(container.contains("glassEffect(.regular"))
     }
 
-    func testToolbarUsesCompactVisibleHeightAndBoldIcons() throws {
+    func testToolbarUsesCompactVisibleHeightAndHeavyIcons() throws {
         let menu = try projectSource(named: "SignatureOverlayContextMenu.swift", subdirectory: "Views")
         let metrics = try projectSource(named: "ContextualControlMetrics.swift", subdirectory: "Models")
         XCTAssertTrue(menu.contains("toolbarVisibleHeight"))
         XCTAssertTrue(menu.contains("toolbarSymbolFont"))
-        XCTAssertTrue(metrics.contains("weight: .bold"))
-        XCTAssertTrue(metrics.contains("toolbarShadowOpacity"))
+        XCTAssertTrue(metrics.contains("weight: .heavy"))
+        XCTAssertTrue(metrics.contains("floatingPanelShadowOpacity"))
     }
 
     private func projectSource(named fileName: String, subdirectory: String) throws -> String {

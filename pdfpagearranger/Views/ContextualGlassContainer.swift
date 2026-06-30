@@ -1,51 +1,20 @@
 import SwiftUI
 
-enum ContextualGlassShape {
-    case capsule
-    case roundedRectangle(cornerRadius: CGFloat)
-
-    var shadowOpacity: CGFloat {
-        switch self {
-        case .capsule:
-            ContextualControlMetrics.toolbarShadowOpacity
-        case .roundedRectangle:
-            ContextualControlMetrics.popoverShadowOpacity
-        }
-    }
-
-    var shadowRadius: CGFloat {
-        switch self {
-        case .capsule:
-            ContextualControlMetrics.toolbarShadowRadius
-        case .roundedRectangle:
-            ContextualControlMetrics.popoverShadowRadius
-        }
-    }
-
-    var shadowYOffset: CGFloat {
-        switch self {
-        case .capsule:
-            ContextualControlMetrics.toolbarShadowYOffset
-        case .roundedRectangle:
-            ContextualControlMetrics.popoverShadowYOffset
-        }
-    }
-}
-
 /// Shared Liquid Glass container for all floating contextual controls.
 struct ContextualGlassContainerModifier: ViewModifier {
-    let shape: ContextualGlassShape
     let horizontalPadding: CGFloat
     let verticalPadding: CGFloat
 
     init(
-        shape: ContextualGlassShape = .capsule,
         horizontalPadding: CGFloat = ContextualControlMetrics.toolbarHorizontalPadding,
         verticalPadding: CGFloat = ContextualControlMetrics.toolbarVerticalPadding
     ) {
-        self.shape = shape
         self.horizontalPadding = horizontalPadding
         self.verticalPadding = verticalPadding
+    }
+
+    private var cornerRadius: CGFloat {
+        ContextualControlMetrics.floatingPanelCornerRadius
     }
 
     func body(content: Content) -> some View {
@@ -53,52 +22,28 @@ struct ContextualGlassContainerModifier: ViewModifier {
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
             .background {
-                glassBackground
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(.clear)
+                    .glassEffect(
+                        ContextualControlMetrics.floatingPanelGlass,
+                        in: .rect(cornerRadius: cornerRadius, style: .continuous)
+                    )
             }
             .overlay {
-                glassHighlight
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(highlightGradient, lineWidth: ContextualControlMetrics.glassBorderWidth)
+                    .allowsHitTesting(false)
             }
             .shadow(
-                color: .black.opacity(shape.shadowOpacity),
-                radius: shape.shadowRadius,
-                y: shape.shadowYOffset
+                color: .black.opacity(ContextualControlMetrics.floatingPanelShadowOpacity),
+                radius: ContextualControlMetrics.floatingPanelShadowRadius,
+                y: ContextualControlMetrics.floatingPanelShadowYOffset
             )
             .shadow(
-                color: .black.opacity(shape.shadowOpacity * 0.45),
-                radius: shape.shadowRadius * 0.45,
-                y: shape.shadowYOffset * 0.5
+                color: .black.opacity(ContextualControlMetrics.floatingPanelShadowOpacity * 0.5),
+                radius: ContextualControlMetrics.floatingPanelShadowRadius * 0.55,
+                y: ContextualControlMetrics.floatingPanelShadowYOffset * 0.45
             )
-    }
-
-    @ViewBuilder
-    private var glassBackground: some View {
-        switch shape {
-        case .capsule:
-            Capsule()
-                .fill(.clear)
-                .glassEffect(.regular, in: .capsule)
-        case .roundedRectangle(let cornerRadius):
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(.clear)
-                .glassEffect(
-                    .regular,
-                    in: .rect(cornerRadius: cornerRadius, style: .continuous)
-                )
-        }
-    }
-
-    @ViewBuilder
-    private var glassHighlight: some View {
-        switch shape {
-        case .capsule:
-            Capsule()
-                .strokeBorder(highlightGradient, lineWidth: ContextualControlMetrics.glassBorderWidth)
-                .allowsHitTesting(false)
-        case .roundedRectangle(let cornerRadius):
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(highlightGradient, lineWidth: ContextualControlMetrics.glassBorderWidth)
-                .allowsHitTesting(false)
-        }
     }
 
     private var highlightGradient: LinearGradient {
@@ -116,13 +61,11 @@ struct ContextualGlassContainerModifier: ViewModifier {
 
 extension View {
     func contextualGlassContainer(
-        shape: ContextualGlassShape = .capsule,
         horizontalPadding: CGFloat = ContextualControlMetrics.toolbarHorizontalPadding,
         verticalPadding: CGFloat = ContextualControlMetrics.toolbarVerticalPadding
     ) -> some View {
         modifier(
             ContextualGlassContainerModifier(
-                shape: shape,
                 horizontalPadding: horizontalPadding,
                 verticalPadding: verticalPadding
             )

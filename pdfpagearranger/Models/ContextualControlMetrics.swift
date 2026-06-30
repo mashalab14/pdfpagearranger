@@ -3,18 +3,15 @@ import SwiftUI
 
 /// Shared visual language for floating contextual controls (signatures, highlights, comments, etc.).
 enum ContextualControlMetrics {
+    static let floatingPanelCornerRadius: CGFloat = 14
+    static let floatingPanelGlass: Glass = .clear
     static let glassBorderWidth: CGFloat = 0.5
-    static let glassHighlightOpacity: CGFloat = 0.32
-    static let glassHighlightFadeOpacity: CGFloat = 0.08
+    static let glassHighlightOpacity: CGFloat = 0.22
+    static let glassHighlightFadeOpacity: CGFloat = 0.05
 
-    static let toolbarShadowOpacity: CGFloat = 0.18
-    static let toolbarShadowRadius: CGFloat = 12
-    static let toolbarShadowYOffset: CGFloat = 6
-
-    static let popoverShadowOpacity: CGFloat = 0.15
-    static let popoverShadowRadius: CGFloat = 10
-    static let popoverShadowYOffset: CGFloat = 5
-    static let popoverCornerRadius: CGFloat = 14
+    static let floatingPanelShadowOpacity: CGFloat = 0.26
+    static let floatingPanelShadowRadius: CGFloat = 16
+    static let floatingPanelShadowYOffset: CGFloat = 8
 
     static let minimumTapTarget: CGFloat = 52
     static let presetColorDiameter: CGFloat = 26
@@ -29,25 +26,24 @@ enum ContextualControlMetrics {
     static let toolbarCellSpacing: CGFloat = 0
     static let toolbarDividerHeight: CGFloat = 20
     static let toolbarDividerOpacity: CGFloat = 0.18
-    static let toolbarSymbolFont: Font = .system(size: 17, weight: .bold)
+    static let toolbarSymbolFont: Font = .system(size: 18, weight: .heavy)
     static let symbolFont: Font = toolbarSymbolFont
-    static let symbolWeight: Font.Weight = .bold
+    static let symbolWeight: Font.Weight = .heavy
 
-    static var toolbarCapsuleHeight: CGFloat {
+    static var toolbarShellHeight: CGFloat {
         toolbarVisibleHeight + toolbarVerticalPadding * 2
     }
 
-    /// Toolbar capsule ends use half the visible shell height.
-    static var toolbarCapsuleRadius: CGFloat {
-        toolbarCapsuleHeight / 2
-    }
-
     static var glassCornerRadius: CGFloat {
-        toolbarCapsuleRadius
+        floatingPanelCornerRadius
     }
 
     static var cornerRadius: CGFloat {
-        popoverCornerRadius
+        floatingPanelCornerRadius
+    }
+
+    static var popoverCornerRadius: CGFloat {
+        floatingPanelCornerRadius
     }
 
     static var toolbarTapOutsetHorizontal: CGFloat {
@@ -66,8 +62,8 @@ enum ContextualControlMetrics {
 
     static let popoverHorizontalPadding: CGFloat = 6
     static let popoverVerticalPadding: CGFloat = 4
-    static let popoverRowSpacing: CGFloat = 4
-    static let popoverColorRowSpacing: CGFloat = 2
+    static let popoverRowSpacing: CGFloat = 6
+    static let popoverColorRowSpacing: CGFloat = 4
     static let popoverColorCellWidth: CGFloat = 44
     static let popoverVisibleRowHeight: CGFloat = 32
     static let thicknessRowColumnCount: CGFloat = 10
@@ -98,16 +94,12 @@ enum ContextualControlMetrics {
         popoverHorizontalPadding * 2 + popoverContentWidth
     }
 
-    static var popoverCapsuleHeight: CGFloat {
+    static var popoverHeight: CGFloat {
         popoverVerticalPadding * 2
             + popoverVisibleRowHeight
             + popoverRowSpacing
             + popoverVisibleRowHeight
             + thicknessRowVerticalInset * 2
-    }
-
-    static var popoverHeight: CGFloat {
-        popoverCapsuleHeight
     }
 
     /// Legacy aliases used by shared container defaults.

@@ -19,20 +19,10 @@ final class ContextualControlMetricsRegressionTests: XCTestCase {
         XCTAssertEqual(SignatureOverlayMenuEngine.menuWidth, expected)
     }
 
-    func testToolbarCapsuleRadiusMatchesHalfHeight() {
-        XCTAssertEqual(
-            ContextualControlMetrics.toolbarCapsuleRadius,
-            ContextualControlMetrics.toolbarCapsuleHeight / 2
-        )
-        XCTAssertEqual(ContextualControlMetrics.toolbarCapsuleHeight, 40)
-    }
-
-    func testPopoverUsesDistinctRoundedRectangleRadius() {
-        XCTAssertEqual(ContextualControlMetrics.popoverCornerRadius, 14)
-        XCTAssertLessThan(
-            ContextualControlMetrics.popoverCornerRadius,
-            ContextualControlMetrics.toolbarCapsuleRadius
-        )
+    func testFloatingPanelsShareUnifiedCornerRadius() {
+        XCTAssertEqual(ContextualControlMetrics.floatingPanelCornerRadius, 14)
+        XCTAssertEqual(ContextualControlMetrics.glassCornerRadius, ContextualControlMetrics.floatingPanelCornerRadius)
+        XCTAssertEqual(ContextualControlMetrics.popoverCornerRadius, ContextualControlMetrics.floatingPanelCornerRadius)
     }
 
     func testPopoverSizeMatchesMetrics() {
@@ -61,11 +51,28 @@ final class ContextualControlMetricsRegressionTests: XCTestCase {
         )
     }
 
-    func testSharedGlassUsesElevatedFloatingShadow() {
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.toolbarShadowOpacity, 0.14)
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.toolbarShadowRadius, 10)
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.popoverShadowOpacity, 0.12)
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.popoverShadowRadius, 8)
+    func testFloatingPanelUsesStrongerShadowThanLegacyToolbarValues() {
+        XCTAssertGreaterThan(ContextualControlMetrics.floatingPanelShadowOpacity, 0.18)
+        XCTAssertGreaterThan(ContextualControlMetrics.floatingPanelShadowRadius, 12)
+        XCTAssertGreaterThan(ContextualControlMetrics.floatingPanelShadowYOffset, 6)
+    }
+
+    func testFloatingPanelUsesClearGlassForLightBlur() throws {
+        let metrics = try projectSource(named: "ContextualControlMetrics.swift", subdirectory: "Models")
+        XCTAssertTrue(metrics.contains("floatingPanelGlass: Glass = .clear"))
+    }
+
+    private func projectSource(named fileName: String, subdirectory: String) throws -> String {
+        let projectRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        return try String(
+            contentsOf: projectRoot
+                .appendingPathComponent("pdfpagearranger")
+                .appendingPathComponent(subdirectory)
+                .appendingPathComponent(fileName),
+            encoding: .utf8
+        )
     }
 
     func testToolbarTapOutsetsPreserveCompactLayout() {

@@ -88,7 +88,6 @@ struct PlacedSignatureEditPopover: View {
             )
         }
         .contextualGlassContainer(
-            shape: .roundedRectangle(cornerRadius: ContextualControlMetrics.popoverCornerRadius),
             horizontalPadding: ContextualControlMetrics.popoverHorizontalPadding,
             verticalPadding: ContextualControlMetrics.popoverVerticalPadding
         )
