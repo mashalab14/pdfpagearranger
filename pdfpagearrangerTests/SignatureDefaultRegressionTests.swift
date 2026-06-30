@@ -298,7 +298,7 @@ final class SignatureDefaultUIRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("handleQuickSignature"))
         XCTAssertTrue(source.contains("resolveQuickSignatureResolution"))
         XCTAssertTrue(source.contains("signatureLibraryShowsDefaultGuidance"))
-        XCTAssertTrue(source.contains("placeSignature"))
+        XCTAssertTrue(source.contains("beginSignaturePlacement"))
         XCTAssertTrue(source.contains("selectedObjectID = overlayID"))
     }
 

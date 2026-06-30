@@ -50,7 +50,7 @@ This document describes **exactly how the app behaves today** from the user's pe
 - View all pages in a scrollable grid (**Document Mode**)
 - Reorder, rotate, duplicate, and delete pages
 - Open a single page for detailed editing (**Page Mode**)
-- Add image overlays and signatures on individual pages (including one-tap **Quick Signature** when a default is set)
+- Add image overlays and signatures on individual pages (including **Quick Signature** with tap-to-place when a default is set)
 - Apply document-wide page numbers
 - Apply document-wide text or image watermarks
 - Compress the document
@@ -808,7 +808,7 @@ After success:
 |--------|----------|----------|--------|
 | **Text** | Coming soon | **No** | — |
 | **Image** | Import from Photos or Files | **Yes** | Dismisses sheet → opens **Photos picker** |
-| **Quick Signature** | Place your default signature | **Yes** | Dismisses sheet → places default signature immediately (see below), or opens **Signature Library** if none is available |
+| **Quick Signature** | Place your default signature | **Yes** | Dismisses sheet → enters **Signature Placement Mode** (see below), or opens **Signature Library** if none is available |
 | **Signature Library** | Choose, create, or manage signatures | **Yes** | Dismisses sheet → opens **Signature Library** |
 
 ### Quick Signature
@@ -817,8 +817,8 @@ After success:
 
 | Situation | Result |
 |-----------|--------|
-| **Case A** — User has an explicit **Default Signature** set | Signature is placed on the current page **immediately** (Add sheet dismisses; library does **not** open). Placed overlay is **auto-selected**. |
-| **Case B** — User has **exactly one** saved signature and **no** explicit Default Signature | That signature is placed **immediately** with the same auto-select behaviour. User is **not** required to mark it as default. |
+| **Case A** — User has an explicit **Default Signature** set | Enters **Signature Placement Mode** (see below). Add sheet dismisses; library does **not** open. |
+| **Case B** — User has **exactly one** saved signature and **no** explicit Default Signature | Same tap-to-place flow as Case A. User is **not** required to mark it as default. |
 | **Case C** — User has **multiple** saved signatures and **no** explicit Default Signature | **Signature Library** opens with a guidance banner at the top: *"Choose a default signature for one-tap signing."* User can place any signature, set a Default Signature via the star, or create a new one. |
 | **Case D** — User has **no** saved signatures | **Signature Library** opens in the **empty state** (Create Signature). No guidance banner. |
 
@@ -885,7 +885,7 @@ See [Adding content in Page Mode — Quick Signature](#quick-signature). Uses th
 - **Create New Signature** button at top
 - Grid (2 columns) of saved signatures with name labels
 - **Star button** (top-right of each tile) — tap to set that signature as **Default Signature** (see [Default Signature](#default-signature))
-- Tap a signature tile (thumbnail area) → places on current page, **dismisses library**; placed overlay is **auto-selected**
+- Tap a signature tile (thumbnail area) → enters **Signature Placement Mode** on the current page, **dismisses library**
 
 **Default Signature visual state** (updates **immediately** when the star is tapped — no need to close and reopen the library):
 
@@ -911,7 +911,24 @@ See [Adding content in Page Mode — Quick Signature](#quick-signature). Uses th
 - If saving the Default Signature fails, the UI **reverts** and an alert is shown
 - Default preference is **persisted** across app launches (`library-preferences.json` in the signature library folder)
 - Quick Signature uses the stored Default Signature when set (Case A)
-- If there is **exactly one** saved signature and **no** explicit Default Signature, Quick Signature still places it immediately (Case B; star/badge remain unset until the user taps the star)
+- If there is **exactly one** saved signature and **no** explicit Default Signature, Quick Signature still enters **Signature Placement Mode** (Case B; star/badge remain unset until the user taps the star)
+
+### Signature Placement Mode
+
+**Entry:** Quick Signature (Cases A/B), tap a signature in **Signature Library**, or **Save & Use** after creating a signature
+
+**Behaviour:**
+
+1. Add / library / capture sheets dismiss; the PDF page stays visible
+2. Instruction banner: *"Tap where you want to place the signature."*
+3. **Cancel** (toolbar) exits placement mode without placing anything
+4. **Add** bar is hidden; page swipe and pinch zoom are **disabled** to avoid accidental navigation or placement
+5. Existing overlays cannot be selected or edited while placement mode is active
+6. User **taps** the page → signature is placed **centered on the tap**, clamped to stay within page bounds
+7. Placement uses the standard haptic + scale/fade animation; the new signature is **auto-selected**
+8. Placement mode ends after a successful tap
+
+**Save & Use** from signature capture saves to the library, then enters Signature Placement Mode (does not place at center immediately).
 
 ### Signature capture (drawing)
 
@@ -946,8 +963,8 @@ See [Adding content in Page Mode — Quick Signature](#quick-signature). Uses th
 
 1. Renders drawing to image (tight crop)
 2. Saves PNG to **on-device signature library** (persistent), including optional **stroke thickness metadata** on newly created assets
-3. Places signature on current PDF page
-4. Dismisses capture and library sheets; placed overlay is **auto-selected**
+3. Enters **Signature Placement Mode** on the current PDF page (see above)
+4. Dismisses capture and library sheets
 
 ### Signature on page
 
@@ -955,7 +972,7 @@ See [Adding content in Page Mode — Quick Signature](#quick-signature). Uses th
 - Initial width: **30%** of page width (slightly smaller than images)
 - Initial height: derived from the saved PNG aspect ratio so the overlay frame matches the signature image (`height = width × imageHeight / imageWidth` on the page); no vertical letterboxing inside the frame
 - Same move/resize/delete behaviour as image overlays
-- When placed from Quick Signature, Signature Library, or Save & Use, the new overlay is **selected automatically**
+- When placed from Quick Signature, Signature Library, or Save & Use (after tap), the new overlay is **selected automatically**
 
 ### Signature library persistence
 
@@ -980,7 +997,7 @@ Applies to **image overlays** and **signature overlays** (same UI).
 | **Tap overlay** (not selected) | Selects overlay; shows blue border, delete (×) top-right, resize handle bottom-right; brings overlay to **front** if it was behind another |
 | **Tap empty canvas** | Deselects |
 | **Select another overlay** | Switches selection |
-| **Place overlay** (image import, Quick Signature, Signature Library, or Save & Use) | New overlay is **auto-selected** with placement haptic + animation |
+| **Place overlay** (image import at center, or signature after tap in Placement Mode) | New overlay is **auto-selected** with placement haptic + animation |
 
 **Only one overlay selected at a time.** No multi-select.
 

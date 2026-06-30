@@ -6,6 +6,8 @@ struct PageOverlayCanvasView: View {
     let objects: [PageObject]
     let placementAnimatingOverlayIDs: Set<UUID>
     let onPlacementAnimationFinished: (UUID) -> Void
+    let signaturePlacementActive: Bool
+    let onSignaturePlacementTap: ((CGPoint, CGSize) -> Void)?
     @Binding var selectedObjectID: UUID?
     let imageProvider: (UUID) -> UIImage?
     let onUpdate: (PageObject) -> Void
@@ -22,7 +24,7 @@ struct PageOverlayCanvasView: View {
     private let maxScale: CGFloat = 4
 
     private var pageZoomEnabled: Bool {
-        selectedObjectID == nil
+        selectedObjectID == nil && !signaturePlacementActive
     }
 
     private var isPageZoomed: Bool {
@@ -30,7 +32,8 @@ struct PageOverlayCanvasView: View {
     }
 
     private var pageSwipeEnabled: Bool {
-        onPageSwipe != nil
+        !signaturePlacementActive
+            && onPageSwipe != nil
             && PageModeNavigationEngine.shouldAllowPageSwipe(
                 overlayManipulationActive: overlayManipulationState.isActive,
                 isPageZoomed: isPageZoomed
@@ -58,7 +61,19 @@ struct PageOverlayCanvasView: View {
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("pageModeCanvas")
                 .onTapGesture {
+                    guard !signaturePlacementActive else { return }
                     selectedObjectID = nil
+                }
+                .onTapGesture(coordinateSpace: .local) { location in
+                    guard signaturePlacementActive else { return }
+                    onSignaturePlacementTap?(location, displaySize)
+                }
+                .onChange(of: signaturePlacementActive) { _, isActive in
+                    if isActive {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            resetZoom()
+                        }
+                    }
                 }
                 .onTapGesture(count: 2) {
                     guard pageZoomEnabled else { return }
@@ -90,6 +105,7 @@ struct PageOverlayCanvasView: View {
                         pageSize: fitSize,
                         canvasScale: scale,
                         isSelected: selectedObjectID == object.id,
+                        isInteractionEnabled: !signaturePlacementActive,
                         animatePlacement: placementAnimatingOverlayIDs.contains(object.id),
                         onPlacementAnimationFinished: {
                             onPlacementAnimationFinished(object.id)

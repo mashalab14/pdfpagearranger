@@ -21,6 +21,7 @@ struct PageEditorView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var selectedObjectID: UUID?
     @State private var placementAnimatingOverlayIDs: Set<UUID> = []
+    @State private var pendingSignatureImage: UIImage?
     @State private var pageTransitionEdge: Edge = .trailing
 
     private let signatureLibraryStore: SignatureLibraryStore
@@ -58,12 +59,22 @@ struct PageEditorView: View {
         (viewModel.pageIndex(for: pageRoute.pageItemID) ?? 0) + 1
     }
 
+    private var signaturePlacementActive: Bool {
+        pendingSignatureImage != nil
+    }
+
     var body: some View {
         VStack(spacing: 0) {
+            if signaturePlacementActive {
+                signaturePlacementInstruction
+            }
+
             pageContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            addButtonBar
+            if !signaturePlacementActive {
+                addButtonBar
+            }
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Page \(pageNumber)")
@@ -73,12 +84,23 @@ struct PageEditorView: View {
         .accessibilityIdentifier("pageModeView")
         .accessibilityValue("page \(pageNumber) of \(viewModel.pageCount)")
         .toolbar {
+            if signaturePlacementActive {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        cancelSignaturePlacement()
+                    }
+                    .accessibilityIdentifier("signaturePlacementCancelButton")
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Done") {
+                    if signaturePlacementActive {
+                        cancelSignaturePlacement()
+                    }
                     dismiss()
                 }
             }
-            if selectedObjectID != nil {
+            if selectedObjectID != nil, !signaturePlacementActive {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Delete", role: .destructive) {
                         deleteSelectedOverlay()
@@ -105,7 +127,7 @@ struct PageEditorView: View {
                 store: signatureLibraryStore,
                 showDefaultGuidanceBanner: signatureLibraryShowsDefaultGuidance
             ) { image in
-                placeSignature(image: image)
+                beginSignaturePlacement(image: image)
             }
         }
         .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotoItem, matching: .images)
@@ -116,6 +138,7 @@ struct PageEditorView: View {
             }
         }
         .onChange(of: pageRoute.pageItemID) { _, _ in
+            cancelSignaturePlacement()
             selectedObjectID = nil
             placementAnimatingOverlayIDs.removeAll()
         }
@@ -135,6 +158,10 @@ struct PageEditorView: View {
                 onPlacementAnimationFinished: { overlayID in
                     placementAnimatingOverlayIDs.remove(overlayID)
                 },
+                signaturePlacementActive: signaturePlacementActive,
+                onSignaturePlacementTap: { location, displaySize in
+                    placeSignature(atDisplayTap: location, displayPageSize: displaySize)
+                },
                 selectedObjectID: $selectedObjectID,
                 imageProvider: { viewModel.imageAsset(for: $0) },
                 onUpdate: { viewModel.updateOverlay($0) },
@@ -152,6 +179,17 @@ struct PageEditorView: View {
             ProgressView("Loading page…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    private var signaturePlacementInstruction: some View {
+        Text("Tap where you want to place the signature.")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+            .background(.bar)
+            .accessibilityIdentifier("signaturePlacementInstruction")
     }
 
     private var addButtonBar: some View {
@@ -233,19 +271,44 @@ struct PageEditorView: View {
                 showSignatureLibrary = true
                 return
             }
-            placeSignature(image: image)
+            beginSignaturePlacement(image: image)
         case .openLibrary(let showDefaultGuidanceBanner):
             signatureLibraryShowsDefaultGuidance = showDefaultGuidanceBanner
             showSignatureLibrary = true
         }
     }
 
-    private func placeSignature(image: UIImage) {
-        guard let pageItem else { return }
+    private func beginSignaturePlacement(image: UIImage) {
+        pendingSignatureImage = image
+        selectedObjectID = nil
+    }
+
+    private func cancelSignaturePlacement() {
+        pendingSignatureImage = nil
+        selectedObjectID = nil
+    }
+
+    private func placeSignature(atDisplayTap tap: CGPoint, displayPageSize: CGSize) {
+        guard let pageItem, let image = pendingSignatureImage else { return }
+
+        let normalizedSize = OverlayPlacementSizing.normalizedSignatureSize(
+            image: image,
+            pageAspectRatio: pageAspectRatio
+        )
+        let position = SignaturePlacementEngine.storagePosition(
+            forDisplayTap: tap,
+            displayPageSize: displayPageSize,
+            normalizedOverlaySize: normalizedSize,
+            pageRotation: pageItem.rotation
+        )
+
+        pendingSignatureImage = nil
+
         let overlayID = viewModel.addSignatureOverlay(
             to: pageItem.id,
             image: image,
-            pageAspectRatio: pageAspectRatio
+            pageAspectRatio: pageAspectRatio,
+            at: position
         )
         registerNewOverlayPlacement(overlayID: overlayID)
     }

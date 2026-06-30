@@ -85,4 +85,20 @@ enum OverlayInteractionEngine {
             y: min(max(point.y, 0), 1)
         )
     }
+
+    static func clampNormalizedCenter(
+        _ center: CGPoint,
+        normalizedSize: CGSize
+    ) -> CGPoint {
+        let halfWidth = normalizedSize.width / 2
+        let halfHeight = normalizedSize.height / 2
+        let minX = min(halfWidth, 0.5)
+        let maxX = max(1 - halfWidth, 0.5)
+        let minY = min(halfHeight, 0.5)
+        let maxY = max(1 - halfHeight, 0.5)
+        return CGPoint(
+            x: min(max(center.x, minX), maxX),
+            y: min(max(center.y, minY), maxY)
+        )
+    }
 }

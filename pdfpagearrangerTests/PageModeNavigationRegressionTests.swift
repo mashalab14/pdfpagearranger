@@ -52,7 +52,7 @@ final class PageModeNavigationRegressionTests: XCTestCase {
         let overlaySource = try source(named: "ImageOverlayObjectView.swift")
         XCTAssertTrue(overlaySource.contains("dragGesture"))
         XCTAssertTrue(overlaySource.contains("manipulationState.begin()"))
-        XCTAssertTrue(overlaySource.contains("isSelected ? dragGesture : nil"))
+        XCTAssertTrue(overlaySource.contains("isSelected && isInteractionEnabled ? dragGesture : nil"))
     }
 
     func testOverlayManipulationBlocksPageSwipe() throws {
@@ -71,7 +71,7 @@ final class PageModeNavigationRegressionTests: XCTestCase {
         XCTAssertTrue(canvasSource.contains("MagnificationGesture()"))
 
         let overlaySource = try source(named: "ImageOverlayObjectView.swift")
-        XCTAssertTrue(overlaySource.contains("simultaneousGesture(isSelected ? magnificationGesture : nil)"))
+        XCTAssertTrue(overlaySource.contains("simultaneousGesture(isSelected && isInteractionEnabled ? magnificationGesture : nil)"))
     }
 
     func testPageEditorNavigatesByUpdatingPageRoute() throws {

@@ -311,13 +311,19 @@ final class PDFEditorViewModel {
     }
 
     @discardableResult
-    func addSignatureOverlay(to pageItemID: UUID, image: UIImage, pageAspectRatio: CGFloat) -> UUID {
+    func addSignatureOverlay(
+        to pageItemID: UUID,
+        image: UIImage,
+        pageAspectRatio: CGFloat,
+        at position: CGPoint = CGPoint(x: 0.5, y: 0.5)
+    ) -> UUID {
         addRasterOverlay(
             to: pageItemID,
             image: image,
             type: .signature,
             pageAspectRatio: pageAspectRatio,
-            widthFraction: 0.30
+            widthFraction: 0.30,
+            position: position
         )
     }
 
@@ -326,7 +332,8 @@ final class PDFEditorViewModel {
         image: UIImage,
         type: PageObjectType,
         pageAspectRatio: CGFloat,
-        widthFraction: CGFloat
+        widthFraction: CGFloat,
+        position: CGPoint = CGPoint(x: 0.5, y: 0.5)
     ) -> UUID {
         pushUndoSnapshot()
 
@@ -353,7 +360,7 @@ final class PDFEditorViewModel {
         let object = PageObject(
             pageItemID: pageItemID,
             type: type,
-            position: CGPoint(x: 0.5, y: 0.5),
+            position: position,
             size: normalizedSize,
             zIndex: nextZIndex,
             imageAssetID: assetID

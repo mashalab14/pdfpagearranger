@@ -7,6 +7,7 @@ struct ImageOverlayObjectView: View {
     let pageSize: CGSize
     let canvasScale: CGFloat
     let isSelected: Bool
+    var isInteractionEnabled: Bool = true
     let animatePlacement: Bool
     let onPlacementAnimationFinished: (() -> Void)?
     let onSelect: () -> Void
@@ -68,11 +69,13 @@ struct ImageOverlayObjectView: View {
             .opacity(Double(object.opacity * placementReveal))
             .scaleEffect(OverlayPlacementAnimation.scale(for: placementReveal))
             .position(displayPosition)
-            .gesture(isSelected ? dragGesture : nil)
-            .simultaneousGesture(isSelected ? magnificationGesture : nil)
+            .gesture(isSelected && isInteractionEnabled ? dragGesture : nil)
+            .simultaneousGesture(isSelected && isInteractionEnabled ? magnificationGesture : nil)
             .onTapGesture {
+                guard isInteractionEnabled else { return }
                 onSelect()
             }
+            .allowsHitTesting(isInteractionEnabled)
             .onAppear {
                 startPlacementAnimationIfNeeded()
             }
