@@ -384,7 +384,7 @@ final class PDFEditorViewModel {
         pageItemID: UUID,
         presetInkColor: SignatureInkColor,
         customInkRGBA: SignatureInkRGBA?,
-        strokeThickness: SignatureInkThickness
+        strokeWidthPoints: Int
     ) {
         guard var objects = pageObjectsByPage[pageItemID],
               let index = objects.firstIndex(where: { $0.id == overlayID }) else {
@@ -395,10 +395,12 @@ final class PDFEditorViewModel {
         guard object.type == .signature,
               let sourceAssetID = object.signatureSourceImageAssetID ?? object.imageAssetID,
               let sourceImage = imageAssets[sourceAssetID],
-              let baselineThickness = object.signatureBaselineStrokeThickness,
               let displayAssetID = object.imageAssetID else {
             return
         }
+
+        let clampedWidth = PlacedSignatureStrokeWidth.clamped(strokeWidthPoints)
+        let baselineWidth = object.baselineSignatureStrokeWidthPoints
 
         let inkUIColor: UIColor
         if let customInkRGBA {
@@ -410,8 +412,8 @@ final class PDFEditorViewModel {
         let rendered = SignatureAppearanceEngine.renderDisplayImage(
             source: sourceImage,
             inkColor: inkUIColor,
-            thickness: strokeThickness,
-            baselineThickness: baselineThickness
+            strokeWidthPoints: clampedWidth,
+            baselineStrokeWidthPoints: baselineWidth
         )
 
         let updated = PageObject(
@@ -428,7 +430,7 @@ final class PDFEditorViewModel {
             signatureSourceImageAssetID: object.signatureSourceImageAssetID,
             signatureInkColor: presetInkColor,
             signatureCustomInkRGBA: customInkRGBA,
-            signatureStrokeThickness: strokeThickness,
+            signatureStrokeWidthPoints: clampedWidth,
             signatureBaselineInkColor: object.signatureBaselineInkColor,
             signatureBaselineStrokeThickness: object.signatureBaselineStrokeThickness
         )
@@ -446,14 +448,14 @@ final class PDFEditorViewModel {
         overlayID: UUID,
         pageItemID: UUID,
         inkColor: SignatureInkColor,
-        strokeThickness: SignatureInkThickness
+        strokeWidthPoints: Int
     ) {
         updatePlacedSignatureAppearance(
             overlayID: overlayID,
             pageItemID: pageItemID,
             presetInkColor: inkColor,
             customInkRGBA: nil,
-            strokeThickness: strokeThickness
+            strokeWidthPoints: strokeWidthPoints
         )
     }
 
@@ -461,7 +463,7 @@ final class PDFEditorViewModel {
         overlayID: UUID,
         pageItemID: UUID,
         color: UIColor,
-        strokeThickness: SignatureInkThickness
+        strokeWidthPoints: Int
     ) {
         guard let object = overlayObjects(for: pageItemID).first(where: { $0.id == overlayID }) else {
             return
@@ -472,23 +474,59 @@ final class PDFEditorViewModel {
             pageItemID: pageItemID,
             presetInkColor: object.effectiveSignatureInkColor,
             customInkRGBA: SignatureInkRGBA(uiColor: color),
-            strokeThickness: strokeThickness
+            strokeWidthPoints: strokeWidthPoints
         )
     }
 
     func resetPlacedSignatureAppearance(overlayID: UUID, pageItemID: UUID) {
-        guard let object = overlayObjects(for: pageItemID).first(where: { $0.id == overlayID }),
-              let baselineColor = object.signatureBaselineInkColor,
-              let baselineThickness = object.signatureBaselineStrokeThickness else {
+        guard var objects = pageObjectsByPage[pageItemID],
+              let index = objects.firstIndex(where: { $0.id == overlayID }) else {
             return
         }
 
-        updatePlacedSignatureAppearance(
-            overlayID: overlayID,
-            pageItemID: pageItemID,
-            inkColor: baselineColor,
-            strokeThickness: baselineThickness
+        let object = objects[index]
+        guard object.type == .signature,
+              let baselineColor = object.signatureBaselineInkColor,
+              let sourceAssetID = object.signatureSourceImageAssetID ?? object.imageAssetID,
+              let sourceImage = imageAssets[sourceAssetID],
+              let displayAssetID = object.imageAssetID else {
+            return
+        }
+
+        let baselineWidth = object.baselineSignatureStrokeWidthPoints
+        let rendered = SignatureAppearanceEngine.renderDisplayImage(
+            source: sourceImage,
+            inkColor: baselineColor.uiColor,
+            strokeWidthPoints: baselineWidth,
+            baselineStrokeWidthPoints: baselineWidth
         )
+
+        let updated = PageObject(
+            id: object.id,
+            pageItemID: object.pageItemID,
+            type: object.type,
+            position: object.position,
+            size: object.size,
+            rotation: object.rotation,
+            opacity: object.opacity,
+            zIndex: object.zIndex,
+            imageAssetID: object.imageAssetID,
+            signatureLibrarySourceID: object.signatureLibrarySourceID,
+            signatureSourceImageAssetID: object.signatureSourceImageAssetID,
+            signatureInkColor: nil,
+            signatureCustomInkRGBA: nil,
+            signatureStrokeWidthPoints: nil,
+            signatureBaselineInkColor: object.signatureBaselineInkColor,
+            signatureBaselineStrokeThickness: object.signatureBaselineStrokeThickness
+        )
+
+        guard objects[index] != updated else { return }
+
+        pushUndoSnapshot()
+        imageAssets[displayAssetID] = rendered
+        objects[index] = updated
+        pageObjectsByPage[pageItemID] = objects
+        bumpOverlayRevision(for: pageItemID)
     }
 
     @discardableResult
@@ -612,7 +650,7 @@ final class PDFEditorViewModel {
                 signatureSourceImageAssetID: overlay.signatureSourceImageAssetID,
                 signatureInkColor: overlay.signatureInkColor,
                 signatureCustomInkRGBA: overlay.signatureCustomInkRGBA,
-                signatureStrokeThickness: overlay.signatureStrokeThickness,
+                signatureStrokeWidthPoints: overlay.signatureStrokeWidthPoints,
                 signatureBaselineInkColor: overlay.signatureBaselineInkColor,
                 signatureBaselineStrokeThickness: overlay.signatureBaselineStrokeThickness
             )

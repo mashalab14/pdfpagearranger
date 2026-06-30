@@ -5,11 +5,29 @@ enum SignatureAppearanceEngine {
     static func renderDisplayImage(
         source: UIImage,
         inkColor: UIColor,
+        strokeWidthPoints: Int,
+        baselineStrokeWidthPoints: Int
+    ) -> UIImage {
+        let recolored = recolor(source, to: inkColor)
+        return adjustThickness(
+            recolored,
+            from: CGFloat(baselineStrokeWidthPoints),
+            to: CGFloat(PlacedSignatureStrokeWidth.clamped(strokeWidthPoints))
+        )
+    }
+
+    static func renderDisplayImage(
+        source: UIImage,
+        inkColor: UIColor,
         thickness: SignatureInkThickness,
         baselineThickness: SignatureInkThickness
     ) -> UIImage {
-        let recolored = recolor(source, to: inkColor)
-        return adjustThickness(recolored, from: baselineThickness, to: thickness)
+        renderDisplayImage(
+            source: source,
+            inkColor: inkColor,
+            strokeWidthPoints: PlacedSignatureStrokeWidth.points(for: thickness),
+            baselineStrokeWidthPoints: PlacedSignatureStrokeWidth.points(for: baselineThickness)
+        )
     }
 
     static func renderDisplayImage(
@@ -82,10 +100,10 @@ enum SignatureAppearanceEngine {
 
     static func adjustThickness(
         _ image: UIImage,
-        from baseline: SignatureInkThickness,
-        to target: SignatureInkThickness
+        from baselineWidth: CGFloat,
+        to targetWidth: CGFloat
     ) -> UIImage {
-        let delta = target.strokeWidth - baseline.strokeWidth
+        let delta = targetWidth - baselineWidth
         guard abs(delta) > 0.01 else { return image }
         guard let ciImage = CIImage(image: image) else { return image }
 
@@ -100,5 +118,17 @@ enum SignatureAppearanceEngine {
         }
 
         return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+    }
+
+    static func adjustThickness(
+        _ image: UIImage,
+        from baseline: SignatureInkThickness,
+        to target: SignatureInkThickness
+    ) -> UIImage {
+        adjustThickness(
+            image,
+            from: CGFloat(PlacedSignatureStrokeWidth.points(for: baseline)),
+            to: CGFloat(PlacedSignatureStrokeWidth.points(for: target))
+        )
     }
 }

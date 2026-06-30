@@ -49,15 +49,18 @@ final class SignatureEditPopoverEngineRegressionTests: XCTestCase {
 }
 
 final class PlacedSignatureEditPopoverUIRegressionTests: XCTestCase {
-    func testPopoverUsesSingleRowMarkupControls() throws {
+    func testPopoverUsesTwoRowMarkupControls() throws {
         let popover = try projectSource(named: "PlacedSignatureEditPopover.swift", subdirectory: "Views")
         XCTAssertTrue(popover.contains("placedSignatureEditPopover"))
+        XCTAssertTrue(popover.contains("VStack(spacing: 8)"))
         XCTAssertTrue(popover.contains("SignatureInkColor.presetDisplayOrder"))
         XCTAssertTrue(popover.contains("paintpalette.fill"))
         XCTAssertTrue(popover.contains("SignatureUIColorPicker"))
         XCTAssertTrue(popover.contains("signatureEditThicknessMinus"))
         XCTAssertTrue(popover.contains("signatureEditThicknessPlus"))
-        XCTAssertTrue(popover.contains("pointsLabel"))
+        XCTAssertTrue(popover.contains("PlacedSignatureStrokeWidth.label"))
+        XCTAssertTrue(popover.contains("PlacedSignatureStrokeWidth.decreased"))
+        XCTAssertTrue(popover.contains("PlacedSignatureStrokeWidth.increased"))
         XCTAssertFalse(popover.contains("Done"))
         XCTAssertFalse(popover.contains("navigationTitle"))
         XCTAssertFalse(popover.contains("presentationDetents"))

@@ -72,7 +72,7 @@ final class PlacedSignatureAppearanceRegressionTests: XCTestCase {
             overlayID: overlayID,
             pageItemID: page.id,
             inkColor: .red,
-            strokeThickness: .thick
+            strokeWidthPoints: 6
         )
 
         let overlay = try XCTUnwrap(viewModel.overlayObjects(for: page.id).first(where: { $0.id == overlayID }))
@@ -98,14 +98,15 @@ final class PlacedSignatureAppearanceRegressionTests: XCTestCase {
             overlayID: overlayID,
             pageItemID: page.id,
             inkColor: .purple,
-            strokeThickness: .thick
+            strokeWidthPoints: 6
         )
         viewModel.resetPlacedSignatureAppearance(overlayID: overlayID, pageItemID: page.id)
 
         let overlay = try XCTUnwrap(viewModel.overlayObjects(for: page.id).first(where: { $0.id == overlayID }))
         XCTAssertFalse(overlay.signatureAppearanceDiffersFromBaseline)
         XCTAssertEqual(overlay.effectiveSignatureInkColor, .black)
-        XCTAssertEqual(overlay.effectiveSignatureStrokeThickness, .medium)
+        XCTAssertEqual(overlay.effectiveSignatureStrokeWidthPoints, 3)
+        XCTAssertNil(overlay.signatureStrokeWidthPoints)
     }
 
     func testUndoWorksAfterAppearanceChange() throws {
@@ -126,13 +127,13 @@ final class PlacedSignatureAppearanceRegressionTests: XCTestCase {
             overlayID: overlayID,
             pageItemID: page.id,
             inkColor: .green,
-            strokeThickness: .thick
+            strokeWidthPoints: 6
         )
         viewModel.undo()
 
         let restored = try XCTUnwrap(viewModel.overlayObjects(for: page.id).first(where: { $0.id == overlayID }))
         XCTAssertEqual(restored.effectiveSignatureInkColor, .black)
-        XCTAssertEqual(restored.effectiveSignatureStrokeThickness, .medium)
+        XCTAssertEqual(restored.effectiveSignatureStrokeWidthPoints, 3)
     }
 
     func testSaveToLibraryCreatesNewAssetWithoutMutatingPlacedOverlay() throws {
@@ -154,7 +155,7 @@ final class PlacedSignatureAppearanceRegressionTests: XCTestCase {
             overlayID: overlayID,
             pageItemID: page.id,
             inkColor: .red,
-            strokeThickness: .thick
+            strokeWidthPoints: 6
         )
 
         let beforeCount = store.listSignatures().count

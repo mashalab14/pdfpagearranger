@@ -27,6 +27,7 @@ struct PageObject: Identifiable, Equatable, Codable {
     var signatureInkColor: SignatureInkColor?
     var signatureCustomInkRGBA: SignatureInkRGBA?
     var signatureStrokeThickness: SignatureInkThickness?
+    var signatureStrokeWidthPoints: Int?
     var signatureBaselineInkColor: SignatureInkColor?
     var signatureBaselineStrokeThickness: SignatureInkThickness?
 
@@ -46,7 +47,22 @@ struct PageObject: Identifiable, Equatable, Codable {
     }
 
     var effectiveSignatureStrokeThickness: SignatureInkThickness {
-        signatureStrokeThickness ?? signatureBaselineStrokeThickness ?? .defaultThickness
+        PlacedSignatureStrokeWidth.libraryThickness(for: effectiveSignatureStrokeWidthPoints)
+    }
+
+    var effectiveSignatureStrokeWidthPoints: Int {
+        if let points = signatureStrokeWidthPoints {
+            return PlacedSignatureStrokeWidth.clamped(points)
+        }
+        return PlacedSignatureStrokeWidth.points(
+            for: signatureBaselineStrokeThickness ?? .defaultThickness
+        )
+    }
+
+    var baselineSignatureStrokeWidthPoints: Int {
+        PlacedSignatureStrokeWidth.points(
+            for: signatureBaselineStrokeThickness ?? .defaultThickness
+        )
     }
 
     var signatureAppearanceDiffersFromBaseline: Bool {
@@ -67,8 +83,8 @@ struct PageObject: Identifiable, Equatable, Codable {
     }
 
     private var thicknessDiffersFromBaseline: Bool {
-        guard let baselineThickness = signatureBaselineStrokeThickness else { return false }
-        return effectiveSignatureStrokeThickness != baselineThickness
+        guard signatureBaselineStrokeThickness != nil else { return false }
+        return effectiveSignatureStrokeWidthPoints != baselineSignatureStrokeWidthPoints
     }
 
     var canSavePlacedSignatureToLibrary: Bool {
@@ -90,6 +106,7 @@ struct PageObject: Identifiable, Equatable, Codable {
         signatureInkColor: SignatureInkColor? = nil,
         signatureCustomInkRGBA: SignatureInkRGBA? = nil,
         signatureStrokeThickness: SignatureInkThickness? = nil,
+        signatureStrokeWidthPoints: Int? = nil,
         signatureBaselineInkColor: SignatureInkColor? = nil,
         signatureBaselineStrokeThickness: SignatureInkThickness? = nil
     ) {
@@ -107,6 +124,7 @@ struct PageObject: Identifiable, Equatable, Codable {
         self.signatureInkColor = signatureInkColor
         self.signatureCustomInkRGBA = signatureCustomInkRGBA
         self.signatureStrokeThickness = signatureStrokeThickness
+        self.signatureStrokeWidthPoints = signatureStrokeWidthPoints
         self.signatureBaselineInkColor = signatureBaselineInkColor
         self.signatureBaselineStrokeThickness = signatureBaselineStrokeThickness
     }

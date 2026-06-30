@@ -191,20 +191,20 @@ struct PageEditorView: View {
                 onPDFTextMenuCopy: copySelectedPDFText,
                 signatureEditOverlayID: $signatureEditOverlayID,
                 pageItemID: pageItem.id,
-                onUpdateSignatureAppearance: { overlayID, color, thickness in
+                onUpdateSignatureAppearance: { overlayID, color, widthPoints in
                     viewModel.updatePlacedSignatureAppearance(
                         overlayID: overlayID,
                         pageItemID: pageItem.id,
                         inkColor: color,
-                        strokeThickness: thickness
+                        strokeWidthPoints: widthPoints
                     )
                 },
-                onUpdateSignatureCustomColor: { overlayID, uiColor, thickness in
+                onUpdateSignatureCustomColor: { overlayID, uiColor, widthPoints in
                     viewModel.updatePlacedSignatureCustomColor(
                         overlayID: overlayID,
                         pageItemID: pageItem.id,
                         color: uiColor,
-                        strokeThickness: thickness
+                        strokeWidthPoints: widthPoints
                     )
                 },
                 onResetSignatureAppearance: { overlayID in

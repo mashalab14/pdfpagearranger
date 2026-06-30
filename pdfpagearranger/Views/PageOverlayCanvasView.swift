@@ -22,8 +22,8 @@ struct PageOverlayCanvasView: View {
     let onPDFTextMenuCopy: (String) -> Void
     @Binding var signatureEditOverlayID: UUID?
     let pageItemID: UUID
-    let onUpdateSignatureAppearance: (UUID, SignatureInkColor, SignatureInkThickness) -> Void
-    let onUpdateSignatureCustomColor: (UUID, UIColor, SignatureInkThickness) -> Void
+    let onUpdateSignatureAppearance: (UUID, SignatureInkColor, Int) -> Void
+    let onUpdateSignatureCustomColor: (UUID, UIColor, Int) -> Void
     let onResetSignatureAppearance: (UUID) -> Void
     let onSaveSignatureToLibrary: (UUID) -> Void
     let pageTransitionEdge: Edge
@@ -272,49 +272,53 @@ struct PageOverlayCanvasView: View {
                             onUpdateSignatureAppearance(
                                 editingSignature.id,
                                 color,
-                                editingSignature.effectiveSignatureStrokeThickness
+                                editingSignature.effectiveSignatureStrokeWidthPoints
                             )
                         },
                         onSelectCustomColor: { uiColor in
                             onUpdateSignatureCustomColor(
                                 editingSignature.id,
                                 uiColor,
-                                editingSignature.effectiveSignatureStrokeThickness
+                                editingSignature.effectiveSignatureStrokeWidthPoints
                             )
                         },
                         onDecreaseThickness: {
-                            guard let stepped = editingSignature.effectiveSignatureStrokeThickness.steppedDown() else {
+                            guard let decreased = PlacedSignatureStrokeWidth.decreased(
+                                from: editingSignature.effectiveSignatureStrokeWidthPoints
+                            ) else {
                                 return
                             }
                             if let custom = editingSignature.signatureCustomInkRGBA {
                                 onUpdateSignatureCustomColor(
                                     editingSignature.id,
                                     custom.uiColor,
-                                    stepped
+                                    decreased
                                 )
                             } else {
                                 onUpdateSignatureAppearance(
                                     editingSignature.id,
                                     editingSignature.effectiveSignatureInkColor,
-                                    stepped
+                                    decreased
                                 )
                             }
                         },
                         onIncreaseThickness: {
-                            guard let stepped = editingSignature.effectiveSignatureStrokeThickness.steppedUp() else {
+                            guard let increased = PlacedSignatureStrokeWidth.increased(
+                                from: editingSignature.effectiveSignatureStrokeWidthPoints
+                            ) else {
                                 return
                             }
                             if let custom = editingSignature.signatureCustomInkRGBA {
                                 onUpdateSignatureCustomColor(
                                     editingSignature.id,
                                     custom.uiColor,
-                                    stepped
+                                    increased
                                 )
                             } else {
                                 onUpdateSignatureAppearance(
                                     editingSignature.id,
                                     editingSignature.effectiveSignatureInkColor,
-                                    stepped
+                                    increased
                                 )
                             }
                         }

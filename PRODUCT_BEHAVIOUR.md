@@ -1051,13 +1051,17 @@ The menu is positioned above the signature, clamped within the visible page area
 
 Editing affects **only the selected placement** on the current page. The saved library signature is never modified in place. The document stays in focus — there is **no bottom sheet**, modal, or dimmed background.
 
-**Floating popover** (single row, anchored above or below the signature depending on available space):
+**Floating popover** (two compact rows, anchored above or below the signature depending on available space):
+
+| Row | Controls |
+|-----|----------|
+| **Row 1** | Preset colors: Black, Gray, Blue, Red, Green, Purple — live recolor |
+| **Row 2** | Advanced color (palette icon), thickness −, integer **pt** value, thickness + |
 
 | Control | Behaviour |
 |---------|-----------|
-| **Preset colors** | Black, Gray, Blue, Red, Green, Purple — live recolor |
 | **Advanced color** (palette icon) | Presents Apple's native **UIColorPickerViewController**; live recolor with alpha preserved |
-| **Thickness − / value / +** | Steps through supported thickness values (e.g. `2 pt`); live update |
+| **Thickness − / value / +** | Adjusts stroke width in **whole points** from **2 pt** to **30 pt** (±1 pt per tap); live update |
 
 Changes apply **immediately** — no Apply or Done button. Tap outside, select another overlay, delete the signature, or navigate away to dismiss.
 
