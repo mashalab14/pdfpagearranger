@@ -4,11 +4,17 @@ import SwiftUI
 /// Shared visual language for floating contextual controls (signatures, highlights, comments, etc.).
 enum ContextualControlMetrics {
     static let glassBorderWidth: CGFloat = 0.5
-    static let glassHighlightOpacity: CGFloat = 0.28
-    static let glassHighlightFadeOpacity: CGFloat = 0.06
-    static let glassShadowOpacity: CGFloat = 0.08
-    static let glassShadowRadius: CGFloat = 4
-    static let glassShadowYOffset: CGFloat = 2
+    static let glassHighlightOpacity: CGFloat = 0.32
+    static let glassHighlightFadeOpacity: CGFloat = 0.08
+
+    static let toolbarShadowOpacity: CGFloat = 0.18
+    static let toolbarShadowRadius: CGFloat = 12
+    static let toolbarShadowYOffset: CGFloat = 6
+
+    static let popoverShadowOpacity: CGFloat = 0.15
+    static let popoverShadowRadius: CGFloat = 10
+    static let popoverShadowYOffset: CGFloat = 5
+    static let popoverCornerRadius: CGFloat = 14
 
     static let minimumTapTarget: CGFloat = 52
     static let presetColorDiameter: CGFloat = 26
@@ -31,12 +37,18 @@ enum ContextualControlMetrics {
         toolbarVisibleHeight + toolbarVerticalPadding * 2
     }
 
-    /// Capsule ends use half the visible shell height.
-    static var glassCornerRadius: CGFloat {
+    /// Toolbar capsule ends use half the visible shell height.
+    static var toolbarCapsuleRadius: CGFloat {
         toolbarCapsuleHeight / 2
     }
 
-    static let cornerRadius: CGFloat = glassCornerRadius
+    static var glassCornerRadius: CGFloat {
+        toolbarCapsuleRadius
+    }
+
+    static var cornerRadius: CGFloat {
+        popoverCornerRadius
+    }
 
     static var toolbarTapOutsetHorizontal: CGFloat {
         max(0, (minimumTapTarget - toolbarVisibleCellWidth) / 2)

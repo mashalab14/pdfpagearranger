@@ -57,7 +57,7 @@ final class PlacedSignatureEditPopoverUIRegressionTests: XCTestCase {
         XCTAssertTrue(popover.contains("thicknessRowMinusColumns"))
         XCTAssertTrue(popover.contains("thicknessRowLabelColumns"))
         XCTAssertTrue(popover.contains("thicknessRowPlusColumns"))
-        XCTAssertTrue(popover.contains("contextualGlassContainer("))
+        XCTAssertTrue(popover.contains(".roundedRectangle(cornerRadius: ContextualControlMetrics.popoverCornerRadius)"))
         XCTAssertTrue(popover.contains("SignatureInkColor.presetDisplayOrder"))
         XCTAssertTrue(popover.contains("paintpalette.fill"))
         XCTAssertTrue(popover.contains("SignatureUIColorPicker"))

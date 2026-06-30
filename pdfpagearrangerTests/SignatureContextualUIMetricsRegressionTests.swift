@@ -21,10 +21,18 @@ final class ContextualControlMetricsRegressionTests: XCTestCase {
 
     func testToolbarCapsuleRadiusMatchesHalfHeight() {
         XCTAssertEqual(
-            ContextualControlMetrics.glassCornerRadius,
+            ContextualControlMetrics.toolbarCapsuleRadius,
             ContextualControlMetrics.toolbarCapsuleHeight / 2
         )
         XCTAssertEqual(ContextualControlMetrics.toolbarCapsuleHeight, 40)
+    }
+
+    func testPopoverUsesDistinctRoundedRectangleRadius() {
+        XCTAssertEqual(ContextualControlMetrics.popoverCornerRadius, 14)
+        XCTAssertLessThan(
+            ContextualControlMetrics.popoverCornerRadius,
+            ContextualControlMetrics.toolbarCapsuleRadius
+        )
     }
 
     func testPopoverSizeMatchesMetrics() {
@@ -53,9 +61,11 @@ final class ContextualControlMetricsRegressionTests: XCTestCase {
         )
     }
 
-    func testSharedGlassUsesSoftFloatingShadow() {
-        XCTAssertLessThanOrEqual(ContextualControlMetrics.glassShadowOpacity, 0.10)
-        XCTAssertLessThanOrEqual(ContextualControlMetrics.glassShadowRadius, 6)
+    func testSharedGlassUsesElevatedFloatingShadow() {
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.toolbarShadowOpacity, 0.14)
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.toolbarShadowRadius, 10)
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.popoverShadowOpacity, 0.12)
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.popoverShadowRadius, 8)
     }
 
     func testToolbarTapOutsetsPreserveCompactLayout() {

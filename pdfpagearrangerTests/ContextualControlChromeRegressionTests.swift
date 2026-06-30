@@ -9,17 +9,20 @@ final class ContextualGlassContainerRegressionTests: XCTestCase {
         XCTAssertFalse(menu.contains("Color.white.opacity"))
     }
 
-    func testSharedGlassContainerUsedBySignatureEditPopover() throws {
+    func testSignatureEditPopoverUsesRoundedRectangleGlass() throws {
         let popover = try projectSource(named: "PlacedSignatureEditPopover.swift", subdirectory: "Views")
         XCTAssertTrue(popover.contains("contextualGlassContainer("))
+        XCTAssertTrue(popover.contains(".roundedRectangle(cornerRadius: ContextualControlMetrics.popoverCornerRadius)"))
         XCTAssertTrue(popover.contains("contextualExpandedTapTarget"))
         XCTAssertFalse(popover.contains(".background(.regularMaterial"))
     }
 
-    func testContextualGlassContainerUsesCapsuleGlass() throws {
+    func testContextualGlassContainerSupportsCapsuleAndRoundedRectangle() throws {
         let container = try projectSource(named: "ContextualGlassContainer.swift", subdirectory: "Views")
+        XCTAssertTrue(container.contains("case capsule"))
+        XCTAssertTrue(container.contains("case roundedRectangle"))
         XCTAssertTrue(container.contains("glassEffect(.regular, in: .capsule)"))
-        XCTAssertTrue(container.contains("Capsule()"))
+        XCTAssertTrue(container.contains(".rect(cornerRadius: cornerRadius, style: .continuous)"))
         XCTAssertTrue(container.contains("contextualExpandedTapTarget"))
     }
 
@@ -29,6 +32,7 @@ final class ContextualGlassContainerRegressionTests: XCTestCase {
         XCTAssertTrue(menu.contains("toolbarVisibleHeight"))
         XCTAssertTrue(menu.contains("toolbarSymbolFont"))
         XCTAssertTrue(metrics.contains("weight: .bold"))
+        XCTAssertTrue(metrics.contains("toolbarShadowOpacity"))
     }
 
     private func projectSource(named fileName: String, subdirectory: String) throws -> String {
