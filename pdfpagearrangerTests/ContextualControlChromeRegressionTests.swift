@@ -21,12 +21,20 @@ final class ContextualGlassContainerRegressionTests: XCTestCase {
     func testUnifiedFloatingPanelUsesClearGlassAndRoundedRectangle() throws {
         let container = try projectSource(named: "ContextualGlassContainer.swift", subdirectory: "Views")
         let metrics = try projectSource(named: "ContextualControlMetrics.swift", subdirectory: "Models")
-        XCTAssertTrue(container.contains("floatingPanelCornerRadius"))
+        XCTAssertTrue(container.contains("ZStack"))
+        XCTAssertTrue(container.contains("floatingPanelBackground"))
         XCTAssertTrue(container.contains("glassEffect("))
         XCTAssertTrue(container.contains(".rect(cornerRadius: cornerRadius, style: .continuous)"))
         XCTAssertTrue(metrics.contains("floatingPanelGlass: Glass = .clear"))
         XCTAssertFalse(container.contains("Capsule()"))
         XCTAssertFalse(container.contains("glassEffect(.regular"))
+        XCTAssertFalse(container.contains(".background {"))
+    }
+
+    func testCanvasDoesNotWrapContextualControlsInGlassEffectContainer() throws {
+        let canvas = try projectSource(named: "PageOverlayCanvasView.swift", subdirectory: "Views")
+        XCTAssertFalse(canvas.contains("GlassEffectContainer"))
+        XCTAssertFalse(canvas.contains("glassEffectID"))
     }
 
     func testToolbarUsesCompactVisibleHeightAndHeavyIcons() throws {
