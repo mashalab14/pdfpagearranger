@@ -9,10 +9,10 @@ struct SignatureOverlayContextMenu: View {
     let onReset: () -> Void
     let onSaveToLibrary: () -> Void
 
-    private let cellSize = SignatureContextualUIMetrics.minimumTapTarget
+    private let cellSize = ContextualControlMetrics.minimumTapTarget
 
     var body: some View {
-        HStack(spacing: SignatureContextualUIMetrics.toolbarCellSpacing) {
+        HStack(spacing: ContextualControlMetrics.toolbarCellSpacing) {
             toolbarButton(
                 systemName: "pencil",
                 foregroundStyle: Color.primary,
@@ -51,7 +51,7 @@ struct SignatureOverlayContextMenu: View {
                 Button("Send Backward") {}.disabled(true)
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.subheadline.weight(.semibold))
+                    .font(ContextualControlMetrics.symbolFont.weight(ContextualControlMetrics.symbolWeight))
                     .foregroundStyle(Color.primary)
                     .frame(width: cellSize, height: cellSize)
                     .contentShape(Rectangle())
@@ -61,11 +61,7 @@ struct SignatureOverlayContextMenu: View {
             .accessibilityLabel("More Signature Actions")
             .accessibilityIdentifier("signatureMenuMore")
         }
-        .font(.subheadline)
-        .padding(.horizontal, SignatureContextualUIMetrics.toolbarHorizontalPadding)
-        .padding(.vertical, 4)
-        .background(Color.white.opacity(0.75), in: Capsule())
-        .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
+        .contextualControlChrome()
         .position(anchorPoint)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("signatureOverlayContextMenu")
@@ -74,7 +70,7 @@ struct SignatureOverlayContextMenu: View {
     private var divider: some View {
         Rectangle()
             .fill(Color.secondary.opacity(0.2))
-            .frame(width: 1, height: 28)
+            .frame(width: 1, height: ContextualControlMetrics.toolbarDividerHeight)
     }
 
     private func toolbarButton(
@@ -86,7 +82,7 @@ struct SignatureOverlayContextMenu: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.subheadline.weight(.semibold))
+                .font(ContextualControlMetrics.symbolFont.weight(ContextualControlMetrics.symbolWeight))
                 .foregroundStyle(foregroundStyle)
                 .frame(width: cellSize, height: cellSize)
                 .contentShape(Rectangle())

@@ -12,7 +12,7 @@ struct PlacedSignatureEditPopover: View {
     @State private var showColorPicker = false
     @State private var pickerColor: UIColor
 
-    private let tapTarget = SignatureContextualUIMetrics.minimumTapTarget
+    private let tapTarget = ContextualControlMetrics.minimumTapTarget
 
     init(
         overlay: PageObject,
@@ -39,45 +39,52 @@ struct PlacedSignatureEditPopover: View {
         overlay.signatureCustomInkRGBA != nil
     }
 
+    private var columnUnit: CGFloat {
+        ContextualControlMetrics.thicknessRowColumnUnit
+    }
+
     var body: some View {
-        VStack(spacing: SignatureContextualUIMetrics.popoverRowSpacing) {
-            HStack(spacing: SignatureContextualUIMetrics.popoverControlSpacing) {
+        VStack(spacing: ContextualControlMetrics.popoverRowSpacing) {
+            HStack(spacing: ContextualControlMetrics.popoverColorRowSpacing) {
                 ForEach(SignatureInkColor.presetDisplayOrder) { color in
                     presetColorButton(color)
                 }
             }
 
-            HStack(spacing: SignatureContextualUIMetrics.popoverControlSpacing) {
-                paletteButton
-                thicknessButton(
-                    systemName: "minus",
-                    accessibilityLabel: "Decrease Thickness",
-                    accessibilityIdentifier: "signatureEditThicknessMinus",
-                    isEnabled: PlacedSignatureStrokeWidth.decreased(from: strokeWidthPoints) != nil,
-                    action: onDecreaseThickness
-                )
-
-                Text(PlacedSignatureStrokeWidth.label(for: strokeWidthPoints))
-                    .font(.caption.monospacedDigit().weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: SignatureContextualUIMetrics.thicknessLabelMinWidth)
-                    .allowsHitTesting(false)
-                    .accessibilityIdentifier("signatureEditThicknessValue")
-
-                thicknessButton(
-                    systemName: "plus",
-                    accessibilityLabel: "Increase Thickness",
-                    accessibilityIdentifier: "signatureEditThicknessPlus",
-                    isEnabled: PlacedSignatureStrokeWidth.increased(from: strokeWidthPoints) != nil,
-                    action: onIncreaseThickness
-                )
+            HStack(spacing: 0) {
+                columnSlot(width: columnUnit * ContextualControlMetrics.thicknessRowPaletteColumns) {
+                    paletteButton
+                }
+                columnSlot(width: columnUnit * ContextualControlMetrics.thicknessRowMinusColumns) {
+                    thicknessButton(
+                        systemName: "minus",
+                        accessibilityLabel: "Decrease Thickness",
+                        accessibilityIdentifier: "signatureEditThicknessMinus",
+                        isEnabled: PlacedSignatureStrokeWidth.decreased(from: strokeWidthPoints) != nil,
+                        action: onDecreaseThickness
+                    )
+                }
+                columnSlot(width: columnUnit * ContextualControlMetrics.thicknessRowLabelColumns) {
+                    Text(PlacedSignatureStrokeWidth.label(for: strokeWidthPoints))
+                        .font(.caption.monospacedDigit().weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .allowsHitTesting(false)
+                        .accessibilityIdentifier("signatureEditThicknessValue")
+                }
+                columnSlot(width: columnUnit * ContextualControlMetrics.thicknessRowPlusColumns) {
+                    thicknessButton(
+                        systemName: "plus",
+                        accessibilityLabel: "Increase Thickness",
+                        accessibilityIdentifier: "signatureEditThicknessPlus",
+                        isEnabled: PlacedSignatureStrokeWidth.increased(from: strokeWidthPoints) != nil,
+                        action: onIncreaseThickness
+                    )
+                }
             }
+            .frame(width: ContextualControlMetrics.popoverContentWidth)
+            .padding(.vertical, ContextualControlMetrics.thicknessRowVerticalInset)
         }
-        .font(.subheadline)
-        .padding(.horizontal, SignatureContextualUIMetrics.popoverHorizontalPadding)
-        .padding(.vertical, SignatureContextualUIMetrics.popoverVerticalPadding)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .shadow(color: .black.opacity(0.14), radius: 8, y: 3)
+        .contextualControlChrome()
         .position(anchorPoint)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("placedSignatureEditPopover")
@@ -91,15 +98,28 @@ struct PlacedSignatureEditPopover: View {
         }
     }
 
+    private func columnSlot<Content: View>(
+        width: CGFloat,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        ZStack {
+            content()
+        }
+        .frame(width: width, height: tapTarget)
+    }
+
     private var paletteButton: some View {
         Button {
             pickerColor = overlay.effectiveSignatureInkUIColor
             showColorPicker = true
         } label: {
             Image(systemName: "paintpalette.fill")
-                .font(.subheadline.weight(.semibold))
+                .font(ContextualControlMetrics.symbolFont.weight(ContextualControlMetrics.symbolWeight))
                 .foregroundStyle(usesCustomColor ? Color.accentColor : Color.primary)
-                .frame(width: SignatureContextualUIMetrics.presetColorDiameter, height: SignatureContextualUIMetrics.presetColorDiameter)
+                .frame(
+                    width: ContextualControlMetrics.presetColorDiameter,
+                    height: ContextualControlMetrics.presetColorDiameter
+                )
                 .background(
                     Circle()
                         .strokeBorder(
@@ -125,7 +145,7 @@ struct PlacedSignatureEditPopover: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.subheadline.weight(.semibold))
+                .font(ContextualControlMetrics.symbolFont.weight(ContextualControlMetrics.symbolWeight))
                 .frame(width: tapTarget, height: tapTarget)
                 .contentShape(Rectangle())
         }
@@ -145,16 +165,16 @@ struct PlacedSignatureEditPopover: View {
             Circle()
                 .fill(color.displayColor)
                 .frame(
-                    width: SignatureContextualUIMetrics.presetColorDiameter,
-                    height: SignatureContextualUIMetrics.presetColorDiameter
+                    width: ContextualControlMetrics.presetColorDiameter,
+                    height: ContextualControlMetrics.presetColorDiameter
                 )
                 .overlay {
                     if isSelected {
                         Circle()
                             .strokeBorder(Color.accentColor, lineWidth: 2)
                             .frame(
-                                width: SignatureContextualUIMetrics.selectedColorRingDiameter,
-                                height: SignatureContextualUIMetrics.selectedColorRingDiameter
+                                width: ContextualControlMetrics.selectedColorRingDiameter,
+                                height: ContextualControlMetrics.selectedColorRingDiameter
                             )
                     }
                 }

@@ -1,33 +1,57 @@
 import XCTest
 @testable import pdfpagearranger
 
-final class SignatureContextualUIMetricsRegressionTests: XCTestCase {
+final class ContextualControlMetricsRegressionTests: XCTestCase {
     func testMinimumTapTargetIsFiftyTwoPoints() {
-        XCTAssertEqual(SignatureContextualUIMetrics.minimumTapTarget, 52)
+        XCTAssertEqual(ContextualControlMetrics.minimumTapTarget, 52)
     }
 
     func testPresetColorDiameterStaysCompact() {
-        XCTAssertGreaterThanOrEqual(SignatureContextualUIMetrics.presetColorDiameter, 24)
-        XCTAssertLessThanOrEqual(SignatureContextualUIMetrics.presetColorDiameter, 28)
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.presetColorDiameter, 24)
+        XCTAssertLessThanOrEqual(ContextualControlMetrics.presetColorDiameter, 28)
     }
 
     func testToolbarWidthFitsThreeEqualCells() {
-        let expected = SignatureContextualUIMetrics.minimumTapTarget * 3
-            + SignatureContextualUIMetrics.toolbarCellSpacing * 2
+        let expected = ContextualControlMetrics.horizontalPadding * 2
+            + ContextualControlMetrics.minimumTapTarget * 3
+            + ContextualControlMetrics.toolbarCellSpacing * 2
             + 2
-            + SignatureContextualUIMetrics.toolbarHorizontalPadding * 2
-        XCTAssertEqual(SignatureContextualUIMetrics.signatureToolbarWidth, expected)
+        XCTAssertEqual(ContextualControlMetrics.signatureToolbarWidth, expected)
         XCTAssertEqual(SignatureOverlayMenuEngine.menuWidth, expected)
     }
 
     func testPopoverSizeMatchesMetrics() {
         XCTAssertEqual(
             SignatureEditPopoverEngine.popoverSize.width,
-            SignatureContextualUIMetrics.popoverWidth
+            ContextualControlMetrics.popoverWidth
         )
         XCTAssertEqual(
             SignatureEditPopoverEngine.popoverSize.height,
-            SignatureContextualUIMetrics.popoverHeight
+            ContextualControlMetrics.popoverHeight
         )
     }
+
+    func testThicknessRowUsesTenColumnGrid() {
+        XCTAssertEqual(
+            ContextualControlMetrics.thicknessRowPaletteColumns
+                + ContextualControlMetrics.thicknessRowMinusColumns
+                + ContextualControlMetrics.thicknessRowLabelColumns
+                + ContextualControlMetrics.thicknessRowPlusColumns,
+            ContextualControlMetrics.thicknessRowColumnCount
+        )
+        XCTAssertEqual(
+            ContextualControlMetrics.thicknessRowColumnUnit * ContextualControlMetrics.thicknessRowColumnCount,
+            ContextualControlMetrics.popoverContentWidth,
+            accuracy: 0.001
+        )
+    }
+
+    func testSharedChromeUsesElevatedShadow() {
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.shadowOpacity, 0.20)
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.shadowRadius, 10)
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.shadowYOffset, 4)
+    }
 }
+
+/// Preserves suite name used by existing regression filters.
+typealias SignatureContextualUIMetricsRegressionTests = ContextualControlMetricsRegressionTests

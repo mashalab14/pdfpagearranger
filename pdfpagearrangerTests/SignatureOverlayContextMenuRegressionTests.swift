@@ -45,7 +45,7 @@ final class SignatureOverlayContextMenuUIRegressionTests: XCTestCase {
         XCTAssertTrue(canvas.contains("signatureEditOverlayID"))
     }
 
-    func testSignatureMenuUsesCapsuleToolbarStyling() throws {
+    func testSignatureMenuUsesSharedContextualChrome() throws {
         let menu = try projectSource(named: "SignatureOverlayContextMenu.swift", subdirectory: "Views")
         XCTAssertTrue(menu.contains("pencil"))
         XCTAssertTrue(menu.contains("trash"))
@@ -54,13 +54,13 @@ final class SignatureOverlayContextMenuUIRegressionTests: XCTestCase {
         XCTAssertTrue(menu.contains("Delete Signature"))
         XCTAssertTrue(menu.contains("More Signature Actions"))
         XCTAssertTrue(menu.contains("signatureOverlayContextMenu"))
-        XCTAssertTrue(menu.contains("Color.white.opacity(0.75)"))
-        XCTAssertTrue(menu.contains("Capsule()"))
+        XCTAssertTrue(menu.contains("contextualControlChrome()"))
         XCTAssertTrue(menu.contains("foregroundStyle: Color.red"))
         XCTAssertTrue(menu.contains("foregroundStyle: Color.primary"))
-        XCTAssertTrue(menu.contains("SignatureContextualUIMetrics.minimumTapTarget"))
+        XCTAssertTrue(menu.contains("ContextualControlMetrics.minimumTapTarget"))
+        XCTAssertTrue(menu.contains("ContextualControlMetrics.symbolFont.weight(ContextualControlMetrics.symbolWeight)"))
         XCTAssertTrue(menu.contains("contentShape(Rectangle())"))
-        XCTAssertFalse(menu.contains("regularMaterial"))
+        XCTAssertFalse(menu.contains("Capsule()"))
     }
 
     func testSignatureOverlaysHideInlineDeleteControl() throws {
