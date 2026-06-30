@@ -22,9 +22,10 @@ struct PageEditorView: View {
     @State private var pageSelection: PageModeSelection = .none
     @State private var pdfSelectionClearToken = UUID()
     @State private var placementAnimatingOverlayIDs: Set<UUID> = []
-    @State private var pendingSignatureImage: UIImage?
+    @State private var pendingSignaturePlacement: SignaturePlacementContext?
     @State private var pageTransitionEdge: Edge = .trailing
     @State private var lastPageNavigationUptime: TimeInterval = 0
+    @State private var editingSignatureOverlayID: UUID?
 
     private let signatureLibraryStore: SignatureLibraryStore
 
@@ -62,7 +63,7 @@ struct PageEditorView: View {
     }
 
     private var signaturePlacementActive: Bool {
-        pendingSignatureImage != nil
+        pendingSignaturePlacement != nil
     }
 
     var body: some View {
@@ -131,8 +132,28 @@ struct PageEditorView: View {
             SignatureLibraryView(
                 store: signatureLibraryStore,
                 showDefaultGuidanceBanner: signatureLibraryShowsDefaultGuidance
-            ) { image in
-                beginSignaturePlacement(image: image)
+            ) { context in
+                beginSignaturePlacement(context: context)
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { editingSignatureOverlayID != nil },
+            set: { isPresented in
+                if !isPresented {
+                    editingSignatureOverlayID = nil
+                }
+            }
+        )) {
+            if let pageItem,
+               let overlayID = editingSignatureOverlayID,
+               let overlay = viewModel.overlayObjects(for: pageItem.id).first(where: { $0.id == overlayID }) {
+                EditPlacedSignatureSheet(
+                    overlayID: overlayID,
+                    pageItemID: pageItem.id,
+                    overlay: overlay,
+                    viewModel: viewModel,
+                    libraryStore: signatureLibraryStore
+                )
             }
         }
         .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotoItem, matching: .images)
@@ -146,10 +167,12 @@ struct PageEditorView: View {
             if isPresented {
                 clearPDFTextSelection()
                 pageSelection = .none
+                editingSignatureOverlayID = nil
             }
         }
         .onChange(of: pageRoute.pageItemID) { _, _ in
             cancelSignaturePlacement()
+            editingSignatureOverlayID = nil
             pageSelection = .none
             bumpPDFSelectionClearToken()
             placementAnimatingOverlayIDs.removeAll()
@@ -190,6 +213,9 @@ struct PageEditorView: View {
                     navigateToAdjacentPage(direction: direction)
                 },
                 onPDFTextMenuCopy: copySelectedPDFText,
+                onEditSignature: { overlayID in
+                    editingSignatureOverlayID = overlayID
+                },
                 pageTransitionEdge: pageTransitionEdge
             )
         } else {
@@ -280,6 +306,7 @@ struct PageEditorView: View {
 
     private func deleteSelectedOverlay() {
         guard let pageItem, let overlayID = pageSelection.selectedOverlayID else { return }
+        editingSignatureOverlayID = nil
         viewModel.deleteOverlay(id: overlayID, pageItemID: pageItem.id)
         pageSelection = .none
     }
@@ -293,28 +320,31 @@ struct PageEditorView: View {
                 showSignatureLibrary = true
                 return
             }
-            beginSignaturePlacement(image: image)
+            beginSignaturePlacement(
+                context: SignaturePlacementContext.fromLibraryAsset(asset, image: image)
+            )
         case .openLibrary(let showDefaultGuidanceBanner):
             signatureLibraryShowsDefaultGuidance = showDefaultGuidanceBanner
             showSignatureLibrary = true
         }
     }
 
-    private func beginSignaturePlacement(image: UIImage) {
+    private func beginSignaturePlacement(context: SignaturePlacementContext) {
         clearPDFTextSelection()
-        pendingSignatureImage = image
+        editingSignatureOverlayID = nil
+        pendingSignaturePlacement = context
         pageSelection = .none
     }
 
     private func cancelSignaturePlacement() {
-        pendingSignatureImage = nil
+        pendingSignaturePlacement = nil
     }
 
     private func placeSignature(atDisplayTap tap: CGPoint, displayPageSize: CGSize) {
-        guard let pageItem, let image = pendingSignatureImage else { return }
+        guard let pageItem, let context = pendingSignaturePlacement else { return }
 
         let normalizedSize = OverlayPlacementSizing.normalizedSignatureSize(
-            image: image,
+            image: context.sourceImage,
             pageAspectRatio: pageAspectRatio
         )
         let position = SignaturePlacementEngine.storagePosition(
@@ -324,11 +354,11 @@ struct PageEditorView: View {
             pageRotation: pageItem.rotation
         )
 
-        pendingSignatureImage = nil
+        pendingSignaturePlacement = nil
 
         let overlayID = viewModel.addSignatureOverlay(
             to: pageItem.id,
-            image: image,
+            context: context,
             pageAspectRatio: pageAspectRatio,
             at: position
         )

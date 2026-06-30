@@ -105,7 +105,7 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | Concept | Role |
 |--------|------|
 | **`PageItem`** | One page in the document list. Stable `id`, `originalPageIndex` into the source PDF, `rotation`, optional `duplicateSourceID`. |
-| **`PageObject`** | One overlay on a page (image today). Normalized `position` / `size`, `rotation`, `zIndex`, `imageAssetID`. |
+| **`PageObject`** | One overlay on a page (image/signature). Normalized `position` / `size`, `rotation`, `zIndex`, `imageAssetID`. Signatures may also store `signatureSourceImageAssetID`, library baseline appearance, and per-placement ink color/thickness overrides. |
 | **`pageObjectsByPage`** | `[UUID: [PageObject]]` in `PDFEditorViewModel` — overlays keyed by `PageItem.id`. |
 | **`EditorSnapshot`** | Undo entry: pages, overlays, overlay revisions, and image asset references. |
 | **`PDFEditorViewModel`** | Session state, page ops, overlay ops, undo stack, export entry point. |
@@ -124,6 +124,8 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`OverlayPDFExporter`** | Draws image overlays into a PDF `CGContext` using `OverlayGeometryEngine`. |
 | **`OverlayPlacementSizing`** | Initial normalized overlay size for signatures (PNG aspect–matched frame) and images (legacy formula). |
 | **`OverlayGeometryEngine`** | Shared normalized → concrete rect mapping for Page Mode, thumbnails, and PDF export (including page rotation). |
+| **`SignatureAppearanceEngine`** | Recolors and thickens/thins placed signature rasters from an immutable source image. |
+| **`SignaturePlacementContext`** | Baseline ink color/thickness and optional library source ID captured at placement time. |
 | **`SignatureOverlayMenuEngine`** | Positions the signature contextual menu above the selected overlay within page bounds. |
 | **`SignatureOverlayContextMenu`** | Floating Edit / Delete / More menu for selected signature overlays in Page Mode. |
 | **`SignaturePlacementEngine`** | Converts Page Mode tap coordinates to clamped normalized signature position (`Signature Placement Mode`). |

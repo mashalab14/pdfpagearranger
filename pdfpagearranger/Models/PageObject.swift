@@ -19,9 +19,39 @@ struct PageObject: Identifiable, Equatable, Codable {
     var opacity: CGFloat
     var zIndex: Int
     var imageAssetID: UUID?
+    /// Library asset this placement originated from, when applicable.
+    var signatureLibrarySourceID: UUID?
+    /// Immutable raster used to re-render placed signature appearance.
+    var signatureSourceImageAssetID: UUID?
+    var signatureInkColor: SignatureInkColor?
+    var signatureStrokeThickness: SignatureInkThickness?
+    var signatureBaselineInkColor: SignatureInkColor?
+    var signatureBaselineStrokeThickness: SignatureInkThickness?
 
     var usesRasterImageAsset: Bool {
         (type == .image || type == .signature) && imageAssetID != nil
+    }
+
+    var effectiveSignatureInkColor: SignatureInkColor {
+        signatureInkColor ?? signatureBaselineInkColor ?? .defaultInk
+    }
+
+    var effectiveSignatureStrokeThickness: SignatureInkThickness {
+        signatureStrokeThickness ?? signatureBaselineStrokeThickness ?? .defaultThickness
+    }
+
+    var signatureAppearanceDiffersFromBaseline: Bool {
+        guard type == .signature,
+              let baselineColor = signatureBaselineInkColor,
+              let baselineThickness = signatureBaselineStrokeThickness else {
+            return false
+        }
+        return effectiveSignatureInkColor != baselineColor
+            || effectiveSignatureStrokeThickness != baselineThickness
+    }
+
+    var canSavePlacedSignatureToLibrary: Bool {
+        signatureLibrarySourceID != nil && signatureAppearanceDiffersFromBaseline
     }
 
     init(
@@ -33,7 +63,13 @@ struct PageObject: Identifiable, Equatable, Codable {
         rotation: CGFloat = 0,
         opacity: CGFloat = 1,
         zIndex: Int = 0,
-        imageAssetID: UUID? = nil
+        imageAssetID: UUID? = nil,
+        signatureLibrarySourceID: UUID? = nil,
+        signatureSourceImageAssetID: UUID? = nil,
+        signatureInkColor: SignatureInkColor? = nil,
+        signatureStrokeThickness: SignatureInkThickness? = nil,
+        signatureBaselineInkColor: SignatureInkColor? = nil,
+        signatureBaselineStrokeThickness: SignatureInkThickness? = nil
     ) {
         self.id = id
         self.pageItemID = pageItemID
@@ -44,5 +80,11 @@ struct PageObject: Identifiable, Equatable, Codable {
         self.opacity = opacity
         self.zIndex = zIndex
         self.imageAssetID = imageAssetID
+        self.signatureLibrarySourceID = signatureLibrarySourceID
+        self.signatureSourceImageAssetID = signatureSourceImageAssetID
+        self.signatureInkColor = signatureInkColor
+        self.signatureStrokeThickness = signatureStrokeThickness
+        self.signatureBaselineInkColor = signatureBaselineInkColor
+        self.signatureBaselineStrokeThickness = signatureBaselineStrokeThickness
     }
 }

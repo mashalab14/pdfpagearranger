@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-enum SignatureInkColor: String, CaseIterable, Identifiable {
+enum SignatureInkColor: String, CaseIterable, Identifiable, Codable {
     case black
     case darkGray
     case blue

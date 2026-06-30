@@ -315,15 +315,158 @@ final class PDFEditorViewModel {
         to pageItemID: UUID,
         image: UIImage,
         pageAspectRatio: CGFloat,
+        at position: CGPoint = CGPoint(x: 0.5, y: 0.5),
+        placementContext: SignaturePlacementContext? = nil
+    ) -> UUID {
+        let context = placementContext ?? SignaturePlacementContext(
+            sourceImage: image,
+            librarySourceID: nil,
+            baselineInkColor: .defaultInk,
+            baselineStrokeThickness: .defaultThickness
+        )
+        return addSignatureOverlay(
+            to: pageItemID,
+            context: context,
+            pageAspectRatio: pageAspectRatio,
+            at: position
+        )
+    }
+
+    @discardableResult
+    func addSignatureOverlay(
+        to pageItemID: UUID,
+        context: SignaturePlacementContext,
+        pageAspectRatio: CGFloat,
         at position: CGPoint = CGPoint(x: 0.5, y: 0.5)
     ) -> UUID {
-        addRasterOverlay(
-            to: pageItemID,
-            image: image,
-            type: .signature,
+        pushUndoSnapshot()
+
+        let sourceAssetID = UUID()
+        imageAssets[sourceAssetID] = context.sourceImage
+
+        let displayAssetID = UUID()
+        imageAssets[displayAssetID] = SignatureAppearanceEngine.renderDisplayImage(
+            source: context.sourceImage,
+            inkColor: context.baselineInkColor,
+            thickness: context.baselineStrokeThickness,
+            baselineThickness: context.baselineStrokeThickness
+        )
+
+        let normalizedSize = OverlayPlacementSizing.normalizedSignatureSize(
+            image: context.sourceImage,
             pageAspectRatio: pageAspectRatio,
-            widthFraction: 0.30,
-            position: position
+            widthFraction: 0.30
+        )
+
+        let nextZIndex = (pageObjectsByPage[pageItemID]?.map(\.zIndex).max() ?? -1) + 1
+        let object = PageObject(
+            pageItemID: pageItemID,
+            type: .signature,
+            position: position,
+            size: normalizedSize,
+            zIndex: nextZIndex,
+            imageAssetID: displayAssetID,
+            signatureLibrarySourceID: context.librarySourceID,
+            signatureSourceImageAssetID: sourceAssetID,
+            signatureInkColor: context.baselineInkColor,
+            signatureStrokeThickness: context.baselineStrokeThickness,
+            signatureBaselineInkColor: context.baselineInkColor,
+            signatureBaselineStrokeThickness: context.baselineStrokeThickness
+        )
+
+        pageObjectsByPage[pageItemID, default: []].append(object)
+        bumpOverlayRevision(for: pageItemID)
+        return object.id
+    }
+
+    func updatePlacedSignatureAppearance(
+        overlayID: UUID,
+        pageItemID: UUID,
+        inkColor: SignatureInkColor,
+        strokeThickness: SignatureInkThickness
+    ) {
+        guard var objects = pageObjectsByPage[pageItemID],
+              let index = objects.firstIndex(where: { $0.id == overlayID }) else {
+            return
+        }
+
+        var object = objects[index]
+        guard object.type == .signature,
+              let sourceAssetID = object.signatureSourceImageAssetID ?? object.imageAssetID,
+              let sourceImage = imageAssets[sourceAssetID],
+              let baselineThickness = object.signatureBaselineStrokeThickness,
+              let displayAssetID = object.imageAssetID else {
+            return
+        }
+
+        let rendered = SignatureAppearanceEngine.renderDisplayImage(
+            source: sourceImage,
+            inkColor: inkColor,
+            thickness: strokeThickness,
+            baselineThickness: baselineThickness
+        )
+
+        let updated = PageObject(
+            id: object.id,
+            pageItemID: object.pageItemID,
+            type: object.type,
+            position: object.position,
+            size: object.size,
+            rotation: object.rotation,
+            opacity: object.opacity,
+            zIndex: object.zIndex,
+            imageAssetID: object.imageAssetID,
+            signatureLibrarySourceID: object.signatureLibrarySourceID,
+            signatureSourceImageAssetID: object.signatureSourceImageAssetID,
+            signatureInkColor: inkColor,
+            signatureStrokeThickness: strokeThickness,
+            signatureBaselineInkColor: object.signatureBaselineInkColor,
+            signatureBaselineStrokeThickness: object.signatureBaselineStrokeThickness
+        )
+
+        guard objects[index] != updated else { return }
+
+        pushUndoSnapshot()
+        imageAssets[displayAssetID] = rendered
+        objects[index] = updated
+        pageObjectsByPage[pageItemID] = objects
+        bumpOverlayRevision(for: pageItemID)
+    }
+
+    func resetPlacedSignatureAppearance(overlayID: UUID, pageItemID: UUID) {
+        guard let object = overlayObjects(for: pageItemID).first(where: { $0.id == overlayID }),
+              let baselineColor = object.signatureBaselineInkColor,
+              let baselineThickness = object.signatureBaselineStrokeThickness else {
+            return
+        }
+
+        updatePlacedSignatureAppearance(
+            overlayID: overlayID,
+            pageItemID: pageItemID,
+            inkColor: baselineColor,
+            strokeThickness: baselineThickness
+        )
+    }
+
+    @discardableResult
+    func savePlacedSignatureToLibrary(
+        overlayID: UUID,
+        pageItemID: UUID,
+        store: SignatureLibraryStore
+    ) throws -> SignatureAsset {
+        guard let object = overlayObjects(for: pageItemID).first(where: { $0.id == overlayID }),
+              object.type == .signature,
+              object.canSavePlacedSignatureToLibrary,
+              let displayAssetID = object.imageAssetID,
+              let image = imageAssets[displayAssetID],
+              let pngData = image.pngData() else {
+            throw SignatureLibraryStoreError.invalidImageData
+        }
+
+        return try store.saveSignature(
+            imageData: pngData,
+            sourceType: .drawn,
+            strokeThickness: object.effectiveSignatureStrokeThickness
         )
     }
 
@@ -390,10 +533,13 @@ final class PDFEditorViewModel {
 
         pushUndoSnapshot()
 
-        if let object = objects.first(where: { $0.id == id }),
-           let assetID = object.imageAssetID,
-           !isImageAssetReferenced(assetID, excludingObjectID: id) {
-            imageAssets.removeValue(forKey: assetID)
+        if let object = objects.first(where: { $0.id == id }) {
+            if let assetID = object.imageAssetID {
+                releaseImageAssetIfUnreferenced(assetID, excludingObjectID: id)
+            }
+            if let sourceAssetID = object.signatureSourceImageAssetID {
+                releaseImageAssetIfUnreferenced(sourceAssetID, excludingObjectID: id)
+            }
         }
 
         objects.removeAll { $0.id == id }
@@ -410,7 +556,7 @@ final class PDFEditorViewModel {
         guard !sourceOverlays.isEmpty else { return }
 
         let copiedOverlays = sourceOverlays.map { overlay in
-            PageObject(
+            var copied = PageObject(
                 pageItemID: destinationID,
                 type: overlay.type,
                 position: overlay.position,
@@ -418,8 +564,30 @@ final class PDFEditorViewModel {
                 rotation: overlay.rotation,
                 opacity: overlay.opacity,
                 zIndex: overlay.zIndex,
-                imageAssetID: overlay.imageAssetID
+                imageAssetID: overlay.imageAssetID,
+                signatureLibrarySourceID: overlay.signatureLibrarySourceID,
+                signatureSourceImageAssetID: overlay.signatureSourceImageAssetID,
+                signatureInkColor: overlay.signatureInkColor,
+                signatureStrokeThickness: overlay.signatureStrokeThickness,
+                signatureBaselineInkColor: overlay.signatureBaselineInkColor,
+                signatureBaselineStrokeThickness: overlay.signatureBaselineStrokeThickness
             )
+
+            if let sourceAssetID = overlay.signatureSourceImageAssetID,
+               let sourceImage = imageAssets[sourceAssetID] {
+                let newSourceID = UUID()
+                imageAssets[newSourceID] = sourceImage
+                copied.signatureSourceImageAssetID = newSourceID
+            }
+
+            if let displayAssetID = overlay.imageAssetID,
+               let displayImage = imageAssets[displayAssetID] {
+                let newDisplayID = UUID()
+                imageAssets[newDisplayID] = displayImage
+                copied.imageAssetID = newDisplayID
+            }
+
+            return copied
         }
 
         pageObjectsByPage[destinationID] = copiedOverlays
@@ -429,13 +597,20 @@ final class PDFEditorViewModel {
     private func removeOverlays(forPageItemID pageItemID: UUID) {
         let objects = pageObjectsByPage[pageItemID] ?? []
         for object in objects {
-            if let assetID = object.imageAssetID,
-               !isImageAssetReferenced(assetID, excludingObjectID: object.id) {
-                imageAssets.removeValue(forKey: assetID)
+            if let assetID = object.imageAssetID {
+                releaseImageAssetIfUnreferenced(assetID, excludingObjectID: object.id)
+            }
+            if let sourceAssetID = object.signatureSourceImageAssetID {
+                releaseImageAssetIfUnreferenced(sourceAssetID, excludingObjectID: object.id)
             }
         }
         pageObjectsByPage.removeValue(forKey: pageItemID)
         overlayRevisions.removeValue(forKey: pageItemID)
+    }
+
+    private func releaseImageAssetIfUnreferenced(_ assetID: UUID, excludingObjectID: UUID?) {
+        guard !isImageAssetReferenced(assetID, excludingObjectID: excludingObjectID) else { return }
+        imageAssets.removeValue(forKey: assetID)
     }
 
     private func isImageAssetReferenced(_ assetID: UUID, excludingObjectID: UUID? = nil) -> Bool {
@@ -446,6 +621,7 @@ final class PDFEditorViewModel {
             for object in objects {
                 if object.id == excludingObjectID { continue }
                 if object.imageAssetID == assetID { return true }
+                if object.signatureSourceImageAssetID == assetID { return true }
             }
         }
         return false

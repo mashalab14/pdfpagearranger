@@ -18,6 +18,7 @@ struct PageOverlayCanvasView: View {
     let onDelete: (UUID) -> Void
     let onPageSwipe: ((PageModeNavigationDirection) -> Void)?
     let onPDFTextMenuCopy: (String) -> Void
+    let onEditSignature: (UUID) -> Void
     let pageTransitionEdge: Edge
 
     @State private var scale: CGFloat = 1
@@ -26,7 +27,6 @@ struct PageOverlayCanvasView: View {
     @State private var steadyOffset: CGSize = .zero
     @State private var overlayManipulationState = OverlayManipulationState()
     @State private var pdfTextSelectionLayerActive = false
-    @State private var showEditSignatureSheet = false
 
     private let minScale: CGFloat = 1
     private let maxScale: CGFloat = 4
@@ -123,17 +123,6 @@ struct PageOverlayCanvasView: View {
                 }
         }
         .ignoresSafeArea(edges: .horizontal)
-        .sheet(isPresented: $showEditSignatureSheet) {
-            EditSignaturePlaceholderSheet()
-        }
-        .onChange(of: pageSelection) { _, newValue in
-            guard let overlayID = newValue.selectedOverlayID,
-                  let object = objects.first(where: { $0.id == overlayID }),
-                  object.type == .signature else {
-                showEditSignatureSheet = false
-                return
-            }
-        }
     }
 
     @ViewBuilder
@@ -225,7 +214,7 @@ struct PageOverlayCanvasView: View {
                             for: layout,
                             pageSize: fitSize
                         ),
-                        onEdit: { showEditSignatureSheet = true },
+                        onEdit: { onEditSignature(signature.id) },
                         onDelete: { deleteSelectedSignature(signature.id) }
                     )
                 }
@@ -299,13 +288,11 @@ struct PageOverlayCanvasView: View {
 
     private func clearPageSelection() {
         deactivatePDFTextSelectionLayer()
-        showEditSignatureSheet = false
         pageSelection = .none
     }
 
     private func deleteSelectedSignature(_ overlayID: UUID) {
         onDelete(overlayID)
-        showEditSignatureSheet = false
         if pageSelection.selectedOverlayID == overlayID {
             pageSelection = .none
         }

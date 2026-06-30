@@ -4,7 +4,7 @@ import SwiftUI
 struct SignatureCaptureView: View {
     @Environment(\.dismiss) private var dismiss
 
-    let onUseSignature: (UIImage, SignatureInkThickness) -> Void
+    let onUseSignature: (UIImage, SignatureInkThickness, SignatureInkColor) -> Void
 
     @State private var selectedColor: SignatureInkColor = .defaultInk
     @State private var selectedThickness: SignatureInkThickness = SignatureCaptureSettings.storedThickness()
@@ -186,7 +186,7 @@ struct SignatureCaptureView: View {
               let image = SignatureRenderer.image(from: canvasView.drawing) else {
             return
         }
-        onUseSignature(image, selectedThickness)
+        onUseSignature(image, selectedThickness, selectedColor)
         dismiss()
     }
 }

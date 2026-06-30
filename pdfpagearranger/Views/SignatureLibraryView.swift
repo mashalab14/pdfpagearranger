@@ -5,7 +5,7 @@ struct SignatureLibraryView: View {
 
     let store: SignatureLibraryStore
     let showDefaultGuidanceBanner: Bool
-    let onSelectSignature: (UIImage) -> Void
+    let onSelectSignature: (SignaturePlacementContext) -> Void
 
     @State private var signatures: [SignatureAsset] = []
     @State private var defaultSignatureID: UUID?
@@ -22,7 +22,7 @@ struct SignatureLibraryView: View {
     init(
         store: SignatureLibraryStore,
         showDefaultGuidanceBanner: Bool = false,
-        onSelectSignature: @escaping (UIImage) -> Void
+        onSelectSignature: @escaping (SignaturePlacementContext) -> Void
     ) {
         self.store = store
         self.showDefaultGuidanceBanner = showDefaultGuidanceBanner
@@ -52,8 +52,8 @@ struct SignatureLibraryView: View {
                 syncDefaultSignatureIDFromStore()
             }
             .sheet(isPresented: $showCapture) {
-                SignatureCaptureView { image, strokeThickness in
-                    saveAndUse(image, strokeThickness: strokeThickness)
+                SignatureCaptureView { image, strokeThickness, inkColor in
+                    saveAndUse(image, strokeThickness: strokeThickness, inkColor: inkColor)
                 }
             }
             .alert("Rename Signature", isPresented: renameAlertIsPresented) {
@@ -254,20 +254,31 @@ struct SignatureLibraryView: View {
               let image = UIImage(data: data) else {
             return
         }
-        onSelectSignature(image)
+        onSelectSignature(SignaturePlacementContext.fromLibraryAsset(asset, image: image))
         dismiss()
     }
 
-    private func saveAndUse(_ image: UIImage, strokeThickness: SignatureInkThickness) {
+    private func saveAndUse(
+        _ image: UIImage,
+        strokeThickness: SignatureInkThickness,
+        inkColor: SignatureInkColor
+    ) {
+        var savedAsset: SignatureAsset?
         if let pngData = image.pngData() {
-            try? store.saveSignature(
+            savedAsset = try? store.saveSignature(
                 imageData: pngData,
                 sourceType: .drawn,
                 strokeThickness: strokeThickness
             )
             reloadSignatures()
         }
-        onSelectSignature(image)
+        let context = SignaturePlacementContext.fromCapturedImage(
+            image,
+            librarySourceID: savedAsset?.id,
+            strokeThickness: strokeThickness,
+            inkColor: inkColor
+        )
+        onSelectSignature(context)
         dismiss()
     }
 
