@@ -1,7 +1,7 @@
 import CoreGraphics
 
 enum SignatureOverlayMenuEngine {
-    static let menuWidth: CGFloat = 132
+    static var menuWidth: CGFloat { SignatureContextualUIMetrics.signatureToolbarWidth }
     static let verticalOffset: CGFloat = 28
     static let horizontalPadding: CGFloat = 8
     static let minimumTopPadding: CGFloat = 24

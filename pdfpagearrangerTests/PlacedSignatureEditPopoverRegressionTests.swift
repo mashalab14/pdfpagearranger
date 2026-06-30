@@ -35,7 +35,7 @@ final class SignatureEditPopoverEngineRegressionTests: XCTestCase {
             size: CGSize(width: 20, height: 20),
             rotationDegrees: 0
         )
-        let pageSize = CGSize(width: 400, height: 400)
+        let pageSize = CGSize(width: 420, height: 400)
         let popoverSize = SignatureEditPopoverEngine.popoverSize
 
         let anchor = SignatureEditPopoverEngine.anchorPoint(for: layout, pageSize: pageSize)
@@ -52,7 +52,7 @@ final class PlacedSignatureEditPopoverUIRegressionTests: XCTestCase {
     func testPopoverUsesTwoRowMarkupControls() throws {
         let popover = try projectSource(named: "PlacedSignatureEditPopover.swift", subdirectory: "Views")
         XCTAssertTrue(popover.contains("placedSignatureEditPopover"))
-        XCTAssertTrue(popover.contains("VStack(spacing: 8)"))
+        XCTAssertTrue(popover.contains("VStack(spacing: SignatureContextualUIMetrics.popoverRowSpacing)"))
         XCTAssertTrue(popover.contains("SignatureInkColor.presetDisplayOrder"))
         XCTAssertTrue(popover.contains("paintpalette.fill"))
         XCTAssertTrue(popover.contains("SignatureUIColorPicker"))
@@ -61,7 +61,9 @@ final class PlacedSignatureEditPopoverUIRegressionTests: XCTestCase {
         XCTAssertTrue(popover.contains("PlacedSignatureStrokeWidth.label"))
         XCTAssertTrue(popover.contains("PlacedSignatureStrokeWidth.decreased"))
         XCTAssertTrue(popover.contains("PlacedSignatureStrokeWidth.increased"))
-        XCTAssertTrue(popover.contains("frame(width: 44, height: 44)"))
+        XCTAssertTrue(popover.contains("SignatureContextualUIMetrics.minimumTapTarget"))
+        XCTAssertTrue(popover.contains("allowsHitTesting(false)"))
+        XCTAssertTrue(popover.contains("presetColorDiameter"))
         XCTAssertFalse(popover.contains("Done"))
         XCTAssertFalse(popover.contains("navigationTitle"))
         XCTAssertFalse(popover.contains("presentationDetents"))

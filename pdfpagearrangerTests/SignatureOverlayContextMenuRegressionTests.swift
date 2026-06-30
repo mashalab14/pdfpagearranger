@@ -58,6 +58,8 @@ final class SignatureOverlayContextMenuUIRegressionTests: XCTestCase {
         XCTAssertTrue(menu.contains("Capsule()"))
         XCTAssertTrue(menu.contains("foregroundStyle: Color.red"))
         XCTAssertTrue(menu.contains("foregroundStyle: Color.primary"))
+        XCTAssertTrue(menu.contains("SignatureContextualUIMetrics.minimumTapTarget"))
+        XCTAssertTrue(menu.contains("contentShape(Rectangle())"))
         XCTAssertFalse(menu.contains("regularMaterial"))
     }
 

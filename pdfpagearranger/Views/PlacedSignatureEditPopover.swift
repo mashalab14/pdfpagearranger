@@ -12,6 +12,8 @@ struct PlacedSignatureEditPopover: View {
     @State private var showColorPicker = false
     @State private var pickerColor: UIColor
 
+    private let tapTarget = SignatureContextualUIMetrics.minimumTapTarget
+
     init(
         overlay: PageObject,
         anchorPoint: CGPoint,
@@ -38,67 +40,42 @@ struct PlacedSignatureEditPopover: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
+        VStack(spacing: SignatureContextualUIMetrics.popoverRowSpacing) {
+            HStack(spacing: SignatureContextualUIMetrics.popoverControlSpacing) {
                 ForEach(SignatureInkColor.presetDisplayOrder) { color in
                     presetColorButton(color)
                 }
             }
 
-            HStack(spacing: 6) {
-                Button {
-                    pickerColor = overlay.effectiveSignatureInkUIColor
-                    showColorPicker = true
-                } label: {
-                    Image(systemName: "paintpalette.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(usesCustomColor ? Color.accentColor : Color.primary)
-                        .frame(width: 28, height: 28)
-                        .background(
-                            Circle()
-                                .strokeBorder(
-                                    usesCustomColor ? Color.accentColor : Color.clear,
-                                    lineWidth: 2
-                                )
-                        )
-                }
-                .buttonStyle(.plain)
-                .frame(width: 36, height: 36)
-                .accessibilityLabel("Advanced Color")
-                .accessibilityIdentifier("signatureEditAdvancedColorButton")
-
-                Button(action: onDecreaseThickness) {
-                    Image(systemName: "minus")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .buttonStyle(.plain)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-                .disabled(PlacedSignatureStrokeWidth.decreased(from: strokeWidthPoints) == nil)
-                .accessibilityLabel("Decrease Thickness")
-                .accessibilityIdentifier("signatureEditThicknessMinus")
+            HStack(spacing: SignatureContextualUIMetrics.popoverControlSpacing) {
+                paletteButton
+                thicknessButton(
+                    systemName: "minus",
+                    accessibilityLabel: "Decrease Thickness",
+                    accessibilityIdentifier: "signatureEditThicknessMinus",
+                    isEnabled: PlacedSignatureStrokeWidth.decreased(from: strokeWidthPoints) != nil,
+                    action: onDecreaseThickness
+                )
 
                 Text(PlacedSignatureStrokeWidth.label(for: strokeWidthPoints))
                     .font(.caption.monospacedDigit().weight(.medium))
                     .foregroundStyle(.secondary)
-                    .frame(minWidth: 40)
+                    .frame(minWidth: SignatureContextualUIMetrics.thicknessLabelMinWidth)
+                    .allowsHitTesting(false)
                     .accessibilityIdentifier("signatureEditThicknessValue")
 
-                Button(action: onIncreaseThickness) {
-                    Image(systemName: "plus")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .buttonStyle(.plain)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-                .disabled(PlacedSignatureStrokeWidth.increased(from: strokeWidthPoints) == nil)
-                .accessibilityLabel("Increase Thickness")
-                .accessibilityIdentifier("signatureEditThicknessPlus")
+                thicknessButton(
+                    systemName: "plus",
+                    accessibilityLabel: "Increase Thickness",
+                    accessibilityIdentifier: "signatureEditThicknessPlus",
+                    isEnabled: PlacedSignatureStrokeWidth.increased(from: strokeWidthPoints) != nil,
+                    action: onIncreaseThickness
+                )
             }
         }
         .font(.subheadline)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, SignatureContextualUIMetrics.popoverHorizontalPadding)
+        .padding(.vertical, SignatureContextualUIMetrics.popoverVerticalPadding)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .shadow(color: .black.opacity(0.14), radius: 8, y: 3)
         .position(anchorPoint)
@@ -114,6 +91,51 @@ struct PlacedSignatureEditPopover: View {
         }
     }
 
+    private var paletteButton: some View {
+        Button {
+            pickerColor = overlay.effectiveSignatureInkUIColor
+            showColorPicker = true
+        } label: {
+            Image(systemName: "paintpalette.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(usesCustomColor ? Color.accentColor : Color.primary)
+                .frame(width: SignatureContextualUIMetrics.presetColorDiameter, height: SignatureContextualUIMetrics.presetColorDiameter)
+                .background(
+                    Circle()
+                        .strokeBorder(
+                            usesCustomColor ? Color.accentColor : Color.clear,
+                            lineWidth: 2
+                        )
+                )
+                .frame(width: tapTarget, height: tapTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(width: tapTarget, height: tapTarget)
+        .accessibilityLabel("Advanced Color")
+        .accessibilityIdentifier("signatureEditAdvancedColorButton")
+    }
+
+    private func thicknessButton(
+        systemName: String,
+        accessibilityLabel: String,
+        accessibilityIdentifier: String,
+        isEnabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.subheadline.weight(.semibold))
+                .frame(width: tapTarget, height: tapTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(width: tapTarget, height: tapTarget)
+        .disabled(!isEnabled)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityIdentifier(accessibilityIdentifier)
+    }
+
     private func presetColorButton(_ color: SignatureInkColor) -> some View {
         let isSelected = !usesCustomColor && overlay.effectiveSignatureInkColor == color
 
@@ -122,17 +144,25 @@ struct PlacedSignatureEditPopover: View {
         } label: {
             Circle()
                 .fill(color.displayColor)
-                .frame(width: 22, height: 22)
+                .frame(
+                    width: SignatureContextualUIMetrics.presetColorDiameter,
+                    height: SignatureContextualUIMetrics.presetColorDiameter
+                )
                 .overlay {
                     if isSelected {
                         Circle()
                             .strokeBorder(Color.accentColor, lineWidth: 2)
-                            .frame(width: 28, height: 28)
+                            .frame(
+                                width: SignatureContextualUIMetrics.selectedColorRingDiameter,
+                                height: SignatureContextualUIMetrics.selectedColorRingDiameter
+                            )
                     }
                 }
-                .frame(width: 28, height: 28)
+                .frame(width: tapTarget, height: tapTarget)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .frame(width: tapTarget, height: tapTarget)
         .accessibilityLabel(color.markupTitle)
         .accessibilityIdentifier(color.accessibilityIdentifier)
     }
