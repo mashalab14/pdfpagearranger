@@ -194,8 +194,21 @@ Quality is guarded by an automated regression suite (`PDFPagesTests`, `PDFPagesU
 **Rules for all changes:**
 
 1. **Every new feature must include regression coverage** (unit and/or UI tests as appropriate).
-2. **The existing regression suite must pass before commit.** A pre-commit hook runs `xcodebuild test` on the shared scheme.
-3. **New features should update the regression checklist** (and `Golden PDFs/` fixtures when manual PDFs are relevant).
+2. **During development**, run **focused tests** for the area you changed. Do not run the full suite before every commit.
+3. **Before release or major architecture changes** (rendering, coordinates, export, undo, document model), run the **full regression suite** manually.
+4. **New features should update the regression checklist** (and `Golden PDFs/` fixtures when manual PDFs are relevant).
+
+### Testing workflow
+
+| When | What to run |
+|------|-------------|
+| **Normal commit** | Focused tests for your change + `xcodebuild build`. The **pre-commit hook** runs only a **fast compile check** (~seconds). |
+| **Optional focused tests on commit** | `PRE_COMMIT_ONLY_TESTING="PDFPagesTests/MyTests" git commit` (space-separated `-only-testing:` targets). |
+| **Optional full regression on commit** | `RUN_FULL_REGRESSION=1 git commit` |
+| **Manual full regression** | `./scripts/run-full-regression.sh` |
+| **Release / shared infrastructure** | `./scripts/run-full-regression.sh` (required) |
+
+The pre-commit hook (`scripts/pre-commit`, symlinked from `.git/hooks/pre-commit`) must **not** run the full simulator regression suite by default.
 
 Test helpers live under `pdfpagearrangerTests/Helpers/` (`PDFTestFactory`, `OverlayTestFactory`, `ExportAssertions`). Prefer extending these over one-off test setup.
 
@@ -234,7 +247,8 @@ When in doubt: if it **transforms an imported PDF locally** and **exports a new 
 | `Golden PDFs/` | Manual/regression PDF fixtures (by category) |
 | `pdfpagearrangerTests/` | Unit regression tests (`PDFPagesTests`) |
 | `pdfpagearrangerUITests/` | UI regression tests (`PDFPagesUITests`) |
-| `scripts/pre-commit` | Runs full test suite before commit |
+| `scripts/pre-commit` | Fast compile check on commit (not full regression) |
+| `scripts/run-full-regression.sh` | Manual full regression suite (`xcodebuild test`) |
 
 ---
 

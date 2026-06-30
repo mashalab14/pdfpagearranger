@@ -1,23 +1,38 @@
 #!/bin/sh
-# Run the full PDF Pages regression suite before allowing a commit.
+# Fast pre-commit checks. Full regression is opt-in or manual.
 set -e
 
 ROOT="$(git rev-parse --show-toplevel)"
+SCRIPTS_DIR="$ROOT/scripts"
 XCODEBUILD="/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild"
 SCHEME="pdfpagearranger"
 DESTINATION="platform=iOS Simulator,name=iPhone 17"
 
 cd "$ROOT"
 
+if [ "$RUN_FULL_REGRESSION" = "1" ]; then
+  exec "$SCRIPTS_DIR/run-full-regression.sh"
+fi
+
 if [ ! -x "$XCODEBUILD" ]; then
-  echo "pre-commit: Xcode not found at $XCODEBUILD"
+  echo "pre-commit: Xcode not found at $XCODEBUILD" >&2
   exit 1
 fi
 
-echo "pre-commit: running PDF Pages regression tests..."
+echo "pre-commit: running fast compile check..."
 "$XCODEBUILD" \
   -scheme "$SCHEME" \
   -destination "$DESTINATION" \
-  test
+  build
 
-echo "pre-commit: all regression tests passed."
+if [ -n "$PRE_COMMIT_ONLY_TESTING" ]; then
+  echo "pre-commit: running focused tests: $PRE_COMMIT_ONLY_TESTING"
+  set -- -scheme "$SCHEME" -destination "$DESTINATION" test
+  for target in $PRE_COMMIT_ONLY_TESTING; do
+    set -- "$@" "-only-testing:$target"
+  done
+  "$XCODEBUILD" "$@"
+fi
+
+echo "pre-commit: fast checks passed."
+echo "pre-commit: run ./scripts/run-full-regression.sh before release or major architecture changes."
