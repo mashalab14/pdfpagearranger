@@ -11,6 +11,7 @@ struct PageOverlayCanvasView: View {
     let onPlacementAnimationFinished: (UUID) -> Void
     let signaturePlacementActive: Bool
     let onSignaturePlacementTap: ((CGPoint, CGSize) -> Void)?
+    let onSignaturePlacementDismiss: (() -> Void)?
     @Binding var pageSelection: PageModeSelection
     let pdfSelectionClearToken: UUID
     let imageProvider: (UUID) -> UIImage?
@@ -72,55 +73,58 @@ struct PageOverlayCanvasView: View {
                 trailingSafeAreaInset: geometry.safeAreaInsets.trailing
             )
 
-            pageStack(fitSize: displaySize)
-                .frame(width: displaySize.width, height: displaySize.height)
-                .scaleEffect(scale)
-                .offset(offset)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .contentShape(Rectangle())
-                .gesture(pageZoomEnabled ? magnificationGesture : nil)
-                .simultaneousGesture(pageZoomEnabled ? panGesture : nil)
-                .simultaneousGesture(pageSwipeEnabled ? pageSwipeGesture : nil)
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("pageModeCanvas")
-                .onTapGesture {
-                    guard !signaturePlacementActive else { return }
-                    deactivatePDFTextSelectionLayer()
-                    clearPageSelection()
-                }
-                .onLongPressGesture(minimumDuration: 0.35) {
-                    guard !signaturePlacementActive else { return }
-                    pdfTextSelectionLayerActive = true
-                }
-                .onTapGesture(coordinateSpace: .local) { location in
-                    guard signaturePlacementActive else { return }
-                    onSignaturePlacementTap?(location, displaySize)
-                }
-                .onChange(of: signaturePlacementActive) { _, isActive in
-                    if isActive {
-                        deactivatePDFTextSelectionLayer()
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            resetZoom()
-                        }
+            ZStack(alignment: .top) {
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        handleCanvasBackgroundTap()
                     }
-                }
-                .onChange(of: pageLoadKey) { _, _ in
+
+                pageStack(fitSize: displaySize)
+                    .frame(width: displaySize.width, height: displaySize.height)
+                    .scaleEffect(scale)
+                    .offset(offset)
+                    .contentShape(Rectangle())
+                    .onTapGesture(coordinateSpace: .local) { location in
+                        handlePageTap(at: location, displaySize: displaySize)
+                    }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .gesture(pageZoomEnabled ? magnificationGesture : nil)
+            .simultaneousGesture(pageZoomEnabled ? panGesture : nil)
+            .simultaneousGesture(pageSwipeEnabled ? pageSwipeGesture : nil)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("pageModeCanvas")
+            .onLongPressGesture(minimumDuration: 0.35) {
+                guard !signaturePlacementActive else { return }
+                pdfTextSelectionLayerActive = true
+            }
+            .onChange(of: signaturePlacementActive) { _, isActive in
+                if isActive {
                     deactivatePDFTextSelectionLayer()
                     withAnimation(.easeInOut(duration: 0.2)) {
                         resetZoom()
                     }
                 }
-                .onChange(of: pageSelection) { _, newValue in
-                    if newValue.pdfTextSelection == nil {
-                        pdfTextSelectionLayerActive = false
-                    }
+            }
+            .onChange(of: pageLoadKey) { _, _ in
+                deactivatePDFTextSelectionLayer()
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    resetZoom()
                 }
-                .onTapGesture(count: 2) {
-                    guard pageZoomEnabled else { return }
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        resetZoom()
-                    }
+            }
+            .onChange(of: pageSelection) { _, newValue in
+                if newValue.pdfTextSelection == nil {
+                    pdfTextSelectionLayerActive = false
                 }
+            }
+            .onTapGesture(count: 2) {
+                guard pageZoomEnabled else { return }
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    resetZoom()
+                }
+            }
         }
         .ignoresSafeArea(edges: .horizontal)
     }
@@ -139,6 +143,7 @@ struct PageOverlayCanvasView: View {
                     onPageSwipe: onPageSwipe,
                     clearSelectionToken: pdfSelectionClearToken,
                     onSelectionChange: { selection in
+                        guard !signaturePlacementActive else { return }
                         if let selection {
                             pdfTextSelectionLayerActive = true
                             pageSelection = .pdfText(selection)
@@ -177,6 +182,7 @@ struct PageOverlayCanvasView: View {
                                 onPlacementAnimationFinished(object.id)
                             },
                             onSelect: {
+                                guard !signaturePlacementActive else { return }
                                 deactivatePDFTextSelectionLayer()
                                 pageSelection = .overlay(object.id)
                                 bringToFront(object)
@@ -193,7 +199,7 @@ struct PageOverlayCanvasView: View {
                     }
                 }
 
-                if let textSelection = pageSelection.pdfTextSelection {
+                if let textSelection = pageSelection.pdfTextSelection, !signaturePlacementActive {
                     PDFTextSelectionContextMenu(
                         anchorRect: textSelection.anchorRect,
                         onCopy: { onPDFTextMenuCopy(textSelection.text) },
@@ -269,6 +275,29 @@ struct PageOverlayCanvasView: View {
             .onEnded { _ in
                 steadyOffset = offset
             }
+    }
+
+    private func handlePageTap(at location: CGPoint, displaySize: CGSize) {
+        if signaturePlacementActive {
+            guard SignaturePlacementEngine.isDisplayTapInsidePage(location, displayPageSize: displaySize) else {
+                return
+            }
+            onSignaturePlacementTap?(location, displaySize)
+            return
+        }
+
+        deactivatePDFTextSelectionLayer()
+        clearPageSelection()
+    }
+
+    private func handleCanvasBackgroundTap() {
+        if signaturePlacementActive {
+            onSignaturePlacementDismiss?()
+            return
+        }
+
+        deactivatePDFTextSelectionLayer()
+        clearPageSelection()
     }
 
     private func resetZoom() {

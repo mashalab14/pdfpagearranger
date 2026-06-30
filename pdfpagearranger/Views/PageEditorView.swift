@@ -68,16 +68,10 @@ struct PageEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if signaturePlacementActive {
-                signaturePlacementInstruction
-            }
-
             pageContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            if !signaturePlacementActive {
-                addButtonBar
-            }
+            addButtonBar
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Page \(pageNumber)")
@@ -87,19 +81,8 @@ struct PageEditorView: View {
         .accessibilityIdentifier("pageModeView")
         .accessibilityValue("page \(pageNumber) of \(viewModel.pageCount)")
         .toolbar {
-            if signaturePlacementActive {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        cancelSignaturePlacement()
-                    }
-                    .accessibilityIdentifier("signaturePlacementCancelButton")
-                }
-            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Done") {
-                    if signaturePlacementActive {
-                        cancelSignaturePlacement()
-                    }
                     dismiss()
                 }
             }
@@ -165,6 +148,7 @@ struct PageEditorView: View {
         }
         .onChange(of: showAddSheet) { _, isPresented in
             if isPresented {
+                cancelSignaturePlacement()
                 clearPDFTextSelection()
                 pageSelection = .none
                 editingSignatureOverlayID = nil
@@ -204,6 +188,9 @@ struct PageEditorView: View {
                 onSignaturePlacementTap: { location, displaySize in
                     placeSignature(atDisplayTap: location, displayPageSize: displaySize)
                 },
+                onSignaturePlacementDismiss: {
+                    cancelSignaturePlacement()
+                },
                 pageSelection: $pageSelection,
                 pdfSelectionClearToken: pdfSelectionClearToken,
                 imageProvider: { viewModel.imageAsset(for: $0) },
@@ -222,17 +209,6 @@ struct PageEditorView: View {
             ProgressView("Loading page…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-    }
-
-    private var signaturePlacementInstruction: some View {
-        Text("Tap where you want to place the signature.")
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal)
-            .padding(.vertical, 10)
-            .background(.bar)
-            .accessibilityIdentifier("signaturePlacementInstruction")
     }
 
     private var addButtonBar: some View {
@@ -342,6 +318,9 @@ struct PageEditorView: View {
 
     private func placeSignature(atDisplayTap tap: CGPoint, displayPageSize: CGSize) {
         guard let pageItem, let context = pendingSignaturePlacement else { return }
+        guard SignaturePlacementEngine.isDisplayTapInsidePage(tap, displayPageSize: displayPageSize) else {
+            return
+        }
 
         let normalizedSize = OverlayPlacementSizing.normalizedSignatureSize(
             image: context.sourceImage,

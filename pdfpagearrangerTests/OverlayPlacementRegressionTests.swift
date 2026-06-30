@@ -114,7 +114,7 @@ final class OverlayPlacementUIRegressionTests: XCTestCase {
         let source = try pageEditorSource()
         XCTAssertTrue(source.contains("registerNewOverlayPlacement(overlayID: overlayID)"))
         XCTAssertTrue(source.contains("handleQuickSignature"))
-        XCTAssertTrue(source.contains("beginSignaturePlacement(image: image)"))
+        XCTAssertTrue(source.contains("beginSignaturePlacement"))
     }
 
     private func imageOverlaySource() throws -> String {

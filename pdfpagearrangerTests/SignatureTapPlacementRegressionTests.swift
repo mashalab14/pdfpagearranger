@@ -21,6 +21,35 @@ final class SignaturePlacementEngineRegressionTests: XCTestCase {
         XCTAssertEqual(bottomRight.y, 0.9, accuracy: 0.001)
     }
 
+    func testIsDisplayTapInsidePageAcceptsBoundsAndRejectsOutside() {
+        let displaySize = CGSize(width: 300, height: 400)
+
+        XCTAssertTrue(
+            SignaturePlacementEngine.isDisplayTapInsidePage(
+                CGPoint(x: 0, y: 0),
+                displayPageSize: displaySize
+            )
+        )
+        XCTAssertTrue(
+            SignaturePlacementEngine.isDisplayTapInsidePage(
+                CGPoint(x: 300, y: 400),
+                displayPageSize: displaySize
+            )
+        )
+        XCTAssertFalse(
+            SignaturePlacementEngine.isDisplayTapInsidePage(
+                CGPoint(x: -1, y: 200),
+                displayPageSize: displaySize
+            )
+        )
+        XCTAssertFalse(
+            SignaturePlacementEngine.isDisplayTapInsidePage(
+                CGPoint(x: 301, y: 200),
+                displayPageSize: displaySize
+            )
+        )
+    }
+
     func testStoragePositionCentersOnTapPoint() {
         let image = PDFTestFactory.makeTestImage(size: CGSize(width: 200, height: 100))
         let normalizedSize = OverlayPlacementSizing.normalizedSignatureSize(
@@ -84,46 +113,64 @@ final class SignaturePlacementEngineRegressionTests: XCTestCase {
 }
 
 final class SignatureTapPlacementUIRegressionTests: XCTestCase {
-    func testPageEditorEntersSignaturePlacementMode() throws {
+    func testPageEditorSilentlyArmsSignaturePlacement() throws {
         let source = try pageEditorSource()
-        XCTAssertTrue(source.contains("pendingSignatureImage"))
-        XCTAssertTrue(source.contains("beginSignaturePlacement(image:"))
-        XCTAssertTrue(source.contains("cancelSignaturePlacement()"))
-        XCTAssertTrue(source.contains("signaturePlacementInstruction"))
-        XCTAssertTrue(source.contains("Tap where you want to place the signature."))
+        XCTAssertTrue(source.contains("pendingSignaturePlacement"))
+        XCTAssertTrue(source.contains("beginSignaturePlacement(context:"))
+        XCTAssertTrue(source.contains("handleQuickSignature()"))
         XCTAssertTrue(source.contains("placeSignature(atDisplayTap:"))
         XCTAssertTrue(source.contains("SignaturePlacementEngine.storagePosition"))
+        XCTAssertTrue(source.contains("SignaturePlacementEngine.isDisplayTapInsidePage"))
+        XCTAssertFalse(source.contains("signaturePlacementInstruction"))
+        XCTAssertFalse(source.contains("Tap where you want to place the signature."))
+        XCTAssertFalse(source.contains("signaturePlacementCancelButton"))
     }
 
-    func testQuickSignatureEntersPlacementModeInsteadOfImmediatePlacement() throws {
+    func testQuickSignatureArmsPlacementInsteadOfImmediatePlacement() throws {
         let source = try pageEditorSource()
-        XCTAssertTrue(source.contains("beginSignaturePlacement(image: image)"))
+        XCTAssertTrue(source.contains("beginSignaturePlacement(\n                context:"))
         XCTAssertFalse(source.contains("placeSignature(image:"))
     }
 
-    func testSignatureLibraryRoutesToPlacementMode() throws {
+    func testSignatureLibraryRoutesToSilentPlacement() throws {
         let source = try pageEditorSource()
-        XCTAssertTrue(source.contains("beginSignaturePlacement(image: image)"))
+        XCTAssertTrue(source.contains("beginSignaturePlacement(context: context)"))
     }
 
-    func testCanvasDisablesZoomSwipeAndOverlaySelectionDuringPlacement() throws {
+    func testCanvasRoutesPageTapsToPlacementPath() throws {
         let source = try canvasSource()
         XCTAssertTrue(source.contains("signaturePlacementActive"))
-        XCTAssertTrue(source.contains("!signaturePlacementActive"))
         XCTAssertTrue(source.contains("onSignaturePlacementTap"))
+        XCTAssertTrue(source.contains("onSignaturePlacementDismiss"))
+        XCTAssertTrue(source.contains("handlePageTap(at:"))
+        XCTAssertTrue(source.contains("handleCanvasBackgroundTap()"))
+        XCTAssertTrue(source.contains("SignaturePlacementEngine.isDisplayTapInsidePage"))
         XCTAssertTrue(source.contains("isInteractionEnabled: !signaturePlacementActive"))
     }
 
-    func testCancelExitsPlacementWithoutAddingOverlay() throws {
-        let source = try pageEditorSource()
-        XCTAssertTrue(source.contains("signaturePlacementCancelButton"))
-        XCTAssertTrue(source.contains("pendingSignatureImage = nil"))
+    func testCanvasBlocksTextSelectionWhilePlacementArmed() throws {
+        let source = try canvasSource()
+        XCTAssertTrue(source.contains("guard !signaturePlacementActive else { return }"))
+        XCTAssertTrue(source.contains("!signaturePlacementActive"))
+        XCTAssertTrue(source.contains("isInteractionEnabled: !signaturePlacementActive"))
     }
 
-    func testPlacementUsesSharedRegistrationPath() throws {
+    func testPlacementClearsAfterSuccessfulRegistration() throws {
         let source = try pageEditorSource()
+        XCTAssertTrue(source.contains("pendingSignaturePlacement = nil"))
         XCTAssertTrue(source.contains("registerNewOverlayPlacement(overlayID: overlayID)"))
         XCTAssertTrue(source.contains("OverlayPlacementFeedback.playPlacementHaptic()"))
+    }
+
+    func testAddBarRemainsVisibleDuringPlacement() throws {
+        let source = try pageEditorSource()
+        XCTAssertTrue(source.contains("""
+            addButtonBar
+        """))
+        XCTAssertFalse(source.contains("""
+            if !signaturePlacementActive {
+                addButtonBar
+        """))
     }
 
     private func pageEditorSource() throws -> String {
