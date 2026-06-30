@@ -7,7 +7,7 @@ struct WatermarkView: View {
 
     @Bindable var viewModel: PDFEditorViewModel
 
-    @State private var contentType: WatermarkContentType
+    @State private var watermarkType: WatermarkType
     @State private var text: String
     @State private var draftImage: UIImage?
     @State private var opacity: Double
@@ -27,7 +27,7 @@ struct WatermarkView: View {
     init(viewModel: PDFEditorViewModel) {
         self._viewModel = Bindable(wrappedValue: viewModel)
         let settings = viewModel.watermarkSettings
-        _contentType = State(initialValue: settings.contentType)
+        _watermarkType = State(initialValue: settings.watermarkType)
         _text = State(initialValue: settings.text)
         _draftImage = State(initialValue: viewModel.watermarkImage)
         _opacity = State(initialValue: Double(settings.opacity))
@@ -45,16 +45,16 @@ struct WatermarkView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Content") {
-                    Picker("Content", selection: $contentType) {
-                        ForEach(WatermarkContentType.allCases) { option in
+                Section {
+                    Picker("Watermark Type", selection: $watermarkType) {
+                        ForEach(WatermarkType.allCases) { option in
                             Text(option.title).tag(option)
                         }
                     }
                     .pickerStyle(.segmented)
-                    .accessibilityIdentifier("watermarkContentTypePicker")
+                    .accessibilityIdentifier("watermarkTypePicker")
 
-                    if contentType == .text {
+                    if watermarkType == .text {
                         TextField("Watermark text", text: $text)
                             .textInputAutocapitalization(.characters)
                             .accessibilityIdentifier("watermarkTextField")
@@ -108,7 +108,7 @@ struct WatermarkView: View {
                     }
                     .accessibilityIdentifier("watermarkRotationStepper")
 
-                    if contentType == .text {
+                    if watermarkType == .text {
                         Picker("Color", selection: $color) {
                             ForEach(WatermarkColor.presets, id: \.self) { preset in
                                 Text(colorTitle(for: preset)).tag(preset)
@@ -243,12 +243,12 @@ struct WatermarkView: View {
     }
 
     private var previewText: String? {
-        guard contentType == .text, !trimmedText.isEmpty else { return nil }
+        guard watermarkType == .text, !trimmedText.isEmpty else { return nil }
         return trimmedText
     }
 
     private var canApply: Bool {
-        switch contentType {
+        switch watermarkType {
         case .text:
             return !trimmedText.isEmpty
         case .image:
@@ -259,7 +259,7 @@ struct WatermarkView: View {
     private var draftSettings: WatermarkSettings {
         WatermarkSettings(
             isEnabled: true,
-            contentType: contentType,
+            watermarkType: watermarkType,
             text: trimmedText.isEmpty ? WatermarkSettings.default.text : trimmedText,
             imageAssetID: nil,
             opacity: CGFloat(opacity),
@@ -276,7 +276,7 @@ struct WatermarkView: View {
     }
 
     private func applyWatermark() {
-        let image = contentType == .image ? draftImage : nil
+        let image = watermarkType == .image ? draftImage : nil
         viewModel.applyWatermark(draftSettings, watermarkImage: image)
         dismiss()
     }

@@ -11,7 +11,7 @@ final class WatermarkSettingsTests: XCTestCase {
         XCTAssertEqual(settings.normalizedScale, 0.35, accuracy: 0.001)
         XCTAssertEqual(settings.rotationDegrees, 45, accuracy: 0.001)
         XCTAssertEqual(settings.position, .center)
-        XCTAssertEqual(settings.contentType, .text)
+        XCTAssertEqual(settings.watermarkType, .text)
         XCTAssertEqual(settings.layer, .aboveContent)
         XCTAssertEqual(settings.applyScope, .allPages)
     }

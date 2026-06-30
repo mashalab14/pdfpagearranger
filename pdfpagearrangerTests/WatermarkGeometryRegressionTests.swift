@@ -184,7 +184,7 @@ final class WatermarkGeometryRegressionTests: XCTestCase {
         let mediaBox = CGRect(x: 0, y: 0, width: 612, height: 792)
         var imageSettings = WatermarkSettings.default
         imageSettings.isEnabled = true
-        imageSettings.contentType = .image
+        imageSettings.watermarkType = .image
         imageSettings.imageAssetID = UUID()
         imageSettings.normalizedScale = 0.35
         imageSettings.rotationDegrees = 45

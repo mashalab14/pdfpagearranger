@@ -27,7 +27,7 @@ enum WatermarkRenderer {
             return
         }
 
-        switch settings.contentType {
+        switch settings.watermarkType {
         case .text:
             let trimmed = settings.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty, let fontSize = layout.fontSize else { return }
@@ -104,7 +104,7 @@ enum WatermarkRenderer {
         watermarkImage: UIImage?,
         context: CGContext
     ) {
-        switch settings.contentType {
+        switch settings.watermarkType {
         case .text:
             let trimmed = settings.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty, let fontSize = layout.fontSize else { return }

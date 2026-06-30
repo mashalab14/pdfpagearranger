@@ -616,8 +616,10 @@ After success:
 
 **Sections:**
 
-1. **Content**
-   - **Text** or **Image** (segmented control; default **Text**)
+1. **Watermark Type**
+   - Segmented control labeled **Watermark Type** (default **Text**)
+   - V1 options: **Text**, **Image**
+   - Architecture supports future types (e.g. QR code, PDF page, stamp) without replacing `WatermarkSettings` or `WatermarkGeometryEngine`
    - When **Text** is selected:
      - Watermark string (default **CONFIDENTIAL**)
    - When **Image** is selected:
@@ -646,9 +648,11 @@ After success:
 ### Rendering
 
 - Document-level settings stored in session (not page overlays)
-- Single `WatermarkSettings` model for both text and image content (`contentType`, `text`, `imageAssetID`)
+- Single `WatermarkSettings` model keyed by **`WatermarkType`** (V1: text, image); shared fields apply to all types
+- Type-specific fields: `text` (text type), `imageAssetID` (image type)
 - Image bytes stored in the session `imageAssets` dictionary (same storage as overlay images); settings hold only a UUID reference
-- **`WatermarkGeometryEngine`** computes normalized position, scale, rotation, and bounds once for both content types; text derives font size from render width, image derives height from aspect ratio
+- **`WatermarkGeometryEngine`** computes normalized position, scale, rotation, and bounds once for every watermark type; text derives font size from render width, image derives height from aspect ratio
+- **`WatermarkRenderer`** branches by `watermarkType` — no separate watermark systems per type
 - **Text:** vector text in export; raster composited on thumbnails and Page Mode preview
 - **Image:** raster watermark image in export (original page content remains vector); raster composited on thumbnails and Page Mode preview via `OverlayGeometryEngine` draw helpers
 - **Layer** controls stacking relative to original page content:
@@ -660,7 +664,7 @@ After success:
 
 ### Undo
 
-- Apply, change content type, change image, or remove watermark: **one undo entry** each
+- Apply, change watermark type, change image, or remove watermark: **one undo entry** each
 
 ### Remove Watermark
 

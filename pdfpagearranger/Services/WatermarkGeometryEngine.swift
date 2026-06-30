@@ -100,7 +100,7 @@ enum WatermarkGeometryEngine {
         guard renderWidth > 0, settings.normalizedScale > 0 else { return nil }
 
         let width = renderWidth * settings.normalizedScale
-        switch settings.contentType {
+        switch settings.watermarkType {
         case .text:
             let trimmed = settings.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return nil }
@@ -155,7 +155,7 @@ enum WatermarkGeometryEngine {
             marginFraction: marginFraction
         )
         let fontSize: CGFloat?
-        switch settings.contentType {
+        switch settings.watermarkType {
         case .text:
             let trimmed = settings.text.trimmingCharacters(in: .whitespacesAndNewlines)
             fontSize = Self.fontSize(

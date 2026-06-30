@@ -42,7 +42,7 @@ final class WatermarkImageRegressionTests: XCTestCase {
     ) -> WatermarkSettings {
         WatermarkSettings(
             isEnabled: true,
-            contentType: .image,
+            watermarkType: .image,
             text: WatermarkSettings.default.text,
             imageAssetID: UUID(),
             opacity: opacity,
@@ -67,7 +67,7 @@ final class WatermarkImageRegressionTests: XCTestCase {
         let json = try XCTUnwrap(String(data: data, encoding: .utf8))
         XCTAssertTrue(json.contains(assetID.uuidString))
         XCTAssertFalse(json.contains("base64"))
-        XCTAssertEqual(settings.contentType, .image)
+        XCTAssertEqual(settings.watermarkType, .image)
         XCTAssertTrue(settings.hasRenderableContent)
     }
 
@@ -81,7 +81,7 @@ final class WatermarkImageRegressionTests: XCTestCase {
         let image = watermarkImage()
         viewModel.applyWatermark(imageSettings(), watermarkImage: image)
 
-        XCTAssertEqual(viewModel.watermarkSettings.contentType, .image)
+        XCTAssertEqual(viewModel.watermarkSettings.watermarkType, .image)
         XCTAssertNotNil(viewModel.watermarkSettings.imageAssetID)
         XCTAssertNotNil(viewModel.watermarkImage)
         XCTAssertEqual(viewModel.watermarkImage?.size, image.size)
@@ -338,14 +338,14 @@ final class WatermarkImageRegressionTests: XCTestCase {
         var textSettings = WatermarkSettings.default
         textSettings.text = "TEXT"
         viewModel.applyWatermark(textSettings)
-        XCTAssertEqual(viewModel.watermarkSettings.contentType, .text)
+        XCTAssertEqual(viewModel.watermarkSettings.watermarkType, .text)
 
         viewModel.applyWatermark(imageSettings(), watermarkImage: watermarkImage())
-        XCTAssertEqual(viewModel.watermarkSettings.contentType, .image)
+        XCTAssertEqual(viewModel.watermarkSettings.watermarkType, .image)
         XCTAssertNotNil(viewModel.watermarkImage)
 
         viewModel.undo()
-        XCTAssertEqual(viewModel.watermarkSettings.contentType, .text)
+        XCTAssertEqual(viewModel.watermarkSettings.watermarkType, .text)
         XCTAssertEqual(viewModel.watermarkSettings.text, "TEXT")
         XCTAssertNil(viewModel.watermarkSettings.imageAssetID)
 
@@ -403,7 +403,7 @@ final class WatermarkImageRegressionTests: XCTestCase {
         )
         XCTAssertTrue(source.contains("PhotosPicker"))
         XCTAssertTrue(source.contains("fileImporter"))
-        XCTAssertTrue(source.contains("watermarkContentTypePicker"))
+        XCTAssertTrue(source.contains("watermarkTypePicker"))
     }
 
     private func projectSourceURL(file: String, subdirectory: String) -> URL {

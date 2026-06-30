@@ -29,7 +29,9 @@ enum WatermarkPosition: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-enum WatermarkContentType: String, CaseIterable, Codable, Identifiable {
+/// Supported watermark payload kinds. V1: text and image. Future types (e.g. QR code, PDF page, stamp)
+/// extend this enum without replacing `WatermarkSettings` or `WatermarkGeometryEngine`.
+enum WatermarkType: String, CaseIterable, Codable, Identifiable {
     case text
     case image
 
@@ -92,9 +94,9 @@ struct WatermarkColor: Equatable, Codable, Hashable {
 
 struct WatermarkSettings: Equatable, Codable {
     var isEnabled: Bool
-    var contentType: WatermarkContentType
+    var watermarkType: WatermarkType
     var text: String
-    /// Session image asset reference when `contentType` is `.image`.
+    /// Session image asset reference when `watermarkType` is `.image`.
     var imageAssetID: UUID?
     var opacity: CGFloat
     /// Content width as a fraction of page display width (0–1).
@@ -110,7 +112,7 @@ struct WatermarkSettings: Equatable, Codable {
 
     static let `default` = WatermarkSettings(
         isEnabled: false,
-        contentType: .text,
+        watermarkType: .text,
         text: "CONFIDENTIAL",
         imageAssetID: nil,
         opacity: 0.35,
@@ -128,11 +130,11 @@ struct WatermarkSettings: Equatable, Codable {
     var thumbnailCacheKeySuffix: String {
         guard isEnabled else { return "watermark-off" }
         let assetKey = imageAssetID?.uuidString ?? "none"
-        return "watermark-\(contentType.rawValue)-\(text)-\(assetKey)-\(opacity)-\(normalizedScale)-\(color.red)-\(color.green)-\(color.blue)-\(rotationDegrees)-\(position.rawValue)-\(layer.rawValue)-\(applyScope.rawValue)-\(currentPageIndex)-\(rangeStart)-\(rangeEnd)"
+        return "watermark-\(watermarkType.rawValue)-\(text)-\(assetKey)-\(opacity)-\(normalizedScale)-\(color.red)-\(color.green)-\(color.blue)-\(rotationDegrees)-\(position.rawValue)-\(layer.rawValue)-\(applyScope.rawValue)-\(currentPageIndex)-\(rangeStart)-\(rangeEnd)"
     }
 
     var hasRenderableContent: Bool {
-        switch contentType {
+        switch watermarkType {
         case .text:
             return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .image:
@@ -160,7 +162,7 @@ struct WatermarkSettings: Equatable, Codable {
 
     init(
         isEnabled: Bool,
-        contentType: WatermarkContentType = .text,
+        watermarkType: WatermarkType = .text,
         text: String,
         imageAssetID: UUID? = nil,
         opacity: CGFloat,
@@ -175,7 +177,7 @@ struct WatermarkSettings: Equatable, Codable {
         rangeEnd: Int
     ) {
         self.isEnabled = isEnabled
-        self.contentType = contentType
+        self.watermarkType = watermarkType
         self.text = text
         self.imageAssetID = imageAssetID
         self.opacity = opacity
@@ -190,10 +192,34 @@ struct WatermarkSettings: Equatable, Codable {
         self.rangeEnd = rangeEnd
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case isEnabled
+        case watermarkType
+        case contentType
+        case text
+        case imageAssetID
+        case opacity
+        case normalizedScale
+        case color
+        case rotationDegrees
+        case position
+        case layer
+        case applyScope
+        case currentPageIndex
+        case rangeStart
+        case rangeEnd
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
-        contentType = try container.decodeIfPresent(WatermarkContentType.self, forKey: .contentType) ?? .text
+        if let type = try container.decodeIfPresent(WatermarkType.self, forKey: .watermarkType) {
+            watermarkType = type
+        } else if let legacyType = try container.decodeIfPresent(WatermarkType.self, forKey: .contentType) {
+            watermarkType = legacyType
+        } else {
+            watermarkType = .text
+        }
         text = try container.decode(String.self, forKey: .text)
         imageAssetID = try container.decodeIfPresent(UUID.self, forKey: .imageAssetID)
         opacity = try container.decode(CGFloat.self, forKey: .opacity)
@@ -206,5 +232,23 @@ struct WatermarkSettings: Equatable, Codable {
         currentPageIndex = try container.decode(Int.self, forKey: .currentPageIndex)
         rangeStart = try container.decode(Int.self, forKey: .rangeStart)
         rangeEnd = try container.decode(Int.self, forKey: .rangeEnd)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(isEnabled, forKey: .isEnabled)
+        try container.encode(watermarkType, forKey: .watermarkType)
+        try container.encode(text, forKey: .text)
+        try container.encodeIfPresent(imageAssetID, forKey: .imageAssetID)
+        try container.encode(opacity, forKey: .opacity)
+        try container.encode(normalizedScale, forKey: .normalizedScale)
+        try container.encode(color, forKey: .color)
+        try container.encode(rotationDegrees, forKey: .rotationDegrees)
+        try container.encode(position, forKey: .position)
+        try container.encode(layer, forKey: .layer)
+        try container.encode(applyScope, forKey: .applyScope)
+        try container.encode(currentPageIndex, forKey: .currentPageIndex)
+        try container.encode(rangeStart, forKey: .rangeStart)
+        try container.encode(rangeEnd, forKey: .rangeEnd)
     }
 }

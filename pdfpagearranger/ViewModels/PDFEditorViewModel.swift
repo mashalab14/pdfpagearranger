@@ -179,7 +179,7 @@ final class PDFEditorViewModel {
         watermarkSettings = settings
         watermarkSettings.isEnabled = true
 
-        switch watermarkSettings.contentType {
+        switch watermarkSettings.watermarkType {
         case .text:
             watermarkSettings.imageAssetID = nil
         case .image:
@@ -190,7 +190,7 @@ final class PDFEditorViewModel {
             }
         }
 
-        if watermarkSettings.contentType == .image,
+        if watermarkSettings.watermarkType == .image,
            watermarkSettings.imageAssetID == nil {
             watermarkSettings.isEnabled = false
         }
