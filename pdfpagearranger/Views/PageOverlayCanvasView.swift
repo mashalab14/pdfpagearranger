@@ -26,6 +26,7 @@ struct PageOverlayCanvasView: View {
     @State private var steadyOffset: CGSize = .zero
     @State private var overlayManipulationState = OverlayManipulationState()
     @State private var pdfTextSelectionLayerActive = false
+    @State private var showEditSignatureSheet = false
 
     private let minScale: CGFloat = 1
     private let maxScale: CGFloat = 4
@@ -45,6 +46,21 @@ struct PageOverlayCanvasView: View {
                 overlayManipulationActive: overlayManipulationState.isActive,
                 isPageZoomed: isPageZoomed
             )
+    }
+
+    private var selectedSignatureOverlay: PageObject? {
+        guard let overlayID = pageSelection.selectedOverlayID,
+              let object = objects.first(where: { $0.id == overlayID }),
+              object.type == .signature else {
+            return nil
+        }
+        return object
+    }
+
+    private var showsSignatureContextMenu: Bool {
+        selectedSignatureOverlay != nil
+            && !signaturePlacementActive
+            && !overlayManipulationState.isActive
     }
 
     var body: some View {
@@ -107,6 +123,17 @@ struct PageOverlayCanvasView: View {
                 }
         }
         .ignoresSafeArea(edges: .horizontal)
+        .sheet(isPresented: $showEditSignatureSheet) {
+            EditSignaturePlaceholderSheet()
+        }
+        .onChange(of: pageSelection) { _, newValue in
+            guard let overlayID = newValue.selectedOverlayID,
+                  let object = objects.first(where: { $0.id == overlayID }),
+                  object.type == .signature else {
+                showEditSignatureSheet = false
+                return
+            }
+        }
     }
 
     @ViewBuilder
@@ -186,6 +213,22 @@ struct PageOverlayCanvasView: View {
                         onMore: {}
                     )
                 }
+
+                if let signature = selectedSignatureOverlay, showsSignatureContextMenu {
+                    let layout = OverlayGeometryEngine.pageModeLayout(
+                        for: signature,
+                        pageRotation: pageRotation,
+                        renderSize: fitSize
+                    )
+                    SignatureOverlayContextMenu(
+                        anchorPoint: SignatureOverlayMenuEngine.anchorPoint(
+                            for: layout,
+                            pageSize: fitSize
+                        ),
+                        onEdit: { showEditSignatureSheet = true },
+                        onDelete: { deleteSelectedSignature(signature.id) }
+                    )
+                }
             }
             .id(pageLoadKey)
             .transition(.asymmetric(
@@ -256,7 +299,16 @@ struct PageOverlayCanvasView: View {
 
     private func clearPageSelection() {
         deactivatePDFTextSelectionLayer()
+        showEditSignatureSheet = false
         pageSelection = .none
+    }
+
+    private func deleteSelectedSignature(_ overlayID: UUID) {
+        onDelete(overlayID)
+        showEditSignatureSheet = false
+        if pageSelection.selectedOverlayID == overlayID {
+            pageSelection = .none
+        }
     }
 
     private func deactivatePDFTextSelectionLayer() {

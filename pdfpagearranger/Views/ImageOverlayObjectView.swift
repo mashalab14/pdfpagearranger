@@ -102,7 +102,7 @@ struct ImageOverlayObjectView: View {
     private var overlayContent: some View {
         overlayImage
             .overlay(alignment: .topTrailing) {
-                if isSelected {
+                if isSelected, object.type != .signature {
                     deleteButton
                 }
             }

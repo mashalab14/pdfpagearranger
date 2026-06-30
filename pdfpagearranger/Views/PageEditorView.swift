@@ -145,6 +145,7 @@ struct PageEditorView: View {
         .onChange(of: showAddSheet) { _, isPresented in
             if isPresented {
                 clearPDFTextSelection()
+                pageSelection = .none
             }
         }
         .onChange(of: pageRoute.pageItemID) { _, _ in
@@ -213,6 +214,7 @@ struct PageEditorView: View {
             Spacer()
             Button {
                 clearPDFTextSelection()
+                pageSelection = .none
                 showAddSheet = true
             } label: {
                 Label("Add", systemImage: "plus.circle.fill")

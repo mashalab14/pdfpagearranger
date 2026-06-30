@@ -124,6 +124,8 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`OverlayPDFExporter`** | Draws image overlays into a PDF `CGContext` using `OverlayGeometryEngine`. |
 | **`OverlayPlacementSizing`** | Initial normalized overlay size for signatures (PNG aspect–matched frame) and images (legacy formula). |
 | **`OverlayGeometryEngine`** | Shared normalized → concrete rect mapping for Page Mode, thumbnails, and PDF export (including page rotation). |
+| **`SignatureOverlayMenuEngine`** | Positions the signature contextual menu above the selected overlay within page bounds. |
+| **`SignatureOverlayContextMenu`** | Floating Edit / Delete / More menu for selected signature overlays in Page Mode. |
 | **`SignaturePlacementEngine`** | Converts Page Mode tap coordinates to clamped normalized signature position (`Signature Placement Mode`). |
 | **`SignatureLibraryStore`** | On-device reusable signature assets (`signatures.json`), preferences (`library-preferences.json` for Default Signature ID), and `QuickSignatureResolution` for Quick Signature routing. |
 | **`SignatureLibraryView`** | Library UI; holds `@State defaultSignatureID` for immediate Default Signature feedback; optional guidance banner when Quick Signature opens the library with multiple signatures and no default. |

@@ -1023,18 +1023,33 @@ See [Adding content in Page Mode — Quick Signature](#quick-signature). Uses th
 
 ## 21. Overlay selection and manipulation
 
-Applies to **image overlays** and **signature overlays** (same UI).
+Applies to **image overlays** and **signature overlays**. Image overlays use inline chrome; **selected signature overlays** use a floating contextual menu instead of the inline delete (×) control.
 
 ### Selection
 
 | Action | Result |
 |--------|--------|
-| **Tap overlay** (not selected) | Selects overlay; shows blue border, delete (×) top-right, resize handle bottom-right; brings overlay to **front** if it was behind another |
+| **Tap image overlay** (not selected) | Selects overlay; shows blue border, delete (×) top-right, resize handle bottom-right; brings overlay to **front** if it was behind another |
+| **Tap signature overlay** (not selected) | Selects overlay; shows blue border, resize handle bottom-right, and floating contextual menu (Edit, Delete, More); brings overlay to **front** if it was behind another |
 | **Tap empty canvas** | Deselects |
 | **Select another overlay** | Switches selection |
 | **Place overlay** (image import at center, or signature after tap in Placement Mode) | New overlay is **auto-selected** with placement haptic + animation |
 
 **Only one overlay selected at a time.** No multi-select.
+
+### Signature contextual menu
+
+When a **signature overlay** is selected (and the user is not dragging/resizing it, and Signature Placement Mode is off):
+
+| Control | Behaviour |
+|---------|-----------|
+| **Edit** (pencil icon) | Opens placeholder **Edit Signature** sheet (Color, Thickness, Opacity, Replace Signature — future) |
+| **Delete** (trash icon) | Deletes the selected signature overlay (undo supported) |
+| **More** (… icon) | Placeholder menu: Duplicate, Replace Signature, Bring Forward, Send Backward (disabled for now) |
+
+The menu is positioned above the signature, clamped within the visible page area. It **hides** while the signature is being moved or resized, and when selection is cleared, another object is selected, PDF text is selected, the Add sheet opens, or Signature Placement Mode starts.
+
+Image overlays are unchanged: inline × delete and toolbar **Delete** remain available.
 
 ### Overlay placement feedback
 
@@ -1083,9 +1098,11 @@ Haptics do **not** fire for those cases either.
 
 Three ways:
 
-1. Red **×** button on overlay (top-right when selected)
-2. **Delete** in Page Mode toolbar (when overlay selected)
-3. All create **undo** entries
+1. Red **×** button on **image** overlays (top-right when selected)
+2. **Delete** in Page Mode toolbar (when any overlay selected)
+3. **Delete** (trash icon) in the **signature contextual menu** (signature overlays only)
+
+All create **undo** entries.
 
 ### Z-order
 
@@ -1140,7 +1157,8 @@ Three ways:
 | **Drag** | Overlay | Move |
 | **Drag** | Resize handle | Resize |
 | **Pinch** | Overlay | Resize |
-| **Tap** | × button | Delete overlay |
+| **Tap** | × button (image overlay) | Delete image overlay |
+| **Tap** | Signature menu trash icon | Delete signature overlay |
 
 ### Page Mode — overlay (unselected)
 
@@ -1292,7 +1310,8 @@ Single snapshot of:
 - Settings gear: accessibility label **"Settings"**
 - Document Actions: accessibility label **"More"**
 - Thumbnail action buttons: accessibility labels **"Rotate"**, **"Duplicate"**, **"Delete"**
-- Overlay delete button: **"Delete image"**
+- Overlay delete button: **"Delete image"** (image overlays only)
+- Signature contextual menu: **"Edit Signature"**, **"Delete Signature"**, **"More Signature Actions"**
 - Signature color swatches: per-color accessibility labels/identifiers
 - Signature thickness options: per-thickness accessibility labels/identifiers (`signatureThickness_thin`, etc.)
 - Signature library default star buttons: per-signature accessibility identifiers
