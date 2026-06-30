@@ -61,6 +61,7 @@ final class PlacedSignatureEditPopoverUIRegressionTests: XCTestCase {
         XCTAssertTrue(popover.contains("PlacedSignatureStrokeWidth.label"))
         XCTAssertTrue(popover.contains("PlacedSignatureStrokeWidth.decreased"))
         XCTAssertTrue(popover.contains("PlacedSignatureStrokeWidth.increased"))
+        XCTAssertTrue(popover.contains("frame(width: 44, height: 44)"))
         XCTAssertFalse(popover.contains("Done"))
         XCTAssertFalse(popover.contains("navigationTitle"))
         XCTAssertFalse(popover.contains("presentationDetents"))

@@ -45,7 +45,7 @@ final class SignatureOverlayContextMenuUIRegressionTests: XCTestCase {
         XCTAssertTrue(canvas.contains("signatureEditOverlayID"))
     }
 
-    func testSignatureMenuUsesIconActionsAndAccessibilityLabels() throws {
+    func testSignatureMenuUsesCapsuleToolbarStyling() throws {
         let menu = try projectSource(named: "SignatureOverlayContextMenu.swift", subdirectory: "Views")
         XCTAssertTrue(menu.contains("pencil"))
         XCTAssertTrue(menu.contains("trash"))
@@ -54,8 +54,11 @@ final class SignatureOverlayContextMenuUIRegressionTests: XCTestCase {
         XCTAssertTrue(menu.contains("Delete Signature"))
         XCTAssertTrue(menu.contains("More Signature Actions"))
         XCTAssertTrue(menu.contains("signatureOverlayContextMenu"))
-        XCTAssertTrue(menu.contains("Duplicate"))
-        XCTAssertTrue(menu.contains("Bring Forward"))
+        XCTAssertTrue(menu.contains("Color.white.opacity(0.75)"))
+        XCTAssertTrue(menu.contains("Capsule()"))
+        XCTAssertTrue(menu.contains("foregroundStyle: Color.red"))
+        XCTAssertTrue(menu.contains("foregroundStyle: Color.primary"))
+        XCTAssertFalse(menu.contains("regularMaterial"))
     }
 
     func testSignatureOverlaysHideInlineDeleteControl() throws {

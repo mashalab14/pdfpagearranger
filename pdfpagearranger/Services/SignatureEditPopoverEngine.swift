@@ -1,7 +1,7 @@
 import CoreGraphics
 
 enum SignatureEditPopoverEngine {
-    static let popoverSize = CGSize(width: 248, height: 76)
+    static let popoverSize = CGSize(width: 248, height: 96)
     static let edgePadding: CGFloat = 8
     static let verticalSpacing: CGFloat = 12
 

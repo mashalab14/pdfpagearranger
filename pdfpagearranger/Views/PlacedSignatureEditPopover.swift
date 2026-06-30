@@ -45,7 +45,7 @@ struct PlacedSignatureEditPopover: View {
                 }
             }
 
-            HStack(spacing: 10) {
+            HStack(spacing: 6) {
                 Button {
                     pickerColor = overlay.effectiveSignatureInkUIColor
                     showColorPicker = true
@@ -63,15 +63,17 @@ struct PlacedSignatureEditPopover: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .frame(width: 36, height: 36)
                 .accessibilityLabel("Advanced Color")
                 .accessibilityIdentifier("signatureEditAdvancedColorButton")
 
                 Button(action: onDecreaseThickness) {
                     Image(systemName: "minus")
                         .font(.subheadline.weight(.semibold))
-                        .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
                 .disabled(PlacedSignatureStrokeWidth.decreased(from: strokeWidthPoints) == nil)
                 .accessibilityLabel("Decrease Thickness")
                 .accessibilityIdentifier("signatureEditThicknessMinus")
@@ -79,15 +81,16 @@ struct PlacedSignatureEditPopover: View {
                 Text(PlacedSignatureStrokeWidth.label(for: strokeWidthPoints))
                     .font(.caption.monospacedDigit().weight(.medium))
                     .foregroundStyle(.secondary)
-                    .frame(minWidth: 36)
+                    .frame(minWidth: 40)
                     .accessibilityIdentifier("signatureEditThicknessValue")
 
                 Button(action: onIncreaseThickness) {
                     Image(systemName: "plus")
                         .font(.subheadline.weight(.semibold))
-                        .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
                 .disabled(PlacedSignatureStrokeWidth.increased(from: strokeWidthPoints) == nil)
                 .accessibilityLabel("Increase Thickness")
                 .accessibilityIdentifier("signatureEditThicknessPlus")
