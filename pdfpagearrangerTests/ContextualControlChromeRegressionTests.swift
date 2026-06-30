@@ -21,12 +21,30 @@ final class ContextualGlassContainerRegressionTests: XCTestCase {
     func testUnifiedFloatingPanelUsesClearGlassAndRoundedRectangle() throws {
         let container = try projectSource(named: "ContextualGlassContainer.swift", subdirectory: "Views")
         let metrics = try projectSource(named: "ContextualControlMetrics.swift", subdirectory: "Models")
-        XCTAssertTrue(container.contains("floatingPanelCornerRadius"))
+        XCTAssertTrue(container.contains("ZStack"))
+        XCTAssertTrue(container.contains("floatingPanelBackground"))
         XCTAssertTrue(container.contains("glassEffect("))
         XCTAssertTrue(container.contains(".rect(cornerRadius: cornerRadius, style: .continuous)"))
         XCTAssertTrue(metrics.contains("floatingPanelGlass: Glass = .clear"))
         XCTAssertFalse(container.contains("Capsule()"))
         XCTAssertFalse(container.contains("glassEffect(.regular"))
+        XCTAssertFalse(container.contains(".background {"))
+    }
+
+    func testCanvasDoesNotWrapContextualControlsInGlassEffectContainer() throws {
+        let canvas = try projectSource(named: "PageOverlayCanvasView.swift", subdirectory: "Views")
+        XCTAssertFalse(canvas.contains("GlassEffectContainer"))
+        XCTAssertFalse(canvas.contains("glassEffectID"))
+    }
+
+    func testForegroundContentIsNotInsideGlassEffectHierarchy() throws {
+        let container = try projectSource(named: "ContextualGlassContainer.swift", subdirectory: "Views")
+        let backgroundStart = try XCTUnwrap(container.range(of: "private var floatingPanelBackground"))
+        let bodyEnd = try XCTUnwrap(container.range(of: "extension View"))
+        let backgroundSection = String(container[backgroundStart.lowerBound..<bodyEnd.lowerBound])
+        XCTAssertTrue(backgroundSection.contains("glassEffect("))
+        XCTAssertFalse(backgroundSection.contains("content"))
+        XCTAssertTrue(container.contains("content\n                .padding(.horizontal, horizontalPadding)"))
     }
 
     func testToolbarUsesCompactVisibleHeightAndHeavyIcons() throws {
