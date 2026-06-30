@@ -11,6 +11,7 @@ final class WatermarkSettingsTests: XCTestCase {
         XCTAssertEqual(settings.normalizedScale, 0.35, accuracy: 0.001)
         XCTAssertEqual(settings.rotationDegrees, 45, accuracy: 0.001)
         XCTAssertEqual(settings.position, .center)
+        XCTAssertEqual(settings.layer, .aboveContent)
         XCTAssertEqual(settings.applyScope, .allPages)
     }
 
@@ -326,9 +327,11 @@ final class WatermarkExportRegressionTests: XCTestCase {
             contentsOf: projectSourceURL(file: "PDFService.swift", subdirectory: "Services"),
             encoding: .utf8
         )
-        let watermarkRange = try XCTUnwrap(source.range(of: "WatermarkRenderer.drawInPDFContext"))
         let overlayRange = try XCTUnwrap(source.range(of: "OverlayPDFExporter.drawOverlays"))
-        XCTAssertLessThan(watermarkRange.lowerBound, overlayRange.lowerBound)
+        let behindRange = try XCTUnwrap(source.range(of: "watermarkSettings.layer == .behindContent"))
+        let aboveRange = try XCTUnwrap(source.range(of: "watermarkSettings.layer == .aboveContent"))
+        XCTAssertLessThan(behindRange.lowerBound, overlayRange.lowerBound)
+        XCTAssertLessThan(aboveRange.lowerBound, overlayRange.lowerBound)
     }
 
     func testWatermarkWithImageOverlayPreservesSearchableText() throws {

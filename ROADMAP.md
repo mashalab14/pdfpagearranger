@@ -7,7 +7,7 @@
 - Image overlays
 - Signature library, Quick Signature, default signature, stroke thickness
 - Page numbers (document-level)
-- **Text watermark (document-level, V1)**
+- **Text watermark (document-level, V1)** — including above/behind content layer placement
 - Compression (metadata optimization)
 - Export with vector page preservation
 - Undo (single-level stack)

@@ -79,7 +79,7 @@ actor ThumbnailService {
 
             if watermarkSettings.shouldApply(toExportIndex: exportIndex) {
                 image = WatermarkRenderer.compositeOnImage(
-                    baseImage: image,
+                    pageImage: image,
                     pageRotation: rotation,
                     settings: watermarkSettings,
                     mediaBox: mediaBox

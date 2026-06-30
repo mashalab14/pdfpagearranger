@@ -169,10 +169,20 @@ final class PDFService {
 
         context.beginPDFPage(nil)
 
+        let appliesWatermark = watermarkSettings.shouldApply(toExportIndex: exportIndex)
+        if appliesWatermark, watermarkSettings.layer == .behindContent {
+            WatermarkRenderer.drawInPDFContext(
+                context: context,
+                mediaBox: mediaBox,
+                pageRotation: pageRotation,
+                settings: watermarkSettings
+            )
+        }
+
         // Draw original page content as vector PDF (preserves selectable text).
         sourcePage.draw(with: .mediaBox, to: context)
 
-        if watermarkSettings.shouldApply(toExportIndex: exportIndex) {
+        if appliesWatermark, watermarkSettings.layer == .aboveContent {
             WatermarkRenderer.drawInPDFContext(
                 context: context,
                 mediaBox: mediaBox,

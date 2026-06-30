@@ -623,6 +623,8 @@ After success:
    - Rotation stepper (**−180°…180°**, default **45°**)
    - Color presets: Gray, Black, Blue, Red (default Gray)
    - Position: Center (**default**), Top, Bottom
+   - Layer: **Above content** (**default**), Behind content
+     - Helper when Behind content is selected: *"Behind content may be hidden by page text, images, or filled backgrounds."*
 3. **Apply To**
    - **Entire document** (default)
    - **Current page** — stepper to pick page number
@@ -637,7 +639,10 @@ After success:
 - Document-level settings stored in session (not page overlays)
 - **`WatermarkGeometryEngine`** computes normalized position, scale, rotation, and bounds once; all renderers derive font size from the active canvas width
 - Vector text in export; raster composited on thumbnails and Page Mode preview
-- Drawn **behind** image/signature overlays; page numbers remain on top when both are enabled
+- **Layer** controls stacking relative to original page content:
+  - **Above content** — page vector/text first, then watermark, then manual overlays, then page numbers
+  - **Behind content** — watermark first, then page content, then manual overlays, then page numbers
+- Manual image/signature overlays and page numbers always render above the watermark
 - Occupies the same relative percentage of every page regardless of page size, thumbnail size, Page Mode zoom, or export resolution
 - Works with rotated pages and mixed page sizes
 

@@ -37,15 +37,15 @@ enum WatermarkRenderer {
     }
 
     static func compositeOnImage(
-        baseImage: UIImage,
+        pageImage: UIImage,
         pageRotation: Int,
         settings: WatermarkSettings,
         mediaBox: CGRect
     ) -> UIImage {
         let trimmed = settings.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return baseImage }
+        guard !trimmed.isEmpty else { return pageImage }
 
-        let renderSize = baseImage.size
+        let renderSize = pageImage.size
         guard let layout = WatermarkGeometryEngine.concreteLayout(
             settings: settings,
             text: trimmed,
@@ -54,20 +54,34 @@ enum WatermarkRenderer {
             renderSize: renderSize,
             coordinateSpace: .topLeftOrigin
         ) else {
-            return baseImage
+            return pageImage
         }
 
         let format = UIGraphicsImageRendererFormat.default()
-        format.scale = baseImage.scale
+        format.scale = pageImage.scale
         return UIGraphicsImageRenderer(size: renderSize, format: format).image { rendererContext in
-            baseImage.draw(at: .zero)
-            drawRotatedTextInImageContext(
-                trimmed,
-                layout: layout,
-                color: settings.color.uiColor,
-                opacity: settings.opacity,
-                context: rendererContext.cgContext
-            )
+            switch settings.layer {
+            case .aboveContent:
+                pageImage.draw(at: .zero)
+                drawRotatedTextInImageContext(
+                    trimmed,
+                    layout: layout,
+                    color: settings.color.uiColor,
+                    opacity: settings.opacity,
+                    context: rendererContext.cgContext
+                )
+            case .behindContent:
+                UIColor.white.setFill()
+                rendererContext.fill(CGRect(origin: .zero, size: renderSize))
+                drawRotatedTextInImageContext(
+                    trimmed,
+                    layout: layout,
+                    color: settings.color.uiColor,
+                    opacity: settings.opacity,
+                    context: rendererContext.cgContext
+                )
+                pageImage.draw(at: .zero)
+            }
         }
     }
 

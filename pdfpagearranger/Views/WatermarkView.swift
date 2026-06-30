@@ -11,6 +11,7 @@ struct WatermarkView: View {
     @State private var color: WatermarkColor
     @State private var rotationDegrees: Double
     @State private var position: WatermarkPosition
+    @State private var layer: WatermarkLayer
     @State private var applyScope: WatermarkApplyScope
     @State private var currentPageIndex: Int
     @State private var rangeStart: Int
@@ -25,6 +26,7 @@ struct WatermarkView: View {
         _color = State(initialValue: settings.color)
         _rotationDegrees = State(initialValue: Double(settings.rotationDegrees))
         _position = State(initialValue: settings.position)
+        _layer = State(initialValue: settings.layer)
         _applyScope = State(initialValue: settings.applyScope)
         _currentPageIndex = State(initialValue: settings.currentPageIndex)
         _rangeStart = State(initialValue: settings.rangeStart)
@@ -71,6 +73,22 @@ struct WatermarkView: View {
                     }
                     .pickerStyle(.inline)
                     .labelsHidden()
+
+                    Picker("Layer", selection: $layer) {
+                        ForEach(WatermarkLayer.allCases) { option in
+                            Text(option.title).tag(option)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                    .accessibilityIdentifier("watermarkLayerPicker")
+
+                    if layer == .behindContent {
+                        Text("Behind content may be hidden by page text, images, or filled backgrounds.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("watermarkBehindContentHelper")
+                    }
                 }
 
                 Section("Apply To") {
@@ -172,6 +190,7 @@ struct WatermarkView: View {
             color: color,
             rotationDegrees: CGFloat(rotationDegrees),
             position: position,
+            layer: layer,
             applyScope: applyScope,
             currentPageIndex: currentPageIndex,
             rangeStart: rangeStart,

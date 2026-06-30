@@ -29,6 +29,20 @@ enum WatermarkPosition: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum WatermarkLayer: String, CaseIterable, Codable, Identifiable {
+    case aboveContent
+    case behindContent
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .aboveContent: return "Above content"
+        case .behindContent: return "Behind content"
+        }
+    }
+}
+
 enum WatermarkApplyScope: String, CaseIterable, Codable, Identifiable {
     case allPages
     case currentPage
@@ -71,6 +85,7 @@ struct WatermarkSettings: Equatable, Codable {
     var color: WatermarkColor
     var rotationDegrees: CGFloat
     var position: WatermarkPosition
+    var layer: WatermarkLayer
     var applyScope: WatermarkApplyScope
     var currentPageIndex: Int
     var rangeStart: Int
@@ -84,6 +99,7 @@ struct WatermarkSettings: Equatable, Codable {
         color: .defaultGray,
         rotationDegrees: 45,
         position: .center,
+        layer: .aboveContent,
         applyScope: .allPages,
         currentPageIndex: 1,
         rangeStart: 1,
@@ -92,7 +108,7 @@ struct WatermarkSettings: Equatable, Codable {
 
     var thumbnailCacheKeySuffix: String {
         guard isEnabled else { return "watermark-off" }
-        return "watermark-\(text)-\(opacity)-\(normalizedScale)-\(color.red)-\(color.green)-\(color.blue)-\(rotationDegrees)-\(position.rawValue)-\(applyScope.rawValue)-\(currentPageIndex)-\(rangeStart)-\(rangeEnd)"
+        return "watermark-\(text)-\(opacity)-\(normalizedScale)-\(color.red)-\(color.green)-\(color.blue)-\(rotationDegrees)-\(position.rawValue)-\(layer.rawValue)-\(applyScope.rawValue)-\(currentPageIndex)-\(rangeStart)-\(rangeEnd)"
     }
 
     func shouldApply(toExportIndex exportIndex: Int) -> Bool {
@@ -111,5 +127,49 @@ struct WatermarkSettings: Equatable, Codable {
             let upper = max(rangeStart, rangeEnd)
             return pagePosition >= lower && pagePosition <= upper
         }
+    }
+
+    init(
+        isEnabled: Bool,
+        text: String,
+        opacity: CGFloat,
+        normalizedScale: CGFloat,
+        color: WatermarkColor,
+        rotationDegrees: CGFloat,
+        position: WatermarkPosition,
+        layer: WatermarkLayer = .aboveContent,
+        applyScope: WatermarkApplyScope,
+        currentPageIndex: Int,
+        rangeStart: Int,
+        rangeEnd: Int
+    ) {
+        self.isEnabled = isEnabled
+        self.text = text
+        self.opacity = opacity
+        self.normalizedScale = normalizedScale
+        self.color = color
+        self.rotationDegrees = rotationDegrees
+        self.position = position
+        self.layer = layer
+        self.applyScope = applyScope
+        self.currentPageIndex = currentPageIndex
+        self.rangeStart = rangeStart
+        self.rangeEnd = rangeEnd
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
+        text = try container.decode(String.self, forKey: .text)
+        opacity = try container.decode(CGFloat.self, forKey: .opacity)
+        normalizedScale = try container.decode(CGFloat.self, forKey: .normalizedScale)
+        color = try container.decode(WatermarkColor.self, forKey: .color)
+        rotationDegrees = try container.decode(CGFloat.self, forKey: .rotationDegrees)
+        position = try container.decode(WatermarkPosition.self, forKey: .position)
+        layer = try container.decodeIfPresent(WatermarkLayer.self, forKey: .layer) ?? .aboveContent
+        applyScope = try container.decode(WatermarkApplyScope.self, forKey: .applyScope)
+        currentPageIndex = try container.decode(Int.self, forKey: .currentPageIndex)
+        rangeStart = try container.decode(Int.self, forKey: .rangeStart)
+        rangeEnd = try container.decode(Int.self, forKey: .rangeEnd)
     }
 }

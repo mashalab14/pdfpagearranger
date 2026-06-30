@@ -112,7 +112,7 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`PDFService`** | Import (copy to temp), export (assemble new PDF), initial `PageItem` list. |
 | **`PDFPreviewRenderer`** | On-screen PDF page rasterization via `PDFPage.thumbnail` (correct orientation). |
 | **`PageRenderService`** | High-resolution page image for Page Mode. |
-| **`WatermarkSettings`** | Document-level text watermark configuration (text, opacity, normalized scale, color, rotation, position, apply scope). |
+| **`WatermarkSettings`** | Document-level text watermark configuration (text, opacity, normalized scale, color, rotation, position, layer, apply scope). |
 | **`WatermarkGeometryEngine`** | Single source of truth for watermark normalized position, scale, rotation, and bounds; derives concrete font size from render target width. |
 | **`WatermarkRenderer`** | Vector watermark text for PDF export; image compositing for thumbnails and Page Mode (delegates all placement to `WatermarkGeometryEngine`). |
 | **`PageModeLayoutSizing`** | Page Mode width-fill layout: safe area + 16 pt horizontal margins; height from page aspect ratio. |
@@ -135,7 +135,12 @@ Never edit the imported source bytes in place. Never assume export output overwr
 ### Export pipeline (overlays, watermark, page numbers)
 
 1. For pages **without** overlays, watermark, or page numbers: copy source `PDFPage`, apply rotation, insert.
-2. For pages **with** decorations: draw source page vector content with `PDFPage.draw`, then **watermark** (vector text), then overlay images via `OverlayPDFExporter`, then page numbers.
+2. For pages **with** decorations:
+   - **Behind content** watermark (if enabled): vector watermark text
+   - Source page vector content via `PDFPage.draw` (preserves selectable text)
+   - **Above content** watermark (if enabled): vector watermark text
+   - Overlay images via `OverlayPDFExporter`
+   - Page numbers
 3. **Do not** use `PDFPage(image:)` for export — that rasterizes the page and destroys selectable text.
 
 ---
