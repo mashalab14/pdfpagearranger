@@ -299,7 +299,7 @@ final class SignatureDefaultUIRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("resolveQuickSignatureResolution"))
         XCTAssertTrue(source.contains("signatureLibraryShowsDefaultGuidance"))
         XCTAssertTrue(source.contains("beginSignaturePlacement"))
-        XCTAssertTrue(source.contains("selectedObjectID = overlayID"))
+        XCTAssertTrue(source.contains("pageSelection = .overlay(overlayID)"))
     }
 
     func testDefaultSignatureStateUpdatesImmediatelyWithoutStoreReadInTile() throws {

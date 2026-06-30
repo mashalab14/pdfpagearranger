@@ -697,6 +697,41 @@ After success:
 - **Delete** button (destructive, top-right) appears in addition to **Done**
 - Deletes the **selected** overlay
 
+### PDF text selection
+
+Page Mode uses native **PDFKit** text selection on the underlying vector page (not rasterized). The selection layer is **lazy**: it mounts only after the user long-presses the page (intent precedes interface) or while text remains selected. It sits beneath the composited page preview image.
+
+**Entering text selection:** long-press (~0.35s) on the page canvas, then use standard PDFKit text selection (drag handles / loupe).
+
+**Selection state** (`PageModeSelection`):
+
+| State | Meaning |
+|-------|---------|
+| `none` | Nothing selected |
+| `overlay` | A user overlay (image/signature) is selected |
+| `pdfText` | Native PDF text is selected |
+
+**When text is selected:**
+
+- A lightweight contextual menu appears near the selection:
+  - **Copy** — copies selected text to the pasteboard
+  - **Highlight** — placeholder (no-op)
+  - **Comment** — placeholder (no-op)
+  - **›** chevron — placeholder for future actions (not labeled “More”)
+- Menu disappears when selection is cleared
+- No permanent annotation toolbar; menu only appears after text is selected
+
+**Clearing text selection:**
+
+- Tap outside the selection / empty page
+- Select an overlay
+- Enter **Add** sheet or **Signature Placement Mode**
+- Change pages
+
+**Gestures preserved:** pinch zoom, double-tap zoom reset, page swipe, overlay tap/select — unchanged when no text is selected. Text selection does not add a permanent chrome bar.
+
+**Export:** no change — text selection is Page Mode UI only for now.
+
 ### Leaving Page Mode
 
 | Action | Result |
@@ -709,7 +744,7 @@ After success:
 
 - Overlays belong to **specific pages** (by internal page ID)
 - Navigating between pages in Page Mode does **not** move overlays between pages
-- Changing pages **clears overlay selection**
+- Changing pages **clears overlay and PDF text selection**
 - Page zoom/pan resets when changing pages (fresh canvas per page)
 
 ---

@@ -78,7 +78,7 @@ final class PageModeNavigationRegressionTests: XCTestCase {
         let source = try source(named: "PageEditorView.swift")
         XCTAssertTrue(source.contains("navigateToAdjacentPage"))
         XCTAssertTrue(source.contains("PageModeNavigationEngine.adjacentPageIndex"))
-        XCTAssertTrue(source.contains("selectedObjectID = nil"))
+        XCTAssertTrue(source.contains("pageSelection = .none"))
     }
 
     func testOverlayStateRemainsCorrectPerPage() throws {

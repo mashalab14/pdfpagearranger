@@ -19,10 +19,12 @@ struct PageEditorView: View {
     @State private var showSignatureLibrary = false
     @State private var signatureLibraryShowsDefaultGuidance = false
     @State private var selectedPhotoItem: PhotosPickerItem?
-    @State private var selectedObjectID: UUID?
+    @State private var pageSelection: PageModeSelection = .none
+    @State private var pdfSelectionClearToken = UUID()
     @State private var placementAnimatingOverlayIDs: Set<UUID> = []
     @State private var pendingSignatureImage: UIImage?
     @State private var pageTransitionEdge: Edge = .trailing
+    @State private var lastPageNavigationUptime: TimeInterval = 0
 
     private let signatureLibraryStore: SignatureLibraryStore
 
@@ -100,7 +102,7 @@ struct PageEditorView: View {
                     dismiss()
                 }
             }
-            if selectedObjectID != nil, !signaturePlacementActive {
+            if pageSelection.selectedOverlayID != nil, !signaturePlacementActive {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Delete", role: .destructive) {
                         deleteSelectedOverlay()
@@ -111,12 +113,15 @@ struct PageEditorView: View {
         .sheet(isPresented: $showAddSheet) {
             PageAddOptionsSheet(
                 onImageTapped: {
+                    clearPDFTextSelection()
                     showPhotosPicker = true
                 },
                 onQuickSignatureTapped: {
+                    clearPDFTextSelection()
                     handleQuickSignature()
                 },
                 onSignatureLibraryTapped: {
+                    clearPDFTextSelection()
                     signatureLibraryShowsDefaultGuidance = false
                     showSignatureLibrary = true
                 }
@@ -137,10 +142,21 @@ struct PageEditorView: View {
                 await importPhotoItem(newItem)
             }
         }
+        .onChange(of: showAddSheet) { _, isPresented in
+            if isPresented {
+                clearPDFTextSelection()
+            }
+        }
         .onChange(of: pageRoute.pageItemID) { _, _ in
             cancelSignaturePlacement()
-            selectedObjectID = nil
+            pageSelection = .none
+            bumpPDFSelectionClearToken()
             placementAnimatingOverlayIDs.removeAll()
+        }
+        .onChange(of: pageSelection) { oldValue, newValue in
+            if case .pdfText = oldValue, newValue.pdfTextSelection == nil {
+                bumpPDFSelectionClearToken()
+            }
         }
         .task(id: renderTaskKey) {
             await loadPageImage()
@@ -149,10 +165,12 @@ struct PageEditorView: View {
 
     @ViewBuilder
     private var pageContent: some View {
-        if let pageImage, let pageItem {
+        if let pageImage, let pageItem, let pdfPage = document.page(at: pageItem.originalPageIndex) {
             PageOverlayCanvasView(
                 pageImage: pageImage,
+                pdfPage: pdfPage,
                 pageRotation: pageItem.rotation,
+                pageLoadKey: "\(pageItem.id.uuidString)-\(pageItem.rotation)",
                 objects: viewModel.overlayObjects(for: pageItem.id),
                 placementAnimatingOverlayIDs: placementAnimatingOverlayIDs,
                 onPlacementAnimationFinished: { overlayID in
@@ -162,19 +180,17 @@ struct PageEditorView: View {
                 onSignaturePlacementTap: { location, displaySize in
                     placeSignature(atDisplayTap: location, displayPageSize: displaySize)
                 },
-                selectedObjectID: $selectedObjectID,
+                pageSelection: $pageSelection,
+                pdfSelectionClearToken: pdfSelectionClearToken,
                 imageProvider: { viewModel.imageAsset(for: $0) },
                 onUpdate: { viewModel.updateOverlay($0) },
                 onDelete: { viewModel.deleteOverlay(id: $0, pageItemID: pageItem.id) },
                 onPageSwipe: { direction in
                     navigateToAdjacentPage(direction: direction)
-                }
+                },
+                onPDFTextMenuCopy: copySelectedPDFText,
+                pageTransitionEdge: pageTransitionEdge
             )
-            .id(pageItem.id)
-            .transition(.asymmetric(
-                insertion: .move(edge: pageTransitionEdge),
-                removal: .move(edge: pageTransitionEdge == .trailing ? .leading : .trailing)
-            ))
         } else {
             ProgressView("Loading page…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -196,6 +212,7 @@ struct PageEditorView: View {
         HStack {
             Spacer()
             Button {
+                clearPDFTextSelection()
                 showAddSheet = true
             } label: {
                 Label("Add", systemImage: "plus.circle.fill")
@@ -228,8 +245,9 @@ struct PageEditorView: View {
 
     private func loadPageImage() async {
         guard let pageItem else { return }
-        let exportIndex = viewModel.pageIndex(for: pageItem.id) ?? (pageNumber - 1)
-        pageImage = await PageRenderService.shared.pageImage(
+        let pageID = pageItem.id
+        let exportIndex = viewModel.pageIndex(for: pageID) ?? (pageNumber - 1)
+        let image = await PageRenderService.shared.pageImage(
             for: pageItem,
             document: document,
             pageNumberSettings: viewModel.pageNumberSettings,
@@ -238,6 +256,8 @@ struct PageEditorView: View {
             exportIndex: exportIndex,
             totalPages: viewModel.pageCount
         )
+        guard self.pageItem?.id == pageID else { return }
+        pageImage = image
     }
 
     private func importPhotoItem(_ item: PhotosPickerItem) async {
@@ -257,9 +277,9 @@ struct PageEditorView: View {
     }
 
     private func deleteSelectedOverlay() {
-        guard let pageItem, let selectedObjectID else { return }
-        viewModel.deleteOverlay(id: selectedObjectID, pageItemID: pageItem.id)
-        self.selectedObjectID = nil
+        guard let pageItem, let overlayID = pageSelection.selectedOverlayID else { return }
+        viewModel.deleteOverlay(id: overlayID, pageItemID: pageItem.id)
+        pageSelection = .none
     }
 
     private func handleQuickSignature() {
@@ -279,13 +299,13 @@ struct PageEditorView: View {
     }
 
     private func beginSignaturePlacement(image: UIImage) {
+        clearPDFTextSelection()
         pendingSignatureImage = image
-        selectedObjectID = nil
+        pageSelection = .none
     }
 
     private func cancelSignaturePlacement() {
         pendingSignatureImage = nil
-        selectedObjectID = nil
     }
 
     private func placeSignature(atDisplayTap tap: CGPoint, displayPageSize: CGSize) {
@@ -313,13 +333,31 @@ struct PageEditorView: View {
         registerNewOverlayPlacement(overlayID: overlayID)
     }
 
+    private func copySelectedPDFText(_ text: String) {
+        UIPasteboard.general.string = text
+    }
+
+    private func clearPDFTextSelection() {
+        if case .pdfText = pageSelection {
+            pageSelection = .none
+        }
+        bumpPDFSelectionClearToken()
+    }
+
+    private func bumpPDFSelectionClearToken() {
+        pdfSelectionClearToken = UUID()
+    }
+
     private func registerNewOverlayPlacement(overlayID: UUID) {
         placementAnimatingOverlayIDs.insert(overlayID)
         OverlayPlacementFeedback.playPlacementHaptic()
-        selectedObjectID = overlayID
+        pageSelection = .overlay(overlayID)
     }
 
     private func navigateToAdjacentPage(direction: PageModeNavigationDirection) {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastPageNavigationUptime > 0.35 else { return }
+
         guard let currentIndex = viewModel.pageIndex(for: pageRoute.pageItemID),
               let targetIndex = PageModeNavigationEngine.adjacentPageIndex(
                 currentIndex: currentIndex,
@@ -329,7 +367,8 @@ struct PageEditorView: View {
             return
         }
 
-        selectedObjectID = nil
+        lastPageNavigationUptime = now
+        pageSelection = .none
         pageTransitionEdge = direction == .next ? .trailing : .leading
 
         withAnimation(.easeInOut(duration: 0.25)) {

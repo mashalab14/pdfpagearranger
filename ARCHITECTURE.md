@@ -116,7 +116,9 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`WatermarkSettings`** | Document-level watermark configuration (`watermarkType`, text, `imageAssetID`, opacity, normalized scale, color, rotation, position, layer, apply scope). |
 | **`WatermarkGeometryEngine`** | Single source of truth for watermark normalized position, scale, rotation, and bounds across all watermark types; derives text font size or image content size from render target width. |
 | **`WatermarkRenderer`** | Branches by `watermarkType`: text (vector PDF / raster preview), image (raster via `OverlayGeometryEngine`). Delegates placement to `WatermarkGeometryEngine`. |
-| **`PageModeLayoutSizing`** | Page Mode width-fill layout: safe area + 16 pt horizontal margins; height from page aspect ratio. |
+| **`PageModeSelection`** | Page Mode focus: `none`, `overlay(UUID)`, or `pdfText(PDFTextSelection)` — separate from user overlays. |
+| **`PDFTextSelectionEngine`** | Maps PDFKit selection bounds to Page Mode display coordinates for menu placement. |
+| **`PDFPageTextSelectionView`** | Lazy-mounted `PDFView` for native text selection; disables internal scrolling; forwards page swipes when active. |
 | **`ThumbnailService`** | Cached document thumbnails; composited with overlays when present. |
 | **`OverlayCompositor`** | Draws image overlays onto a thumbnail/page bitmap using `OverlayGeometryEngine`. |
 | **`OverlayPDFExporter`** | Draws image overlays into a PDF `CGContext` using `OverlayGeometryEngine`. |
