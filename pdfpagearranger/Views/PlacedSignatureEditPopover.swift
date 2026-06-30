@@ -12,7 +12,17 @@ struct PlacedSignatureEditPopover: View {
     @State private var showColorPicker = false
     @State private var pickerColor: UIColor
 
-    private let tapTarget = ContextualControlMetrics.minimumTapTarget
+    private var strokeWidthPoints: Int {
+        overlay.effectiveSignatureStrokeWidthPoints
+    }
+
+    private var usesCustomColor: Bool {
+        overlay.signatureCustomInkRGBA != nil
+    }
+
+    private var columnUnit: CGFloat {
+        ContextualControlMetrics.thicknessRowColumnUnit
+    }
 
     init(
         overlay: PageObject,
@@ -31,18 +41,6 @@ struct PlacedSignatureEditPopover: View {
         _pickerColor = State(initialValue: overlay.effectiveSignatureInkUIColor)
     }
 
-    private var strokeWidthPoints: Int {
-        overlay.effectiveSignatureStrokeWidthPoints
-    }
-
-    private var usesCustomColor: Bool {
-        overlay.signatureCustomInkRGBA != nil
-    }
-
-    private var columnUnit: CGFloat {
-        ContextualControlMetrics.thicknessRowColumnUnit
-    }
-
     var body: some View {
         VStack(spacing: ContextualControlMetrics.popoverRowSpacing) {
             HStack(spacing: ContextualControlMetrics.popoverColorRowSpacing) {
@@ -50,6 +48,7 @@ struct PlacedSignatureEditPopover: View {
                     presetColorButton(color)
                 }
             }
+            .frame(height: ContextualControlMetrics.popoverVisibleRowHeight)
 
             HStack(spacing: 0) {
                 columnSlot(width: columnUnit * ContextualControlMetrics.thicknessRowPaletteColumns) {
@@ -58,6 +57,7 @@ struct PlacedSignatureEditPopover: View {
                 columnSlot(width: columnUnit * ContextualControlMetrics.thicknessRowMinusColumns) {
                     thicknessButton(
                         systemName: "minus",
+                        visibleWidth: columnUnit * ContextualControlMetrics.thicknessRowMinusColumns,
                         accessibilityLabel: "Decrease Thickness",
                         accessibilityIdentifier: "signatureEditThicknessMinus",
                         isEnabled: PlacedSignatureStrokeWidth.decreased(from: strokeWidthPoints) != nil,
@@ -74,6 +74,7 @@ struct PlacedSignatureEditPopover: View {
                 columnSlot(width: columnUnit * ContextualControlMetrics.thicknessRowPlusColumns) {
                     thicknessButton(
                         systemName: "plus",
+                        visibleWidth: columnUnit * ContextualControlMetrics.thicknessRowPlusColumns,
                         accessibilityLabel: "Increase Thickness",
                         accessibilityIdentifier: "signatureEditThicknessPlus",
                         isEnabled: PlacedSignatureStrokeWidth.increased(from: strokeWidthPoints) != nil,
@@ -81,10 +82,15 @@ struct PlacedSignatureEditPopover: View {
                     )
                 }
             }
-            .frame(width: ContextualControlMetrics.popoverContentWidth)
-            .padding(.vertical, ContextualControlMetrics.thicknessRowVerticalInset)
+            .frame(
+                width: ContextualControlMetrics.popoverContentWidth,
+                height: ContextualControlMetrics.popoverVisibleRowHeight
+            )
         }
-        .contextualGlassContainer()
+        .contextualGlassContainer(
+            horizontalPadding: ContextualControlMetrics.popoverHorizontalPadding,
+            verticalPadding: ContextualControlMetrics.popoverVerticalPadding
+        )
         .position(anchorPoint)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("placedSignatureEditPopover")
@@ -105,7 +111,7 @@ struct PlacedSignatureEditPopover: View {
         ZStack {
             content()
         }
-        .frame(width: width, height: tapTarget)
+        .frame(width: width, height: ContextualControlMetrics.popoverVisibleRowHeight)
     }
 
     private var paletteButton: some View {
@@ -114,7 +120,7 @@ struct PlacedSignatureEditPopover: View {
             showColorPicker = true
         } label: {
             Image(systemName: "paintpalette.fill")
-                .font(ContextualControlMetrics.symbolFont.weight(ContextualControlMetrics.symbolWeight))
+                .font(ContextualControlMetrics.toolbarSymbolFont)
                 .foregroundStyle(usesCustomColor ? Color.accentColor : Color.primary)
                 .frame(
                     width: ContextualControlMetrics.presetColorDiameter,
@@ -127,17 +133,19 @@ struct PlacedSignatureEditPopover: View {
                             lineWidth: 2
                         )
                 )
-                .frame(width: tapTarget, height: tapTarget)
-                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .frame(width: tapTarget, height: tapTarget)
+        .contextualExpandedTapTarget(
+            visibleWidth: columnUnit * ContextualControlMetrics.thicknessRowPaletteColumns,
+            visibleHeight: ContextualControlMetrics.popoverVisibleRowHeight
+        )
         .accessibilityLabel("Advanced Color")
         .accessibilityIdentifier("signatureEditAdvancedColorButton")
     }
 
     private func thicknessButton(
         systemName: String,
+        visibleWidth: CGFloat,
         accessibilityLabel: String,
         accessibilityIdentifier: String,
         isEnabled: Bool,
@@ -145,12 +153,17 @@ struct PlacedSignatureEditPopover: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(ContextualControlMetrics.symbolFont.weight(ContextualControlMetrics.symbolWeight))
-                .frame(width: tapTarget, height: tapTarget)
-                .contentShape(Rectangle())
+                .font(ContextualControlMetrics.toolbarSymbolFont)
+                .frame(
+                    width: ContextualControlMetrics.toolbarVisibleIconWidth,
+                    height: ContextualControlMetrics.toolbarVisibleIconHeight
+                )
         }
         .buttonStyle(.plain)
-        .frame(width: tapTarget, height: tapTarget)
+        .contextualExpandedTapTarget(
+            visibleWidth: visibleWidth,
+            visibleHeight: ContextualControlMetrics.popoverVisibleRowHeight
+        )
         .disabled(!isEnabled)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityIdentifier(accessibilityIdentifier)
@@ -178,11 +191,12 @@ struct PlacedSignatureEditPopover: View {
                             )
                     }
                 }
-                .frame(width: tapTarget, height: tapTarget)
-                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .frame(width: tapTarget, height: tapTarget)
+        .contextualExpandedTapTarget(
+            visibleWidth: ContextualControlMetrics.popoverColorCellWidth,
+            visibleHeight: ContextualControlMetrics.popoverVisibleRowHeight
+        )
         .accessibilityLabel(color.markupTitle)
         .accessibilityIdentifier(color.accessibilityIdentifier)
     }

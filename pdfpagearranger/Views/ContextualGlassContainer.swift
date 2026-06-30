@@ -1,38 +1,32 @@
 import SwiftUI
 
+enum ContextualGlassShape {
+    case capsule
+}
+
 /// Shared Liquid Glass container for all floating contextual controls.
 struct ContextualGlassContainerModifier: ViewModifier {
+    let shape: ContextualGlassShape
     let horizontalPadding: CGFloat
     let verticalPadding: CGFloat
 
     init(
-        horizontalPadding: CGFloat = ContextualControlMetrics.horizontalPadding,
-        verticalPadding: CGFloat = ContextualControlMetrics.verticalPadding
+        shape: ContextualGlassShape = .capsule,
+        horizontalPadding: CGFloat = ContextualControlMetrics.toolbarHorizontalPadding,
+        verticalPadding: CGFloat = ContextualControlMetrics.toolbarVerticalPadding
     ) {
+        self.shape = shape
         self.horizontalPadding = horizontalPadding
         self.verticalPadding = verticalPadding
-    }
-
-    private var glassShape: RoundedRectangle {
-        RoundedRectangle(
-            cornerRadius: ContextualControlMetrics.glassCornerRadius,
-            style: .continuous
-        )
     }
 
     func body(content: Content) -> some View {
         content
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
-            .glassEffect(
-                .regular,
-                in: .rect(
-                    cornerRadius: ContextualControlMetrics.glassCornerRadius,
-                    style: .continuous
-                )
-            )
+            .glassEffect(.regular, in: .capsule)
             .overlay {
-                glassShape
+                Capsule()
                     .strokeBorder(
                         LinearGradient(
                             colors: [
@@ -57,15 +51,34 @@ struct ContextualGlassContainerModifier: ViewModifier {
 
 extension View {
     func contextualGlassContainer(
-        horizontalPadding: CGFloat = ContextualControlMetrics.horizontalPadding,
-        verticalPadding: CGFloat = ContextualControlMetrics.verticalPadding
+        shape: ContextualGlassShape = .capsule,
+        horizontalPadding: CGFloat = ContextualControlMetrics.toolbarHorizontalPadding,
+        verticalPadding: CGFloat = ContextualControlMetrics.toolbarVerticalPadding
     ) -> some View {
         modifier(
             ContextualGlassContainerModifier(
+                shape: shape,
                 horizontalPadding: horizontalPadding,
                 verticalPadding: verticalPadding
             )
         )
+    }
+
+    /// Expands the tap target without increasing the visible layout footprint.
+    func contextualExpandedTapTarget(
+        visibleWidth: CGFloat,
+        visibleHeight: CGFloat,
+        target: CGFloat = ContextualControlMetrics.minimumTapTarget
+    ) -> some View {
+        let horizontalOutset = max(0, (target - visibleWidth) / 2)
+        let verticalOutset = max(0, (target - visibleHeight) / 2)
+
+        return frame(width: visibleWidth, height: visibleHeight)
+            .padding(.horizontal, horizontalOutset)
+            .padding(.vertical, verticalOutset)
+            .contentShape(Rectangle())
+            .padding(.horizontal, -horizontalOutset)
+            .padding(.vertical, -verticalOutset)
     }
 }
 

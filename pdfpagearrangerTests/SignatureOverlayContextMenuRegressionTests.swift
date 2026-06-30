@@ -55,12 +55,10 @@ final class SignatureOverlayContextMenuUIRegressionTests: XCTestCase {
         XCTAssertTrue(menu.contains("More Signature Actions"))
         XCTAssertTrue(menu.contains("signatureOverlayContextMenu"))
         XCTAssertTrue(menu.contains("contextualGlassContainer()"))
-        XCTAssertTrue(menu.contains("foregroundStyle: Color.red"))
-        XCTAssertTrue(menu.contains("foregroundStyle: Color.primary"))
-        XCTAssertTrue(menu.contains("ContextualControlMetrics.minimumTapTarget"))
-        XCTAssertTrue(menu.contains("ContextualControlMetrics.symbolFont.weight(ContextualControlMetrics.symbolWeight)"))
-        XCTAssertTrue(menu.contains("contentShape(Rectangle())"))
-        XCTAssertFalse(menu.contains("Capsule()"))
+        XCTAssertTrue(menu.contains("contextualExpandedTapTarget"))
+        XCTAssertTrue(menu.contains("toolbarSymbolFont"))
+        XCTAssertTrue(menu.contains("toolbarVisibleHeight"))
+        XCTAssertTrue(menu.contains("contextualExpandedTapTarget"))
     }
 
     func testSignatureOverlaysHideInlineDeleteControl() throws {

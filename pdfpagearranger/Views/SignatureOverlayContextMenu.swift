@@ -9,8 +9,6 @@ struct SignatureOverlayContextMenu: View {
     let onReset: () -> Void
     let onSaveToLibrary: () -> Void
 
-    private let cellSize = ContextualControlMetrics.minimumTapTarget
-
     var body: some View {
         HStack(spacing: ContextualControlMetrics.toolbarCellSpacing) {
             toolbarButton(
@@ -51,16 +49,22 @@ struct SignatureOverlayContextMenu: View {
                 Button("Send Backward") {}.disabled(true)
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(ContextualControlMetrics.symbolFont.weight(ContextualControlMetrics.symbolWeight))
+                    .font(ContextualControlMetrics.toolbarSymbolFont)
                     .foregroundStyle(Color.primary)
-                    .frame(width: cellSize, height: cellSize)
-                    .contentShape(Rectangle())
+                    .frame(
+                        width: ContextualControlMetrics.toolbarVisibleIconWidth,
+                        height: ContextualControlMetrics.toolbarVisibleIconHeight
+                    )
             }
             .buttonStyle(.plain)
-            .frame(width: cellSize, height: cellSize)
+            .contextualExpandedTapTarget(
+                visibleWidth: ContextualControlMetrics.toolbarVisibleCellWidth,
+                visibleHeight: ContextualControlMetrics.toolbarVisibleHeight
+            )
             .accessibilityLabel("More Signature Actions")
             .accessibilityIdentifier("signatureMenuMore")
         }
+        .frame(height: ContextualControlMetrics.toolbarVisibleHeight)
         .contextualGlassContainer()
         .position(anchorPoint)
         .accessibilityElement(children: .contain)
@@ -69,7 +73,7 @@ struct SignatureOverlayContextMenu: View {
 
     private var divider: some View {
         Rectangle()
-            .fill(Color.secondary.opacity(0.2))
+            .fill(Color.secondary.opacity(ContextualControlMetrics.toolbarDividerOpacity))
             .frame(width: 1, height: ContextualControlMetrics.toolbarDividerHeight)
     }
 
@@ -82,13 +86,18 @@ struct SignatureOverlayContextMenu: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(ContextualControlMetrics.symbolFont.weight(ContextualControlMetrics.symbolWeight))
+                .font(ContextualControlMetrics.toolbarSymbolFont)
                 .foregroundStyle(foregroundStyle)
-                .frame(width: cellSize, height: cellSize)
-                .contentShape(Rectangle())
+                .frame(
+                    width: ContextualControlMetrics.toolbarVisibleIconWidth,
+                    height: ContextualControlMetrics.toolbarVisibleIconHeight
+                )
         }
         .buttonStyle(.plain)
-        .frame(width: cellSize, height: cellSize)
+        .contextualExpandedTapTarget(
+            visibleWidth: ContextualControlMetrics.toolbarVisibleCellWidth,
+            visibleHeight: ContextualControlMetrics.toolbarVisibleHeight
+        )
         .accessibilityLabel(accessibilityLabel)
         .accessibilityIdentifier(accessibilityIdentifier)
     }

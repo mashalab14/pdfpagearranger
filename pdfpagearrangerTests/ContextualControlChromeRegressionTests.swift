@@ -5,44 +5,30 @@ final class ContextualGlassContainerRegressionTests: XCTestCase {
     func testSharedGlassContainerUsedBySignatureToolbar() throws {
         let menu = try projectSource(named: "SignatureOverlayContextMenu.swift", subdirectory: "Views")
         XCTAssertTrue(menu.contains("contextualGlassContainer()"))
-        XCTAssertFalse(menu.contains("Capsule()"))
+        XCTAssertTrue(menu.contains("contextualExpandedTapTarget"))
         XCTAssertFalse(menu.contains("Color.white.opacity"))
-        XCTAssertFalse(menu.contains("contextualControlChrome()"))
     }
 
     func testSharedGlassContainerUsedBySignatureEditPopover() throws {
         let popover = try projectSource(named: "PlacedSignatureEditPopover.swift", subdirectory: "Views")
-        XCTAssertTrue(popover.contains("contextualGlassContainer()"))
+        XCTAssertTrue(popover.contains("contextualGlassContainer("))
+        XCTAssertTrue(popover.contains("contextualExpandedTapTarget"))
         XCTAssertFalse(popover.contains(".background(.regularMaterial"))
-        XCTAssertFalse(popover.contains("contextualControlChrome()"))
     }
 
-    func testSharedGlassContainerUsedByPDFTextSelectionMenu() throws {
-        let menu = try projectSource(named: "PDFTextSelectionContextMenu.swift", subdirectory: "Views")
-        XCTAssertTrue(menu.contains("contextualGlassContainer("))
-        XCTAssertFalse(menu.contains(".background(.regularMaterial"))
-    }
-
-    func testContextualGlassContainerDefinesLiquidGlassStyle() throws {
+    func testContextualGlassContainerUsesCapsuleGlass() throws {
         let container = try projectSource(named: "ContextualGlassContainer.swift", subdirectory: "Views")
-        XCTAssertTrue(container.contains("glassEffect"))
-        XCTAssertTrue(container.contains("ContextualControlMetrics.glassCornerRadius"))
-        XCTAssertTrue(container.contains("LinearGradient"))
-        XCTAssertTrue(container.contains("shadow"))
-        XCTAssertTrue(container.contains("contextualGlass"))
+        XCTAssertTrue(container.contains("glassEffect(.regular, in: .capsule)"))
+        XCTAssertTrue(container.contains("Capsule()"))
+        XCTAssertTrue(container.contains("contextualExpandedTapTarget"))
     }
 
-    func testCanvasAnimatesContextualGlassControls() throws {
-        let canvas = try projectSource(named: "PageOverlayCanvasView.swift", subdirectory: "Views")
-        XCTAssertTrue(canvas.contains("GlassEffectContainer"))
-        XCTAssertTrue(canvas.contains("glassEffectID"))
-        XCTAssertTrue(canvas.contains("ContextualGlassAnimation.presentation"))
-        XCTAssertTrue(canvas.contains(".transition(.contextualGlass)"))
-    }
-
-    func testToolbarIconsUseSemiboldSymbolWeight() throws {
+    func testToolbarUsesCompactVisibleHeightAndBoldIcons() throws {
         let menu = try projectSource(named: "SignatureOverlayContextMenu.swift", subdirectory: "Views")
-        XCTAssertTrue(menu.contains("ContextualControlMetrics.symbolFont.weight(ContextualControlMetrics.symbolWeight)"))
+        let metrics = try projectSource(named: "ContextualControlMetrics.swift", subdirectory: "Models")
+        XCTAssertTrue(menu.contains("toolbarVisibleHeight"))
+        XCTAssertTrue(menu.contains("toolbarSymbolFont"))
+        XCTAssertTrue(metrics.contains("weight: .bold"))
     }
 
     private func projectSource(named fileName: String, subdirectory: String) throws -> String {

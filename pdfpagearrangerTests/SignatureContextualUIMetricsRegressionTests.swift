@@ -11,13 +11,20 @@ final class ContextualControlMetricsRegressionTests: XCTestCase {
         XCTAssertLessThanOrEqual(ContextualControlMetrics.presetColorDiameter, 28)
     }
 
-    func testToolbarWidthFitsThreeEqualCells() {
-        let expected = ContextualControlMetrics.horizontalPadding * 2
-            + ContextualControlMetrics.minimumTapTarget * 3
-            + ContextualControlMetrics.toolbarCellSpacing * 2
+    func testToolbarWidthFitsThreeCompactCells() {
+        let expected = ContextualControlMetrics.toolbarHorizontalPadding * 2
+            + ContextualControlMetrics.toolbarVisibleCellWidth * 3
             + 2
         XCTAssertEqual(ContextualControlMetrics.signatureToolbarWidth, expected)
         XCTAssertEqual(SignatureOverlayMenuEngine.menuWidth, expected)
+    }
+
+    func testToolbarCapsuleRadiusMatchesHalfHeight() {
+        XCTAssertEqual(
+            ContextualControlMetrics.glassCornerRadius,
+            ContextualControlMetrics.toolbarCapsuleHeight / 2
+        )
+        XCTAssertEqual(ContextualControlMetrics.toolbarCapsuleHeight, 40)
     }
 
     func testPopoverSizeMatchesMetrics() {
@@ -47,14 +54,21 @@ final class ContextualControlMetricsRegressionTests: XCTestCase {
     }
 
     func testSharedGlassUsesSoftFloatingShadow() {
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.glassShadowOpacity, 0.10)
-        XCTAssertLessThanOrEqual(ContextualControlMetrics.glassShadowOpacity, 0.18)
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.glassShadowRadius, 8)
-        XCTAssertLessThanOrEqual(ContextualControlMetrics.glassShadowRadius, 12)
+        XCTAssertLessThanOrEqual(ContextualControlMetrics.glassShadowOpacity, 0.10)
+        XCTAssertLessThanOrEqual(ContextualControlMetrics.glassShadowRadius, 6)
     }
 
-    func testGlassCornerRadiusIsLargeAndContinuous() {
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.glassCornerRadius, 18)
+    func testToolbarTapOutsetsPreserveCompactLayout() {
+        XCTAssertEqual(
+            ContextualControlMetrics.toolbarVisibleCellWidth
+                + ContextualControlMetrics.toolbarTapOutsetHorizontal * 2,
+            ContextualControlMetrics.minimumTapTarget
+        )
+        XCTAssertEqual(
+            ContextualControlMetrics.toolbarVisibleHeight
+                + ContextualControlMetrics.toolbarTapOutsetVertical * 2,
+            ContextualControlMetrics.minimumTapTarget
+        )
     }
 }
 
