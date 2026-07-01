@@ -3,15 +3,14 @@ import SwiftUI
 
 /// Shared visual language for floating contextual controls (signatures, highlights, comments, etc.).
 enum ContextualControlMetrics {
-    static let floatingPanelCornerRadius: CGFloat = 14
-    static let floatingPanelGlass: Glass = .clear
-    static let glassBorderWidth: CGFloat = 0.5
-    static let glassHighlightOpacity: CGFloat = 0.22
-    static let glassHighlightFadeOpacity: CGFloat = 0.05
+    static let floatingPanelBackgroundOpacity: CGFloat = 0.75
+    static let popoverCornerRadius: CGFloat = 16
+    static let panelBorderWidth: CGFloat = 1
+    static let panelBorderOpacity: CGFloat = 0.35
 
-    static let floatingPanelShadowOpacity: CGFloat = 0.26
-    static let floatingPanelShadowRadius: CGFloat = 16
-    static let floatingPanelShadowYOffset: CGFloat = 8
+    static let floatingPanelShadowOpacity: CGFloat = 0.10
+    static let floatingPanelShadowRadius: CGFloat = 6
+    static let floatingPanelShadowYOffset: CGFloat = 3
 
     static let minimumTapTarget: CGFloat = 52
     static let presetColorDiameter: CGFloat = 26
@@ -35,15 +34,11 @@ enum ContextualControlMetrics {
     }
 
     static var glassCornerRadius: CGFloat {
-        floatingPanelCornerRadius
+        popoverCornerRadius
     }
 
     static var cornerRadius: CGFloat {
-        floatingPanelCornerRadius
-    }
-
-    static var popoverCornerRadius: CGFloat {
-        floatingPanelCornerRadius
+        popoverCornerRadius
     }
 
     static var toolbarTapOutsetHorizontal: CGFloat {

@@ -19,10 +19,10 @@ final class ContextualControlMetricsRegressionTests: XCTestCase {
         XCTAssertEqual(SignatureOverlayMenuEngine.menuWidth, expected)
     }
 
-    func testFloatingPanelsShareUnifiedCornerRadius() {
-        XCTAssertEqual(ContextualControlMetrics.floatingPanelCornerRadius, 14)
-        XCTAssertEqual(ContextualControlMetrics.glassCornerRadius, ContextualControlMetrics.floatingPanelCornerRadius)
-        XCTAssertEqual(ContextualControlMetrics.popoverCornerRadius, ContextualControlMetrics.floatingPanelCornerRadius)
+    func testPopoverUsesLargeRoundedRectangleCornerRadius() {
+        XCTAssertEqual(ContextualControlMetrics.popoverCornerRadius, 16)
+        XCTAssertEqual(ContextualControlMetrics.glassCornerRadius, ContextualControlMetrics.popoverCornerRadius)
+        XCTAssertEqual(ContextualControlMetrics.cornerRadius, ContextualControlMetrics.popoverCornerRadius)
     }
 
     func testPopoverSizeMatchesMetrics() {
@@ -51,15 +51,16 @@ final class ContextualControlMetricsRegressionTests: XCTestCase {
         )
     }
 
-    func testFloatingPanelUsesStrongerShadowThanLegacyToolbarValues() {
-        XCTAssertGreaterThan(ContextualControlMetrics.floatingPanelShadowOpacity, 0.18)
-        XCTAssertGreaterThan(ContextualControlMetrics.floatingPanelShadowRadius, 12)
-        XCTAssertGreaterThan(ContextualControlMetrics.floatingPanelShadowYOffset, 6)
+    func testFloatingPanelUsesSoftElevationShadow() {
+        XCTAssertGreaterThan(ContextualControlMetrics.floatingPanelShadowOpacity, 0.05)
+        XCTAssertLessThan(ContextualControlMetrics.floatingPanelShadowOpacity, 0.15)
+        XCTAssertGreaterThan(ContextualControlMetrics.floatingPanelShadowRadius, 4)
+        XCTAssertLessThan(ContextualControlMetrics.floatingPanelShadowRadius, 10)
     }
 
-    func testFloatingPanelUsesClearGlassForLightBlur() throws {
+    func testFloatingPanelUsesWhiteTranslucentBackground() throws {
         let metrics = try projectSource(named: "ContextualControlMetrics.swift", subdirectory: "Models")
-        XCTAssertTrue(metrics.contains("floatingPanelGlass: Glass = .clear"))
+        XCTAssertTrue(metrics.contains("floatingPanelBackgroundOpacity: CGFloat = 0.75"))
     }
 
     private func projectSource(named fileName: String, subdirectory: String) throws -> String {

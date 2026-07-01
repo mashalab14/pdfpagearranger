@@ -1,24 +1,24 @@
 import SwiftUI
 
-/// Shared Liquid Glass container for all floating contextual controls.
+enum ContextualPanelShape {
+    case capsule
+    case roundedRectangle(cornerRadius: CGFloat)
+}
+
+/// Shared floating container for contextual editing controls.
 struct ContextualGlassContainerModifier: ViewModifier {
+    let shape: ContextualPanelShape
     let horizontalPadding: CGFloat
     let verticalPadding: CGFloat
 
     init(
+        shape: ContextualPanelShape = .capsule,
         horizontalPadding: CGFloat = ContextualControlMetrics.toolbarHorizontalPadding,
         verticalPadding: CGFloat = ContextualControlMetrics.toolbarVerticalPadding
     ) {
+        self.shape = shape
         self.horizontalPadding = horizontalPadding
         self.verticalPadding = verticalPadding
-    }
-
-    private var cornerRadius: CGFloat {
-        ContextualControlMetrics.floatingPanelCornerRadius
-    }
-
-    private var panelShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
     }
 
     func body(content: Content) -> some View {
@@ -27,12 +27,10 @@ struct ContextualGlassContainerModifier: ViewModifier {
             .padding(.vertical, verticalPadding)
             .fixedSize(horizontal: true, vertical: true)
             .background {
-                panelShape
-                    .fill(.ultraThinMaterial)
+                panelBackground
             }
             .overlay {
-                panelShape
-                    .strokeBorder(highlightGradient, lineWidth: ContextualControlMetrics.glassBorderWidth)
+                panelBorder
                     .allowsHitTesting(false)
             }
             .shadow(
@@ -40,33 +38,48 @@ struct ContextualGlassContainerModifier: ViewModifier {
                 radius: ContextualControlMetrics.floatingPanelShadowRadius,
                 y: ContextualControlMetrics.floatingPanelShadowYOffset
             )
-            .shadow(
-                color: .black.opacity(ContextualControlMetrics.floatingPanelShadowOpacity * 0.5),
-                radius: ContextualControlMetrics.floatingPanelShadowRadius * 0.55,
-                y: ContextualControlMetrics.floatingPanelShadowYOffset * 0.45
-            )
     }
 
-    private var highlightGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color.white.opacity(ContextualControlMetrics.glassHighlightOpacity),
-                Color.white.opacity(ContextualControlMetrics.glassHighlightFadeOpacity),
-                Color.clear
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
+    @ViewBuilder
+    private var panelBackground: some View {
+        switch shape {
+        case .capsule:
+            Capsule()
+                .fill(Color.white.opacity(ContextualControlMetrics.floatingPanelBackgroundOpacity))
+        case .roundedRectangle(let cornerRadius):
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(Color.white.opacity(ContextualControlMetrics.floatingPanelBackgroundOpacity))
+        }
+    }
+
+    @ViewBuilder
+    private var panelBorder: some View {
+        switch shape {
+        case .capsule:
+            Capsule()
+                .strokeBorder(
+                    Color.white.opacity(ContextualControlMetrics.panelBorderOpacity),
+                    lineWidth: ContextualControlMetrics.panelBorderWidth
+                )
+        case .roundedRectangle(let cornerRadius):
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(
+                    Color.white.opacity(ContextualControlMetrics.panelBorderOpacity),
+                    lineWidth: ContextualControlMetrics.panelBorderWidth
+                )
+        }
     }
 }
 
 extension View {
     func contextualGlassContainer(
+        shape: ContextualPanelShape = .capsule,
         horizontalPadding: CGFloat = ContextualControlMetrics.toolbarHorizontalPadding,
         verticalPadding: CGFloat = ContextualControlMetrics.toolbarVerticalPadding
     ) -> some View {
         modifier(
             ContextualGlassContainerModifier(
+                shape: shape,
                 horizontalPadding: horizontalPadding,
                 verticalPadding: verticalPadding
             )

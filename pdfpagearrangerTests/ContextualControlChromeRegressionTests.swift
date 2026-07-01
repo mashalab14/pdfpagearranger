@@ -4,30 +4,31 @@ import XCTest
 final class ContextualGlassContainerRegressionTests: XCTestCase {
     func testSharedGlassContainerUsedBySignatureToolbar() throws {
         let menu = try projectSource(named: "SignatureOverlayContextMenu.swift", subdirectory: "Views")
+        let container = try projectSource(named: "ContextualGlassContainer.swift", subdirectory: "Views")
         XCTAssertTrue(menu.contains("contextualGlassContainer()"))
         XCTAssertTrue(menu.contains("contextualExpandedTapTarget"))
-        XCTAssertFalse(menu.contains("Color.white.opacity"))
-        XCTAssertFalse(menu.contains(".capsule"))
+        XCTAssertTrue(container.contains("case .capsule:"))
+        XCTAssertFalse(menu.contains("glassEffect("))
     }
 
     func testSignatureEditPopoverUsesSameFloatingPanelContainer() throws {
         let popover = try projectSource(named: "PlacedSignatureEditPopover.swift", subdirectory: "Views")
         XCTAssertTrue(popover.contains("contextualGlassContainer("))
+        XCTAssertTrue(popover.contains("roundedRectangle(cornerRadius: ContextualControlMetrics.popoverCornerRadius)"))
         XCTAssertTrue(popover.contains("contextualExpandedTapTarget"))
         XCTAssertFalse(popover.contains(".background(.regularMaterial"))
-        XCTAssertFalse(popover.contains(".capsule"))
+        XCTAssertFalse(popover.contains("glassEffect("))
     }
 
-    func testUnifiedFloatingPanelUsesClearGlassAndRoundedRectangle() throws {
+    func testFloatingPanelsUseWhiteTranslucentBackgroundWithoutGlass() throws {
         let container = try projectSource(named: "ContextualGlassContainer.swift", subdirectory: "Views")
         let metrics = try projectSource(named: "ContextualControlMetrics.swift", subdirectory: "Models")
         XCTAssertTrue(container.contains("fixedSize(horizontal: true, vertical: true)"))
-        XCTAssertTrue(container.contains(".background {"))
-        XCTAssertTrue(container.contains("ultraThinMaterial"))
-        XCTAssertTrue(container.contains("floatingPanelCornerRadius"))
+        XCTAssertTrue(container.contains("Color.white.opacity(ContextualControlMetrics.floatingPanelBackgroundOpacity)"))
+        XCTAssertTrue(container.contains("Capsule()"))
         XCTAssertTrue(container.contains("RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)"))
-        XCTAssertTrue(metrics.contains("floatingPanelGlass: Glass = .clear"))
-        XCTAssertFalse(container.contains("Capsule()"))
+        XCTAssertTrue(metrics.contains("floatingPanelBackgroundOpacity: CGFloat = 0.75"))
+        XCTAssertFalse(container.contains("ultraThinMaterial"))
         XCTAssertFalse(container.contains("glassEffect("))
         XCTAssertFalse(container.contains("ZStack"))
         XCTAssertFalse(container.contains("GlassEffectContainer"))
