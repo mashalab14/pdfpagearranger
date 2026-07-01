@@ -52,11 +52,11 @@ final class ContextualControlMetricsRegressionTests: XCTestCase {
     }
 
     func testFloatingPanelUsesSoftElevationShadow() {
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.floatingPanelShadowOpacity, 0.05)
-        XCTAssertLessThanOrEqual(ContextualControlMetrics.floatingPanelShadowOpacity, 0.08)
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.floatingPanelShadowRadius, 16)
-        XCTAssertLessThanOrEqual(ContextualControlMetrics.floatingPanelShadowRadius, 20)
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.floatingPanelShadowYOffset, 6)
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.floatingPanelShadowOpacity, 0.16)
+        XCTAssertLessThanOrEqual(ContextualControlMetrics.floatingPanelShadowOpacity, 0.20)
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.floatingPanelShadowRadius, 20)
+        XCTAssertLessThanOrEqual(ContextualControlMetrics.floatingPanelShadowRadius, 28)
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.floatingPanelShadowYOffset, 8)
         XCTAssertLessThanOrEqual(ContextualControlMetrics.floatingPanelShadowYOffset, 10)
     }
 
