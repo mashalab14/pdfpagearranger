@@ -16,10 +16,10 @@ enum ContextualControlMetrics {
     static let presetColorDiameter: CGFloat = 26
     static let selectedColorRingDiameter: CGFloat = 30
 
-    static let toolbarHorizontalPadding: CGFloat = 16
-    static let toolbarVerticalPadding: CGFloat = 8
-    static let toolbarVisibleHeight: CGFloat = 32
-    static let toolbarVisibleCellWidth: CGFloat = 44
+    static let toolbarHorizontalPadding: CGFloat = 22 //16
+    static let toolbarVerticalPadding: CGFloat = 10 //8
+    static let toolbarVisibleHeight: CGFloat = 36 //32
+    static let toolbarVisibleCellWidth: CGFloat = 52 //44
     static let toolbarVisibleIconWidth: CGFloat = 28
     static let toolbarVisibleIconHeight: CGFloat = 24
     static let toolbarCellSpacing: CGFloat = 0
