@@ -25,7 +25,7 @@ enum ContextualControlMetrics {
     static let toolbarCellSpacing: CGFloat = 0
     static let toolbarDividerHeight: CGFloat = 18
     static let toolbarDividerOpacity: CGFloat = 0.12
-    static let toolbarSymbolFont: Font = .system(size: 17, weight: .bold)
+    static let toolbarSymbolFont: Font = .system(size: 23, weight: .bold)
     static let symbolFont: Font = toolbarSymbolFont
     static let symbolWeight: Font.Weight = .bold
 
