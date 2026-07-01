@@ -51,13 +51,28 @@ final class ContextualControlMetricsRegressionTests: XCTestCase {
         )
     }
 
-    func testFloatingPanelUsesSoftElevationShadow() {
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.floatingPanelShadowOpacity, 0.16)
-        XCTAssertLessThanOrEqual(ContextualControlMetrics.floatingPanelShadowOpacity, 0.20)
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.floatingPanelShadowRadius, 20)
-        XCTAssertLessThanOrEqual(ContextualControlMetrics.floatingPanelShadowRadius, 28)
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.floatingPanelShadowYOffset, 8)
-        XCTAssertLessThanOrEqual(ContextualControlMetrics.floatingPanelShadowYOffset, 10)
+    func testFloatingPanelUsesDualLayerElevationShadow() {
+        XCTAssertEqual(ContextualControlMetrics.floatingPanelKeyShadowOpacity, 0.10)
+        XCTAssertEqual(ContextualControlMetrics.floatingPanelKeyShadowRadius, 10)
+        XCTAssertEqual(ContextualControlMetrics.floatingPanelKeyShadowXOffset, 0)
+        XCTAssertEqual(ContextualControlMetrics.floatingPanelKeyShadowYOffset, 2)
+        XCTAssertEqual(ContextualControlMetrics.floatingPanelAmbientShadowOpacity, 0.08)
+        XCTAssertEqual(ContextualControlMetrics.floatingPanelAmbientShadowRadius, 30)
+        XCTAssertEqual(ContextualControlMetrics.floatingPanelAmbientShadowXOffset, 0)
+        XCTAssertEqual(ContextualControlMetrics.floatingPanelAmbientShadowYOffset, 12)
+    }
+
+    func testFloatingPanelShadowMetricsAreDefinedInMetricsSource() throws {
+        let metrics = try projectSource(named: "ContextualControlMetrics.swift", subdirectory: "Models")
+        XCTAssertTrue(metrics.contains("floatingPanelKeyShadowOpacity"))
+        XCTAssertTrue(metrics.contains("floatingPanelKeyShadowRadius"))
+        XCTAssertTrue(metrics.contains("floatingPanelKeyShadowXOffset"))
+        XCTAssertTrue(metrics.contains("floatingPanelKeyShadowYOffset"))
+        XCTAssertTrue(metrics.contains("floatingPanelAmbientShadowOpacity"))
+        XCTAssertTrue(metrics.contains("floatingPanelAmbientShadowRadius"))
+        XCTAssertTrue(metrics.contains("floatingPanelAmbientShadowXOffset"))
+        XCTAssertTrue(metrics.contains("floatingPanelAmbientShadowYOffset"))
+        XCTAssertFalse(metrics.contains("floatingPanelShadowOpacity"))
     }
 
     func testToolbarHasIncreasedBreathingRoomPadding() {

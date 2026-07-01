@@ -31,6 +31,9 @@ final class ContextualGlassContainerRegressionTests: XCTestCase {
         XCTAssertFalse(container.contains("glassEffect("))
         XCTAssertFalse(container.contains("ZStack"))
         XCTAssertFalse(container.contains("GlassEffectContainer"))
+        XCTAssertTrue(container.contains("floatingPanelKeyShadowOpacity"))
+        XCTAssertTrue(container.contains("floatingPanelAmbientShadowOpacity"))
+        XCTAssertFalse(container.contains(".black.opacity(0."))
     }
 
     func testCanvasDoesNotWrapContextualControlsInGlassEffectContainer() throws {
@@ -60,7 +63,8 @@ final class ContextualGlassContainerRegressionTests: XCTestCase {
         XCTAssertTrue(menu.contains("toolbarSymbolFont"))
         XCTAssertTrue(metrics.contains("weight: .bold"))
         XCTAssertTrue(metrics.contains("toolbarCapsuleCornerRadius"))
-        XCTAssertTrue(metrics.contains("floatingPanelShadowOpacity"))
+        XCTAssertTrue(metrics.contains("floatingPanelKeyShadowOpacity"))
+        XCTAssertTrue(metrics.contains("floatingPanelAmbientShadowOpacity"))
     }
 
     private func projectSource(named fileName: String, subdirectory: String) throws -> String {

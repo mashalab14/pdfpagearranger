@@ -33,26 +33,18 @@ struct ContextualGlassContainerModifier: ViewModifier {
                 panelBorder
                     .allowsHitTesting(false)
             }
-
-        .shadow(
-            color: .black.opacity(0.10),
-            radius: 10,
-            x: 0,
-            y: 2
-        )
-       .shadow(
-            color: .black.opacity(0.08),
-            radius: 30,
-            x: 0,
-            y: 12
-        )
-/*
             .shadow(
-                color: .black.opacity(ContextualControlMetrics.floatingPanelShadowOpacity),
-                radius: ContextualControlMetrics.floatingPanelShadowRadius,
-                y: ContextualControlMetrics.floatingPanelShadowYOffset
+                color: .black.opacity(ContextualControlMetrics.floatingPanelKeyShadowOpacity),
+                radius: ContextualControlMetrics.floatingPanelKeyShadowRadius,
+                x: ContextualControlMetrics.floatingPanelKeyShadowXOffset,
+                y: ContextualControlMetrics.floatingPanelKeyShadowYOffset
             )
-*/
+            .shadow(
+                color: .black.opacity(ContextualControlMetrics.floatingPanelAmbientShadowOpacity),
+                radius: ContextualControlMetrics.floatingPanelAmbientShadowRadius,
+                x: ContextualControlMetrics.floatingPanelAmbientShadowXOffset,
+                y: ContextualControlMetrics.floatingPanelAmbientShadowYOffset
+            )
     }
 
     private var milkyFill: Color {
