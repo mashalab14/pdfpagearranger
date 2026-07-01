@@ -8,16 +8,16 @@ enum ContextualControlMetrics {
     static let panelBorderWidth: CGFloat = 0.5
     static let panelBorderOpacity: CGFloat = 0.08
 
-    static let floatingPanelShadowOpacity: CGFloat = 0.08
-    static let floatingPanelShadowRadius: CGFloat = 5
-    static let floatingPanelShadowYOffset: CGFloat = 2
+    static let floatingPanelShadowOpacity: CGFloat = 0.07
+    static let floatingPanelShadowRadius: CGFloat = 18
+    static let floatingPanelShadowYOffset: CGFloat = 8
 
     static let minimumTapTarget: CGFloat = 52
     static let presetColorDiameter: CGFloat = 26
     static let selectedColorRingDiameter: CGFloat = 30
 
-    static let toolbarHorizontalPadding: CGFloat = 6
-    static let toolbarVerticalPadding: CGFloat = 4
+    static let toolbarHorizontalPadding: CGFloat = 16
+    static let toolbarVerticalPadding: CGFloat = 8
     static let toolbarVisibleHeight: CGFloat = 32
     static let toolbarVisibleCellWidth: CGFloat = 44
     static let toolbarVisibleIconWidth: CGFloat = 28
@@ -25,9 +25,9 @@ enum ContextualControlMetrics {
     static let toolbarCellSpacing: CGFloat = 0
     static let toolbarDividerHeight: CGFloat = 18
     static let toolbarDividerOpacity: CGFloat = 0.12
-    static let toolbarSymbolFont: Font = .system(size: 17, weight: .semibold)
+    static let toolbarSymbolFont: Font = .system(size: 17, weight: .bold)
     static let symbolFont: Font = toolbarSymbolFont
-    static let symbolWeight: Font.Weight = .semibold
+    static let symbolWeight: Font.Weight = .bold
 
     static var toolbarShellHeight: CGFloat {
         toolbarVisibleHeight + toolbarVerticalPadding * 2

@@ -52,10 +52,21 @@ final class ContextualControlMetricsRegressionTests: XCTestCase {
     }
 
     func testFloatingPanelUsesSoftElevationShadow() {
-        XCTAssertGreaterThan(ContextualControlMetrics.floatingPanelShadowOpacity, 0.05)
-        XCTAssertLessThan(ContextualControlMetrics.floatingPanelShadowOpacity, 0.15)
-        XCTAssertGreaterThan(ContextualControlMetrics.floatingPanelShadowRadius, 4)
-        XCTAssertLessThan(ContextualControlMetrics.floatingPanelShadowRadius, 10)
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.floatingPanelShadowOpacity, 0.05)
+        XCTAssertLessThanOrEqual(ContextualControlMetrics.floatingPanelShadowOpacity, 0.08)
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.floatingPanelShadowRadius, 16)
+        XCTAssertLessThanOrEqual(ContextualControlMetrics.floatingPanelShadowRadius, 20)
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.floatingPanelShadowYOffset, 6)
+        XCTAssertLessThanOrEqual(ContextualControlMetrics.floatingPanelShadowYOffset, 10)
+    }
+
+    func testToolbarHasIncreasedBreathingRoomPadding() {
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.toolbarHorizontalPadding, 14)
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.toolbarVerticalPadding, 7)
+    }
+
+    func testToolbarSitsHigherAboveSignature() {
+        XCTAssertEqual(SignatureOverlayMenuEngine.verticalOffset, 40)
     }
 
     func testToolbarCapsuleCornerRadiusIsHalfShellHeight() {
