@@ -21,14 +21,16 @@ final class ContextualGlassContainerRegressionTests: XCTestCase {
     func testUnifiedFloatingPanelUsesClearGlassAndRoundedRectangle() throws {
         let container = try projectSource(named: "ContextualGlassContainer.swift", subdirectory: "Views")
         let metrics = try projectSource(named: "ContextualControlMetrics.swift", subdirectory: "Models")
-        XCTAssertTrue(container.contains("ZStack"))
-        XCTAssertTrue(container.contains("floatingPanelBackground"))
-        XCTAssertTrue(container.contains("glassEffect("))
-        XCTAssertTrue(container.contains(".rect(cornerRadius: cornerRadius, style: .continuous)"))
+        XCTAssertTrue(container.contains("fixedSize(horizontal: true, vertical: true)"))
+        XCTAssertTrue(container.contains(".background {"))
+        XCTAssertTrue(container.contains("ultraThinMaterial"))
+        XCTAssertTrue(container.contains("floatingPanelCornerRadius"))
+        XCTAssertTrue(container.contains("RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)"))
         XCTAssertTrue(metrics.contains("floatingPanelGlass: Glass = .clear"))
         XCTAssertFalse(container.contains("Capsule()"))
-        XCTAssertFalse(container.contains("glassEffect(.regular"))
-        XCTAssertFalse(container.contains(".background {"))
+        XCTAssertFalse(container.contains("glassEffect("))
+        XCTAssertFalse(container.contains("ZStack"))
+        XCTAssertFalse(container.contains("GlassEffectContainer"))
     }
 
     func testCanvasDoesNotWrapContextualControlsInGlassEffectContainer() throws {
@@ -39,12 +41,16 @@ final class ContextualGlassContainerRegressionTests: XCTestCase {
 
     func testForegroundContentIsNotInsideGlassEffectHierarchy() throws {
         let container = try projectSource(named: "ContextualGlassContainer.swift", subdirectory: "Views")
-        let backgroundStart = try XCTUnwrap(container.range(of: "private var floatingPanelBackground"))
-        let bodyEnd = try XCTUnwrap(container.range(of: "extension View"))
-        let backgroundSection = String(container[backgroundStart.lowerBound..<bodyEnd.lowerBound])
-        XCTAssertTrue(backgroundSection.contains("glassEffect("))
-        XCTAssertFalse(backgroundSection.contains("content"))
-        XCTAssertTrue(container.contains("content\n                .padding(.horizontal, horizontalPadding)"))
+        XCTAssertFalse(container.contains("glassEffect("))
+        XCTAssertTrue(container.contains("content\n            .padding(.horizontal, horizontalPadding)"))
+        XCTAssertTrue(container.contains(".background {"))
+    }
+
+    func testPositionedContextualControlsUseFixedSizeBeforePosition() throws {
+        let menu = try projectSource(named: "SignatureOverlayContextMenu.swift", subdirectory: "Views")
+        let popover = try projectSource(named: "PlacedSignatureEditPopover.swift", subdirectory: "Views")
+        XCTAssertTrue(menu.contains(".fixedSize(horizontal: true, vertical: true)\n        .position(anchorPoint)"))
+        XCTAssertTrue(popover.contains(".fixedSize(horizontal: true, vertical: true)\n        .position(anchorPoint)"))
     }
 
     func testToolbarUsesCompactVisibleHeightAndHeavyIcons() throws {

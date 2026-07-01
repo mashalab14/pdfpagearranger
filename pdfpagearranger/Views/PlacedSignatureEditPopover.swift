@@ -91,6 +91,7 @@ struct PlacedSignatureEditPopover: View {
             horizontalPadding: ContextualControlMetrics.popoverHorizontalPadding,
             verticalPadding: ContextualControlMetrics.popoverVerticalPadding
         )
+        .fixedSize(horizontal: true, vertical: true)
         .position(anchorPoint)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("placedSignatureEditPopover")

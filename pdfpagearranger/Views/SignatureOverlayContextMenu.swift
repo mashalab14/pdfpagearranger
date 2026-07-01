@@ -66,6 +66,7 @@ struct SignatureOverlayContextMenu: View {
         }
         .frame(height: ContextualControlMetrics.toolbarVisibleHeight)
         .contextualGlassContainer()
+        .fixedSize(horizontal: true, vertical: true)
         .position(anchorPoint)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("signatureOverlayContextMenu")

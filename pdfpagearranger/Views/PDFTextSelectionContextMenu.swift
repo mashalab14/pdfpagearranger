@@ -33,6 +33,7 @@ struct PDFTextSelectionContextMenu: View {
             horizontalPadding: horizontalPadding,
             verticalPadding: verticalPadding
         )
+        .fixedSize(horizontal: true, vertical: true)
         .position(
             x: anchorRect.midX,
             y: max(anchorRect.minY - 28, 24)
