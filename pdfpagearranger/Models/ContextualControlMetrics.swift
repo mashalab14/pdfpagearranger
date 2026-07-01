@@ -3,14 +3,14 @@ import SwiftUI
 
 /// Shared visual language for floating contextual controls (signatures, highlights, comments, etc.).
 enum ContextualControlMetrics {
-    static let floatingPanelBackgroundOpacity: CGFloat = 0.75
+    static let floatingPanelBackgroundOpacity: CGFloat = 0.8
     static let popoverCornerRadius: CGFloat = 16
-    static let panelBorderWidth: CGFloat = 1
-    static let panelBorderOpacity: CGFloat = 0.35
+    static let panelBorderWidth: CGFloat = 0.5
+    static let panelBorderOpacity: CGFloat = 0.08
 
-    static let floatingPanelShadowOpacity: CGFloat = 0.10
-    static let floatingPanelShadowRadius: CGFloat = 6
-    static let floatingPanelShadowYOffset: CGFloat = 3
+    static let floatingPanelShadowOpacity: CGFloat = 0.08
+    static let floatingPanelShadowRadius: CGFloat = 5
+    static let floatingPanelShadowYOffset: CGFloat = 2
 
     static let minimumTapTarget: CGFloat = 52
     static let presetColorDiameter: CGFloat = 26
@@ -23,14 +23,18 @@ enum ContextualControlMetrics {
     static let toolbarVisibleIconWidth: CGFloat = 28
     static let toolbarVisibleIconHeight: CGFloat = 24
     static let toolbarCellSpacing: CGFloat = 0
-    static let toolbarDividerHeight: CGFloat = 20
-    static let toolbarDividerOpacity: CGFloat = 0.18
-    static let toolbarSymbolFont: Font = .system(size: 18, weight: .heavy)
+    static let toolbarDividerHeight: CGFloat = 18
+    static let toolbarDividerOpacity: CGFloat = 0.12
+    static let toolbarSymbolFont: Font = .system(size: 17, weight: .semibold)
     static let symbolFont: Font = toolbarSymbolFont
-    static let symbolWeight: Font.Weight = .heavy
+    static let symbolWeight: Font.Weight = .semibold
 
     static var toolbarShellHeight: CGFloat {
         toolbarVisibleHeight + toolbarVerticalPadding * 2
+    }
+
+    static var toolbarCapsuleCornerRadius: CGFloat {
+        toolbarShellHeight / 2
     }
 
     static var glassCornerRadius: CGFloat {

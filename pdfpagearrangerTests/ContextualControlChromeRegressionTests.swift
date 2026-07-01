@@ -25,9 +25,8 @@ final class ContextualGlassContainerRegressionTests: XCTestCase {
         let metrics = try projectSource(named: "ContextualControlMetrics.swift", subdirectory: "Models")
         XCTAssertTrue(container.contains("fixedSize(horizontal: true, vertical: true)"))
         XCTAssertTrue(container.contains("Color.white.opacity(ContextualControlMetrics.floatingPanelBackgroundOpacity)"))
-        XCTAssertTrue(container.contains("Capsule()"))
-        XCTAssertTrue(container.contains("RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)"))
-        XCTAssertTrue(metrics.contains("floatingPanelBackgroundOpacity: CGFloat = 0.75"))
+        XCTAssertTrue(container.contains("toolbarCapsuleCornerRadius"))
+        XCTAssertTrue(metrics.contains("floatingPanelBackgroundOpacity: CGFloat = 0.8"))
         XCTAssertFalse(container.contains("ultraThinMaterial"))
         XCTAssertFalse(container.contains("glassEffect("))
         XCTAssertFalse(container.contains("ZStack"))
@@ -54,12 +53,13 @@ final class ContextualGlassContainerRegressionTests: XCTestCase {
         XCTAssertTrue(popover.contains(".fixedSize(horizontal: true, vertical: true)\n        .position(anchorPoint)"))
     }
 
-    func testToolbarUsesCompactVisibleHeightAndHeavyIcons() throws {
+    func testToolbarUsesCompactVisibleHeightAndSemiboldIcons() throws {
         let menu = try projectSource(named: "SignatureOverlayContextMenu.swift", subdirectory: "Views")
         let metrics = try projectSource(named: "ContextualControlMetrics.swift", subdirectory: "Models")
         XCTAssertTrue(menu.contains("toolbarVisibleHeight"))
         XCTAssertTrue(menu.contains("toolbarSymbolFont"))
-        XCTAssertTrue(metrics.contains("weight: .heavy"))
+        XCTAssertTrue(metrics.contains("weight: .semibold"))
+        XCTAssertTrue(metrics.contains("toolbarCapsuleCornerRadius"))
         XCTAssertTrue(metrics.contains("floatingPanelShadowOpacity"))
     }
 

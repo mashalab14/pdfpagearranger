@@ -58,9 +58,16 @@ final class ContextualControlMetricsRegressionTests: XCTestCase {
         XCTAssertLessThan(ContextualControlMetrics.floatingPanelShadowRadius, 10)
     }
 
+    func testToolbarCapsuleCornerRadiusIsHalfShellHeight() {
+        XCTAssertEqual(
+            ContextualControlMetrics.toolbarCapsuleCornerRadius,
+            ContextualControlMetrics.toolbarShellHeight / 2
+        )
+    }
+
     func testFloatingPanelUsesWhiteTranslucentBackground() throws {
         let metrics = try projectSource(named: "ContextualControlMetrics.swift", subdirectory: "Models")
-        XCTAssertTrue(metrics.contains("floatingPanelBackgroundOpacity: CGFloat = 0.75"))
+        XCTAssertTrue(metrics.contains("floatingPanelBackgroundOpacity: CGFloat = 0.8"))
     }
 
     private func projectSource(named fileName: String, subdirectory: String) throws -> String {

@@ -40,15 +40,22 @@ struct ContextualGlassContainerModifier: ViewModifier {
             )
     }
 
+    private var milkyFill: Color {
+        Color.white.opacity(ContextualControlMetrics.floatingPanelBackgroundOpacity)
+    }
+
     @ViewBuilder
     private var panelBackground: some View {
         switch shape {
         case .capsule:
-            Capsule()
-                .fill(Color.white.opacity(ContextualControlMetrics.floatingPanelBackgroundOpacity))
+            RoundedRectangle(
+                cornerRadius: ContextualControlMetrics.toolbarCapsuleCornerRadius,
+                style: .continuous
+            )
+            .fill(milkyFill)
         case .roundedRectangle(let cornerRadius):
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(Color.white.opacity(ContextualControlMetrics.floatingPanelBackgroundOpacity))
+                .fill(milkyFill)
         }
     }
 
@@ -56,15 +63,18 @@ struct ContextualGlassContainerModifier: ViewModifier {
     private var panelBorder: some View {
         switch shape {
         case .capsule:
-            Capsule()
-                .strokeBorder(
-                    Color.white.opacity(ContextualControlMetrics.panelBorderOpacity),
-                    lineWidth: ContextualControlMetrics.panelBorderWidth
-                )
+            RoundedRectangle(
+                cornerRadius: ContextualControlMetrics.toolbarCapsuleCornerRadius,
+                style: .continuous
+            )
+            .strokeBorder(
+                Color.primary.opacity(ContextualControlMetrics.panelBorderOpacity),
+                lineWidth: ContextualControlMetrics.panelBorderWidth
+            )
         case .roundedRectangle(let cornerRadius):
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .strokeBorder(
-                    Color.white.opacity(ContextualControlMetrics.panelBorderOpacity),
+                    Color.primary.opacity(ContextualControlMetrics.panelBorderOpacity),
                     lineWidth: ContextualControlMetrics.panelBorderWidth
                 )
         }

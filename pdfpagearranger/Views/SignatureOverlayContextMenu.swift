@@ -74,7 +74,7 @@ struct SignatureOverlayContextMenu: View {
 
     private var divider: some View {
         Rectangle()
-            .fill(Color.secondary.opacity(ContextualControlMetrics.toolbarDividerOpacity))
+            .fill(Color.primary.opacity(ContextualControlMetrics.toolbarDividerOpacity))
             .frame(width: 1, height: ContextualControlMetrics.toolbarDividerHeight)
     }
 
