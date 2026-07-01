@@ -8,9 +8,9 @@ enum ContextualControlMetrics {
     static let panelBorderWidth: CGFloat = 0.5
     static let panelBorderOpacity: CGFloat = 0.08
 
-    static let floatingPanelShadowOpacity: CGFloat = 0.18
-    static let floatingPanelShadowRadius: CGFloat = 24
-    static let floatingPanelShadowYOffset: CGFloat = 9
+    static let floatingPanelShadowOpacity: CGFloat = 0.14 //0.18
+    static let floatingPanelShadowRadius: CGFloat = 34 //24
+    static let floatingPanelShadowYOffset: CGFloat = 12 //9
 
     static let minimumTapTarget: CGFloat = 52
     static let presetColorDiameter: CGFloat = 26
