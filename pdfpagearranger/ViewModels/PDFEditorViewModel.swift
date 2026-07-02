@@ -637,7 +637,7 @@ final class PDFEditorViewModel {
         guard !sourceOverlays.isEmpty else { return }
 
         let copiedOverlays = sourceOverlays.map { overlay in
-            var copied = PageObject(
+            PageObject(
                 pageItemID: destinationID,
                 type: overlay.type,
                 position: overlay.position,
@@ -654,22 +654,6 @@ final class PDFEditorViewModel {
                 signatureBaselineInkColor: overlay.signatureBaselineInkColor,
                 signatureBaselineStrokeThickness: overlay.signatureBaselineStrokeThickness
             )
-
-            if let sourceAssetID = overlay.signatureSourceImageAssetID,
-               let sourceImage = imageAssets[sourceAssetID] {
-                let newSourceID = UUID()
-                imageAssets[newSourceID] = sourceImage
-                copied.signatureSourceImageAssetID = newSourceID
-            }
-
-            if let displayAssetID = overlay.imageAssetID,
-               let displayImage = imageAssets[displayAssetID] {
-                let newDisplayID = UUID()
-                imageAssets[newDisplayID] = displayImage
-                copied.imageAssetID = newDisplayID
-            }
-
-            return copied
         }
 
         pageObjectsByPage[destinationID] = copiedOverlays

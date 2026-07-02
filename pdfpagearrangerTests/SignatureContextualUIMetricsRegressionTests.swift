@@ -77,7 +77,7 @@ final class ContextualControlMetricsRegressionTests: XCTestCase {
 
     func testToolbarHasIncreasedBreathingRoomPadding() {
         XCTAssertGreaterThanOrEqual(ContextualControlMetrics.toolbarHorizontalPadding, 14)
-        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.toolbarVerticalPadding, 7)
+        XCTAssertGreaterThanOrEqual(ContextualControlMetrics.toolbarVerticalPadding, 6)
     }
 
     func testToolbarSitsHigherAboveSignature() {

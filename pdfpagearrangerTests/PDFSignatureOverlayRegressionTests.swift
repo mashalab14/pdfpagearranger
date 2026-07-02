@@ -71,6 +71,26 @@ final class PDFSignatureOverlayRegressionTests: XCTestCase {
         XCTAssertEqual(copied.size.width, signature.size.width, accuracy: 0.001)
     }
 
+    func testDuplicatePageSharesSignatureSourceAndDisplayAssets() throws {
+        let page = try XCTUnwrap(viewModel.pages.first)
+        let signature = OverlayTestFactory.seedSignature(on: viewModel, pageItemID: page.id)
+        let displayAssetID = try XCTUnwrap(signature.imageAssetID)
+        let sourceAssetID = try XCTUnwrap(signature.signatureSourceImageAssetID)
+
+        viewModel.duplicatePage(id: page.id)
+
+        let duplicatePage = try XCTUnwrap(viewModel.pages.first(where: { $0.id != page.id }))
+        let copied = try XCTUnwrap(viewModel.overlayObjects(for: duplicatePage.id).first)
+
+        XCTAssertNotEqual(copied.id, signature.id)
+        XCTAssertEqual(copied.imageAssetID, displayAssetID)
+        XCTAssertEqual(copied.signatureSourceImageAssetID, sourceAssetID)
+
+        viewModel.deleteOverlay(id: signature.id, pageItemID: page.id)
+        XCTAssertNotNil(viewModel.imageAsset(for: displayAssetID))
+        XCTAssertNotNil(viewModel.imageAsset(for: sourceAssetID))
+    }
+
     func testUndoAfterAddSignatureRemovesOverlay() throws {
         let page = try XCTUnwrap(viewModel.pages.first)
         let revisionBefore = viewModel.overlayRevision(for: page.id)
