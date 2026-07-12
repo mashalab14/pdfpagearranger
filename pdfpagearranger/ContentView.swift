@@ -4,7 +4,9 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Bindable var viewModel: PDFEditorViewModel
+    @State private var scanSessionViewModel = ScanDraftSessionViewModel()
     @State private var showImporter = false
+    @State private var showScanDraftFlow = false
     @State private var showSettings = false
     @State private var showError = false
     @State private var importErrorMessage: String?
@@ -33,6 +35,14 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
+        }
+        .fullScreenCover(isPresented: $showScanDraftFlow, onDismiss: {
+            scanSessionViewModel.discardDraftSession()
+        }) {
+            ScanDraftRootView(
+                sessionViewModel: scanSessionViewModel,
+                editorViewModel: viewModel
+            )
         }
         .fileImporter(
             isPresented: $showImporter,
@@ -89,6 +99,13 @@ struct ContentView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .accessibilityIdentifier("importPDFButton")
+
+            Button("New Document") {
+                showScanDraftFlow = true
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .accessibilityIdentifier("newDocumentButton")
 
             Spacer()
         }

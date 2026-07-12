@@ -1,0 +1,63 @@
+import Foundation
+
+enum ScanDraftError: LocalizedError, Equatable {
+    case imageCannotBeLoaded
+    case unsupportedImageData
+    case processingFailure(stage: ScanProcessingStage)
+    case temporaryFileWriteFailure
+    case insufficientStorage
+    case pdfGenerationFailure
+    case editorHandoffFailure
+    case sessionNotFound
+    case emptyDraft
+    case acquisitionCancelled
+
+    var errorDescription: String? {
+        switch self {
+        case .imageCannotBeLoaded:
+            return "The image could not be loaded."
+        case .unsupportedImageData:
+            return "This image format is not supported."
+        case .processingFailure(let stage):
+            return "Image processing failed during \(stage.displayName)."
+        case .temporaryFileWriteFailure:
+            return "Could not save a working copy of the image."
+        case .insufficientStorage:
+            return "There is not enough storage available."
+        case .pdfGenerationFailure:
+            return "Could not generate the PDF."
+        case .editorHandoffFailure:
+            return "The generated PDF could not be opened in the editor."
+        case .sessionNotFound:
+            return "The scan session could not be found."
+        case .emptyDraft:
+            return "Add at least one page before continuing."
+        case .acquisitionCancelled:
+            return "Image capture was cancelled."
+        }
+    }
+}
+
+enum ScanProcessingStage: String, Codable, CaseIterable, Sendable {
+    case normalizeOrientation
+    case detectBoundaries
+    case applyCrop
+    case applyPerspectiveCorrection
+    case applyRotation
+    case applyVisualAdjustments
+    case generateThumbnail
+    case generateProcessedImage
+
+    var displayName: String {
+        switch self {
+        case .normalizeOrientation: return "orientation normalization"
+        case .detectBoundaries: return "boundary detection"
+        case .applyCrop: return "cropping"
+        case .applyPerspectiveCorrection: return "perspective correction"
+        case .applyRotation: return "rotation"
+        case .applyVisualAdjustments: return "visual adjustments"
+        case .generateThumbnail: return "thumbnail generation"
+        case .generateProcessedImage: return "processed image generation"
+        }
+    }
+}

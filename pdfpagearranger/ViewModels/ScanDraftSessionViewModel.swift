@@ -1,0 +1,328 @@
+import Foundation
+import SwiftUI
+
+@Observable
+@MainActor
+final class ScanDraftSessionViewModel {
+    private(set) var document: ScanDraftDocument?
+    var navigationPath: [ScanDraftRoute] = []
+    private(set) var isProcessingPages = false
+    private(set) var isGeneratingPDF = false
+    var errorMessage: String?
+
+    private let storage: ScanDraftSessionStorage
+    private let processingOrchestrator: ScanPageProcessingOrchestrator
+    private let pdfGenerator: any ScanDraftPDFGenerating
+    private let editorHandoff: ScanEditorHandoffService
+    private var processingTask: Task<Void, Never>?
+
+    init(
+        storage: ScanDraftSessionStorage = ScanDraftSessionStorage(),
+        processingOrchestrator: ScanPageProcessingOrchestrator = ScanPageProcessingOrchestrator(),
+        pdfGenerator: any ScanDraftPDFGenerating = UnimplementedScanDraftPDFGenerator(),
+        editorHandoff: ScanEditorHandoffService? = nil
+    ) {
+        self.storage = storage
+        self.processingOrchestrator = processingOrchestrator
+        self.pdfGenerator = pdfGenerator
+        self.editorHandoff = editorHandoff ?? ScanEditorHandoffService()
+    }
+
+    var hasActiveDraft: Bool {
+        guard let document else { return false }
+        return !document.isEmpty
+    }
+
+    var sessionDirectory: URL? {
+        guard let document else { return nil }
+        return storage.sessionDirectory(for: document.id)
+    }
+
+    // MARK: - Session lifecycle
+
+    func beginNewDocumentFlow() throws {
+        let draft = ScanDraftDocument()
+        try storage.createSessionDirectory(for: draft.id)
+        document = draft
+        navigationPath = [.sourceSelection]
+        errorMessage = nil
+    }
+
+    func discardDraftSession() {
+        processingTask?.cancel()
+        processingTask = nil
+
+        if let documentID = document?.id {
+            try? storage.deleteSession(for: documentID)
+        }
+
+        document = nil
+        navigationPath = []
+        isProcessingPages = false
+        isGeneratingPDF = false
+        errorMessage = nil
+    }
+
+    func handleAcquisitionCancelled() {
+        if hasActiveDraft {
+            navigateToDraftReview()
+        } else {
+            discardDraftSession()
+        }
+    }
+
+    // MARK: - Navigation
+
+    func navigateToSourceSelection() {
+        navigationPath = [.sourceSelection]
+    }
+
+    func navigateToCameraAcquisition() {
+        if navigationPath.last != .cameraAcquisition {
+            navigationPath.append(.cameraAcquisition)
+        }
+    }
+
+    func navigateToPhotosAcquisition() {
+        if navigationPath.last != .photosAcquisition {
+            navigationPath.append(.photosAcquisition)
+        }
+    }
+
+    func navigateToDraftReview() {
+        navigationPath = [.draftReview]
+    }
+
+    func navigateToPageAdjustment(pageID: UUID) {
+        if navigationPath.last != .pageAdjustment(pageID: pageID) {
+            navigationPath.append(.pageAdjustment(pageID: pageID))
+        }
+    }
+
+    func navigateToPDFGenerationProgress() {
+        if navigationPath.last != .pdfGenerationProgress {
+            navigationPath.append(.pdfGenerationProgress)
+        }
+    }
+
+    // MARK: - Acquisition convergence
+
+    func importAcquiredImages(_ payloads: [ScanAcquiredImagePayload]) async throws {
+        guard !payloads.isEmpty else {
+            throw ScanDraftError.emptyDraft
+        }
+        guard var draft = document else {
+            throw ScanDraftError.sessionNotFound
+        }
+
+        let sessionDirectory = storage.sessionDirectory(for: draft.id)
+        var importedPages: [ScanDraftPage] = []
+        importedPages.reserveCapacity(payloads.count)
+
+        for payload in payloads {
+            let page = try storage.importOriginalImage(
+                data: payload.data,
+                pageID: UUID(),
+                sourceType: payload.sourceType,
+                sessionDirectory: sessionDirectory
+            )
+            var pageWithDefaults = page
+            pageWithDefaults.visualAdjustments = draft.sessionDefaultVisualAdjustments.copied()
+            importedPages.append(pageWithDefaults)
+        }
+
+        draft.addPages(importedPages)
+        document = draft
+        navigateToDraftReview()
+        scheduleProcessingAllPages()
+    }
+
+    // MARK: - Draft page operations
+
+    func selectPage(id: UUID?) {
+        guard var draft = document else { return }
+        draft.selectPage(id: id)
+        document = draft
+    }
+
+    func setMultiSelection(_ pageIDs: Set<UUID>) {
+        guard var draft = document else { return }
+        draft.setMultiSelection(pageIDs)
+        document = draft
+    }
+
+    func removePage(id: UUID) {
+        guard var draft = document else { return }
+        draft.removePage(id: id)
+        document = draft
+    }
+
+    func reorderPages(from source: Int, to destination: Int) {
+        guard var draft = document else { return }
+        draft.reorderPages(from: source, to: destination)
+        document = draft
+    }
+
+    func rotatePage(id: UUID) {
+        guard var draft = document else { return }
+        draft.rotatePage(id: id)
+        document = draft
+        scheduleProcessing(for: [id])
+    }
+
+    func updatePageGeometry(id: UUID, geometry: ScanPageGeometry) {
+        guard var draft = document else { return }
+        draft.updatePage(id: id) { page in
+            page.geometry = geometry
+            page.processingState = .pending
+            page.processingFingerprint = nil
+            page.processedImage = nil
+            page.thumbnailState = .notGenerated
+            page.thumbnailImage = nil
+        }
+        document = draft
+        scheduleProcessing(for: [id])
+    }
+
+    func applyVisualAdjustments(_ adjustments: ScanVisualAdjustments, toPageIDs: Set<UUID>) {
+        guard var draft = document else { return }
+        draft.applyVisualAdjustments(adjustments, toPageIDs: toPageIDs)
+        document = draft
+        scheduleProcessing(for: Array(toPageIDs))
+    }
+
+    func applyVisualAdjustmentsToAll(_ adjustments: ScanVisualAdjustments) {
+        guard var draft = document else { return }
+        draft.applyVisualAdjustmentsToAll(adjustments)
+        document = draft
+        scheduleProcessing(for: draft.pages.map(\.id))
+    }
+
+    func updateSessionDefaultVisualAdjustments(_ adjustments: ScanVisualAdjustments) {
+        guard var draft = document else { return }
+        draft.sessionDefaultVisualAdjustments = adjustments.copied()
+        draft.hasUnsavedChanges = true
+        document = draft
+    }
+
+    // MARK: - Processing
+
+    func scheduleProcessing(for pageIDs: [UUID]) {
+        guard let draft = document, let sessionDirectory = sessionDirectory else { return }
+        let targets = draft.pages.filter { pageIDs.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
+        processingTask?.cancel()
+        processingTask = Task { [weak self] in
+            guard let self else { return }
+            await self.processPages(targets, sessionDirectory: sessionDirectory)
+        }
+    }
+
+    func scheduleProcessingAllPages() {
+        guard let draft = document else { return }
+        scheduleProcessing(for: draft.pages.map(\.id))
+    }
+
+    private func processPages(_ pages: [ScanDraftPage], sessionDirectory: URL) async {
+        isProcessingPages = true
+        defer { isProcessingPages = false }
+
+        guard var draft = document else { return }
+        draft.processingStatus = .processingPages(completed: 0, total: pages.count)
+        document = draft
+
+        var completed = 0
+        do {
+            let processedPages = try await processingOrchestrator.processPages(
+                pages,
+                sessionDirectory: sessionDirectory,
+                onPageCompleted: { [weak self] page in
+                    Task { @MainActor in
+                        self?.mergeProcessedPage(page)
+                        completed += 1
+                        self?.document?.processingStatus = .processingPages(
+                            completed: completed,
+                            total: pages.count
+                        )
+                    }
+                }
+            )
+
+            for page in processedPages {
+                mergeProcessedPage(page)
+            }
+
+            document?.processingStatus = .idle
+        } catch {
+            document?.processingStatus = .failed
+            errorMessage = (error as? ScanDraftError)?.localizedDescription ?? error.localizedDescription
+        }
+    }
+
+    private func mergeProcessedPage(_ page: ScanDraftPage) {
+        guard var draft = document else { return }
+        draft.updatePage(id: page.id) { existing in
+            existing.processedImage = page.processedImage
+            existing.thumbnailImage = page.thumbnailImage
+            existing.thumbnailState = page.thumbnailState
+            existing.processingState = page.processingState
+            existing.processingError = page.processingError
+            existing.processingFingerprint = page.processingFingerprint
+        }
+        document = draft
+    }
+
+    // MARK: - PDF generation and editor handoff
+
+    func generatePDF(displayName: String = "Scanned Document") async throws -> URL {
+        guard let draft = document, !draft.isEmpty else {
+            throw ScanDraftError.emptyDraft
+        }
+        guard let sessionDirectory = sessionDirectory else {
+            throw ScanDraftError.sessionNotFound
+        }
+
+        isGeneratingPDF = true
+        navigateToPDFGenerationProgress()
+        defer { isGeneratingPDF = false }
+
+        document?.processingStatus = .generatingPDF
+
+        let pdfURL = try await pdfGenerator.generatePDF(
+            from: draft.pages,
+            sessionDirectory: sessionDirectory,
+            displayName: displayName
+        )
+
+        document?.generatedPDFURL = pdfURL
+        document?.processingStatus = .pdfReady
+        document?.hasUnsavedChanges = false
+        return pdfURL
+    }
+
+    func handoffToEditor(editorViewModel: PDFEditorViewModel) async throws {
+        guard let pdfURL = document?.generatedPDFURL else {
+            throw ScanDraftError.pdfGenerationFailure
+        }
+
+        let sessionID = document?.id
+        try await editorHandoff.handoff(pdfURL: pdfURL, to: editorViewModel)
+
+        if let sessionID {
+            try? storage.deleteSession(for: sessionID)
+        }
+        document = nil
+        navigationPath = []
+    }
+}
+
+extension ScanDraftSessionViewModel: ScanImageAcquisitionCoordinating {
+    func acquisitionDidFinish(payloads: [ScanAcquiredImagePayload]) async {
+        try? await importAcquiredImages(payloads)
+    }
+
+    func acquisitionDidCancel() async {
+        handleAcquisitionCancelled()
+    }
+}
