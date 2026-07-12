@@ -1374,10 +1374,16 @@ final class ScanDraftSessionViewModel {
     }
 
     private func processPages(_ pages: [ScanDraftPage], sessionDirectory: URL) async {
-        isProcessingPages = true
-        defer { isProcessingPages = false }
+        guard let draftID = document?.id else { return }
 
-        guard var draft = document else { return }
+        isProcessingPages = true
+        defer {
+            if isActiveSession(draftID) {
+                isProcessingPages = false
+            }
+        }
+
+        guard var draft = document, draft.id == draftID else { return }
         draft.processingStatus = .processingPages(completed: 0, total: pages.count)
         document = draft
 
@@ -1388,9 +1394,10 @@ final class ScanDraftSessionViewModel {
                 sessionDirectory: sessionDirectory,
                 onPageCompleted: { [weak self] page in
                     Task { @MainActor in
-                        self?.mergeProcessedPage(page)
+                        guard let self, self.isActiveSession(draftID) else { return }
+                        self.mergeProcessedPage(page)
                         completed += 1
-                        self?.document?.processingStatus = .processingPages(
+                        self.document?.processingStatus = .processingPages(
                             completed: completed,
                             total: pages.count
                         )
@@ -1398,12 +1405,18 @@ final class ScanDraftSessionViewModel {
                 }
             )
 
+            guard isActiveSession(draftID) else { return }
+
             for page in processedPages {
                 mergeProcessedPage(page)
             }
 
             document?.processingStatus = .idle
+        } catch is CancellationError {
+            guard isActiveSession(draftID) else { return }
+            document?.processingStatus = .idle
         } catch {
+            guard isActiveSession(draftID) else { return }
             document?.processingStatus = .failed
             errorMessage = (error as? ScanDraftError)?.localizedDescription ?? error.localizedDescription
         }
@@ -1411,6 +1424,7 @@ final class ScanDraftSessionViewModel {
 
     private func mergeProcessedPage(_ page: ScanDraftPage) {
         guard var draft = document else { return }
+        guard draft.pages.contains(where: { $0.id == page.id }) else { return }
         draft.updatePage(id: page.id) { existing in
             existing.processedImage = page.processedImage
             existing.thumbnailImage = page.thumbnailImage
@@ -1483,6 +1497,8 @@ final class ScanDraftSessionViewModel {
         displayName: String,
         onSuccess: @escaping () -> Void
     ) async {
+        guard let draftID = document?.id else { return }
+
         let totalPages = document?.pages.count ?? 0
         isGeneratingPDF = true
         navigateToPDFGenerationProgress()
@@ -1494,27 +1510,37 @@ final class ScanDraftSessionViewModel {
         )
         errorMessage = nil
         defer {
-            isGeneratingPDF = false
+            if isActiveSession(draftID) || document == nil {
+                isGeneratingPDF = false
+            }
             pdfGenerationTask = nil
         }
 
         do {
-            _ = try await buildPDFFile(displayName: displayName)
+            _ = try await buildPDFFile(displayName: displayName, draftID: draftID)
+            guard isActiveSession(draftID) else { return }
             try await handoffToEditor(editorViewModel: editorViewModel)
+            guard isActiveSession(draftID) else { return }
             pdfGenerationProgress = .idle
             onSuccess()
         } catch is CancellationError {
+            guard isActiveSession(draftID) else { return }
             cleanupFailedPDFGeneration()
             navigateToDraftReview()
         } catch {
+            guard isActiveSession(draftID) else { return }
             errorMessage = (error as? ScanDraftError)?.localizedDescription ?? error.localizedDescription
             cleanupFailedPDFGeneration()
             navigateToDraftReview()
         }
     }
 
-    private func buildPDFFile(displayName: String) async throws -> URL {
-        guard let draft = document, !draft.isEmpty else {
+    private func buildPDFFile(displayName: String, draftID: UUID? = nil) async throws -> URL {
+        let activeDraftID = draftID ?? document?.id
+        guard let draft = document,
+              let activeDraftID,
+              draft.id == activeDraftID,
+              !draft.isEmpty else {
             throw ScanDraftError.emptyDraft
         }
         guard let sessionDirectory = sessionDirectory else {
@@ -1529,24 +1555,34 @@ final class ScanDraftSessionViewModel {
             displayName: displayName,
             onProgress: { [weak self] update in
                 Task { @MainActor in
-                    self?.pdfGenerationProgress = ScanDraftPDFGenerationProgress(
+                    guard let self, self.isActiveSession(activeDraftID) else { return }
+                    self.pdfGenerationProgress = ScanDraftPDFGenerationProgress(
                         phase: update.phase,
                         currentPage: update.currentPage,
                         totalPages: update.totalPages,
-                        isCancelling: self?.pdfGenerationProgress.isCancelling ?? false
+                        isCancelling: self.pdfGenerationProgress.isCancelling
                     )
                 }
             },
             onPagePrepared: { [weak self] page in
                 Task { @MainActor in
-                    self?.mergeProcessedPage(page)
+                    guard let self, self.isActiveSession(activeDraftID) else { return }
+                    self.mergeProcessedPage(page)
                 }
             }
         )
 
+        guard isActiveSession(activeDraftID) else {
+            throw CancellationError()
+        }
+
         document?.generatedPDFURL = pdfURL
         document?.processingStatus = .pdfReady
         return pdfURL
+    }
+
+    private func isActiveSession(_ draftID: UUID) -> Bool {
+        document?.id == draftID
     }
 
     private func cleanupFailedPDFGeneration() {

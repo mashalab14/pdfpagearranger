@@ -1,7 +1,6 @@
 import SwiftUI
 
 /// Root navigation shell for the unified scan-to-PDF workflow.
-/// Screens are placeholders until camera, Photos, review, and adjustment UI are implemented.
 struct ScanDraftRootView: View {
     @Bindable var sessionViewModel: ScanDraftSessionViewModel
     @Bindable var editorViewModel: PDFEditorViewModel
@@ -116,8 +115,11 @@ private struct ScanDraftEntryView: View {
 
             Button("Continue", action: onStart)
                 .buttonStyle(.borderedProminent)
+                .accessibilityLabel("Continue")
+                .accessibilityHint("Starts a new scan or photo import draft.")
 
             Button("Cancel", action: onCancel)
+                .accessibilityLabel("Cancel")
         }
         .padding()
         .navigationTitle("New Document")
