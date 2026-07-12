@@ -357,6 +357,7 @@ final class CompressionServiceRegressionTests: XCTestCase {
             for: pageItem,
             document: document,
             overlays: [],
+            annotations: [],
             overlayImages: [:],
             revision: 0
         )

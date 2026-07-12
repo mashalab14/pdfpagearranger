@@ -82,6 +82,7 @@ final class PDFService {
         sourceDocument: PDFDocument,
         outputName: String,
         overlaysByPage: [UUID: [PageObject]] = [:],
+        annotationsByPage: [UUID: [PageAnnotation]] = [:],
         imageAssets: [UUID: UIImage] = [:],
         pageNumberSettings: PageNumberSettings = .default,
         watermarkSettings: WatermarkSettings = .default,
@@ -92,8 +93,10 @@ final class PDFService {
 
         for (exportIndex, item) in pages.enumerated() {
             let overlays = overlaysByPage[item.id] ?? []
+            let annotations = annotationsByPage[item.id] ?? []
             let needsDecoration = Self.pageNeedsDecoration(
                 overlays: overlays,
+                annotations: annotations,
                 exportIndex: exportIndex,
                 pageNumberSettings: pageNumberSettings,
                 watermarkSettings: watermarkSettings
@@ -111,6 +114,7 @@ final class PDFService {
                 totalPages: totalPages,
                 sourceDocument: sourceDocument,
                 overlays: overlays,
+                annotations: annotations,
                 imageAssets: imageAssets,
                 pageNumberSettings: pageNumberSettings,
                 watermarkSettings: watermarkSettings,
@@ -147,6 +151,7 @@ final class PDFService {
         totalPages: Int,
         sourceDocument: PDFDocument,
         overlays: [PageObject],
+        annotations: [PageAnnotation],
         imageAssets: [UUID: UIImage],
         pageNumberSettings: PageNumberSettings,
         watermarkSettings: WatermarkSettings,
@@ -185,6 +190,26 @@ final class PDFService {
 
         // Draw original page content as vector PDF (preserves selectable text).
         sourcePage.draw(with: .mediaBox, to: context)
+
+        let highlights = annotations.filter { $0.kind == .highlight }
+        if !highlights.isEmpty {
+            AnnotationPDFExporter.drawAnnotations(highlights, in: mediaBox, pageRotation: pageRotation, context: context)
+        }
+
+        let drawings = annotations.filter { $0.kind == .drawing }
+        if !drawings.isEmpty {
+            AnnotationPDFExporter.drawAnnotations(drawings, in: mediaBox, pageRotation: pageRotation, context: context)
+        }
+
+        let comments = annotations.filter { $0.kind == .textComment }
+        if !comments.isEmpty {
+            AnnotationPDFExporter.drawAnnotations(comments, in: mediaBox, pageRotation: pageRotation, context: context)
+        }
+
+        let stickyNotes = annotations.filter { $0.kind == .stickyNote }
+        if !stickyNotes.isEmpty {
+            AnnotationPDFExporter.drawAnnotations(stickyNotes, in: mediaBox, pageRotation: pageRotation, context: context)
+        }
 
         if appliesWatermark, watermarkSettings.layer == .aboveContent {
             WatermarkRenderer.drawInPDFContext(
@@ -233,11 +258,13 @@ final class PDFService {
 
     private static func pageNeedsDecoration(
         overlays: [PageObject],
+        annotations: [PageAnnotation],
         exportIndex: Int,
         pageNumberSettings: PageNumberSettings,
         watermarkSettings: WatermarkSettings
     ) -> Bool {
         !overlays.isEmpty
+            || !annotations.isEmpty
             || pageNumberSettings.shouldApply(toExportIndex: exportIndex)
             || watermarkSettings.shouldApply(toExportIndex: exportIndex)
     }

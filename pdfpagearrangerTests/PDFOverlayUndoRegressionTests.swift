@@ -223,6 +223,7 @@ final class PDFOverlayUndoRegressionTests: XCTestCase {
             for: page,
             document: document,
             overlays: [overlay],
+            annotations: [],
             overlayImages: images,
             revision: revisionAfterAdd
         )
@@ -235,6 +236,7 @@ final class PDFOverlayUndoRegressionTests: XCTestCase {
             for: page,
             document: document,
             overlays: [],
+            annotations: [],
             overlayImages: [:],
             revision: revisionAfterUndo
         )

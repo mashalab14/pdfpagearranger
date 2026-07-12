@@ -822,13 +822,19 @@ Page Mode uses native **PDFKit** text selection on the underlying vector page (n
 | `none` | Nothing selected |
 | `overlay` | A user overlay (image, text, or signature) is selected |
 | `pdfText` | Native PDF text is selected |
+| `highlight` | A highlight annotation is selected |
+| `drawing` | A completed drawing annotation is selected |
+| `stickyNote` | A sticky note annotation is selected |
+| `textComment` | A text comment annotation is selected |
+
+Only one selection type may be active at a time. Selecting an annotation clears overlays and PDF text selection.
 
 **When text is selected:**
 
 - A lightweight contextual menu appears near the selection:
   - **Copy** — copies selected text to the pasteboard
-  - **Highlight** — placeholder (no-op)
-  - **Comment** — placeholder (no-op)
+  - **Highlight** — creates a yellow highlight (35% opacity) over the selected text rectangles, clears PDF selection, selects the new highlight, light haptic
+  - **Comment** — opens the text comment editor (requires non-empty comment text)
   - **›** chevron — placeholder for future actions (not labeled “More”)
 - Menu disappears when selection is cleared
 - No permanent annotation toolbar; menu only appears after text is selected
@@ -836,13 +842,13 @@ Page Mode uses native **PDFKit** text selection on the underlying vector page (n
 **Clearing text selection:**
 
 - Tap outside the selection / empty page
-- Select an overlay
-- Enter **Add** sheet or **Signature Placement Mode**
+- Select an overlay or annotation
+- Enter **Add** sheet, **Drawing Mode**, sticky-note placement, or **Signature Placement Mode**
 - Change pages
 
-**Gestures preserved:** pinch zoom, double-tap zoom reset, page swipe, overlay tap/select — unchanged when no text is selected. Text selection does not add a permanent chrome bar.
+**Gestures preserved:** pinch zoom, double-tap zoom reset, page swipe (except during Drawing Mode or sticky-note placement), overlay tap/select — unchanged when no text is selected. Text selection does not add a permanent chrome bar.
 
-**Export:** no change — text selection is Page Mode UI only for now.
+**Export:** highlights, drawings, sticky-note markers, and text-comment anchors are composited into exported PDFs above vector page content. Original PDF text remains selectable/searchable.
 
 ### Leaving Page Mode
 
@@ -856,7 +862,7 @@ Page Mode uses native **PDFKit** text selection on the underlying vector page (n
 
 - Overlays belong to **specific pages** (by internal page ID)
 - Navigating between pages in Page Mode does **not** move overlays between pages
-- Changing pages **clears overlay and PDF text selection**
+- Changing pages **clears overlay, annotation, and PDF text selection**
 - Page zoom/pan resets when changing pages (fresh canvas per page)
 
 ---
@@ -955,8 +961,12 @@ Page Mode uses native **PDFKit** text selection on the underlying vector page (n
 |--------|----------|----------|--------|
 | **Text** | Add editable text | **Yes** | Dismisses sheet → opens **Add Text** editor (see [Text overlays](#195-text-overlays)) |
 | **Image** | Import from Photos or Files | **Yes** | Dismisses sheet → opens **Photos picker** |
+| **Draw** | Draw on the page | **Yes** | Dismisses sheet → enters **Drawing Mode** |
+| **Sticky Note** | Place a note on the page | **Yes** | Dismisses sheet → arms tap-to-place sticky note |
 | **Quick Signature** | Place your default signature | **Yes** | Dismisses sheet → silently arms tap-to-place (see below), or opens **Signature Library** if none is available |
 | **Signature Library** | Choose, create, or manage signatures | **Yes** | Dismisses sheet → opens **Signature Library** |
+
+Highlight and Text Comment are **not** in the Add sheet — they require native PDF text selection.
 
 ### Text import
 
@@ -985,6 +995,81 @@ Quick Signature does **not** open the drawing capture screen directly.
 ### Signature import
 
 See [Signatures](#20-signatures--library-drawing-placement).
+
+---
+
+## 19.4 Page annotations (V1)
+
+Non-destructive review annotations on imported PDF pages. Stored in app state (`annotationsByPage`), not written to the source PDF until export.
+
+### Types
+
+| Type | Entry | Anchor |
+|------|-------|--------|
+| **Highlight** | PDF text selection → Highlight | One or more normalized rectangles from selection |
+| **Text comment** | PDF text selection → Comment (or Highlight menu → Comment) | Selected text + anchor rectangles |
+| **Sticky note** | Add → Sticky Note → tap page | Normalized point on page |
+| **Drawing** | Add → Draw → Drawing Mode | Multiple strokes of normalized points |
+
+Sticky notes and text comments are **separate workflows** (point anchor vs text-anchored comment).
+
+### Highlights
+
+- Default: **yellow**, ~**35%** opacity, rendered behind readable text
+- Tap highlight → contextual menu: color presets (yellow, green, blue, pink, orange), Comment, Delete
+- Color change and delete each create one undo entry
+- Appears in Page Mode, Document Mode thumbnails, and export
+
+### Text comments
+
+- Editor shows selected-text preview, multiline comment field, Cancel / Add (or Save when editing)
+- Empty or whitespace-only comments are rejected with feedback
+- Visible anchor: light underline/highlight on selected text + small comment marker
+- Tap marker → popover with comment text, Edit, Delete
+
+### Sticky notes
+
+- Add → Sticky Note dismisses sheet and arms placement; next tap **inside** the page sets position (tap outside cancels)
+- Compact note editor requires non-empty text
+- Collapsed marker icon on page; tap → popover with note text, Edit, Delete
+- **Move:** drag marker while selected; one undo entry when drag ends; position clamped to page bounds
+
+### Drawing Mode
+
+- Explicit mode with bottom toolbar: pen color (black, red, blue, green, yellow), thickness (thin / medium / thick), eraser, undo last stroke, clear session, Done
+- Last-used color and thickness persist in UserDefaults across sessions
+- Finger and Apple Pencil both draw; points stored normalized to unrotated page
+- Page swipe, zoom, pan, overlay manipulation, and PDF text selection disabled while active
+- **Undo last stroke** affects current session only (not global undo stack)
+- **Done** commits all session strokes as one drawing annotation → one global undo entry
+- **Eraser (V1):** removes entire stroke on intersection (not pixel erasing)
+- **Clear** removes uncommitted session strokes only (no global undo)
+- Completed drawing: tap to select → Delete only (**Edit/re-enter Drawing Mode is not implemented in V1**)
+
+### Page operations
+
+- **Duplicate page** copies all annotations with new IDs
+- **Delete page** removes annotations with the page (undo restores)
+- **Rotate page** keeps stored normalized coordinates unchanged; rendering adapts
+
+### Export stacking order
+
+1. Behind-content watermark  
+2. Original PDF vector page  
+3. Highlights  
+4. Drawings  
+5. Text-comment anchor styling  
+6. Sticky-note markers  
+7. Above-content watermark  
+8. Image/signature overlays  
+9. Page numbers  
+
+### Known limitations (V1)
+
+- No drawing edit-in-place after Done (delete and re-draw)
+- No cloud comments, threads, or collaboration
+- No pressure sensitivity, shape tools, underline, or strikethrough
+- No import of third-party PDF annotation objects beyond what remains in the source file
 
 ---
 
@@ -1427,17 +1512,24 @@ All create **undo** entries.
 
 **Priority (highest to lowest):**
 
-1. **Overlay resize handle drag** (`highPriorityGesture`) — always wins on handle
-2. **Overlay drag / pinch** (when selected) — blocks page navigation while active
-3. **Overlay tap** — select
-4. **Page pinch/pan** (when no overlay selected)
-5. **Page swipe navigation** (when not zoomed, not manipulating overlay)
-6. **Canvas tap** — deselect
+1. **Active placement mode** (signature, text, sticky note)
+2. **Drawing Mode** (draw / eraser)
+3. **Selected annotation** (tap, sticky-note drag)
+4. **Overlay resize handle drag** (`highPriorityGesture`) — always wins on handle
+5. **Overlay drag / pinch** (when selected) — blocks page navigation while active
+6. **Overlay tap** — select
+7. **Native PDF text selection** (long-press to mount layer)
+8. **Page pinch/pan** (when no overlay or annotation selected, not in Drawing Mode)
+9. **Page swipe navigation** (when not zoomed, not manipulating overlay, not in Drawing Mode)
+10. **Canvas tap** — deselect
 
 **Specific rules:**
 
 | Situation | Page swipe | Page zoom | Overlay edit |
 |-----------|------------|-----------|--------------|
+| Drawing Mode active | ❌ Blocked | ❌ Blocked | ❌ Disabled |
+| Sticky-note placement armed | ❌ Blocked | ❌ Disabled | ❌ Disabled |
+| Selected sticky note being dragged | ❌ Blocked | ❌ Disabled | ❌ Disabled |
 | Overlay being dragged | ❌ Blocked | N/A | ✅ Active |
 | Overlay being resized (handle or pinch) | ❌ Blocked | N/A | ✅ Active |
 | Overlay selected, idle | ✅ On empty canvas | ❌ Disabled | ✅ Tap to edit |
@@ -1466,6 +1558,7 @@ Single snapshot of:
 
 - Page list (order, rotations, which pages exist)
 - All overlays on all pages
+- All annotations on all pages
 - Overlay image assets in memory
 - Page number settings
 
@@ -1482,6 +1575,10 @@ Single snapshot of:
 - Resize overlay (handle or pinch, on release)
 - Rotate text overlay (on release)
 - Delete overlay
+- Add / change color / delete highlight
+- Add / edit / delete text comment
+- Add / edit / move / delete sticky note
+- Add / delete drawing annotation
 - Bring overlay to front (only if z-order actually changes)
 - Apply page numbers
 - Remove page numbers

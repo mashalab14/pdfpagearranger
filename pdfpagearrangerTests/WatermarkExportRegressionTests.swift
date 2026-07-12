@@ -378,6 +378,7 @@ final class WatermarkExportRegressionTests: XCTestCase {
             for: pages[0],
             document: imported.document,
             overlays: [],
+            annotations: [],
             overlayImages: [:],
             revision: 0,
             watermarkSettings: settings

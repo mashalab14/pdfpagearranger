@@ -7,6 +7,7 @@ struct PageThumbnailView: View {
     let document: PDFDocument
     let overlays: [PageObject]
     let overlayImages: [UUID: UIImage]
+    let annotations: [PageAnnotation]
     let overlayRevision: Int
     let pageNumberSettings: PageNumberSettings
     let watermarkSettings: WatermarkSettings
@@ -131,6 +132,7 @@ struct PageThumbnailView: View {
             for: item,
             document: document,
             overlays: overlays,
+            annotations: annotations,
             overlayImages: overlayImages,
             revision: overlayRevision,
             pageNumberSettings: pageNumberSettings,

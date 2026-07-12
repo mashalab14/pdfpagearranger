@@ -56,6 +56,7 @@ final class PDFThumbnailRegressionTests: XCTestCase {
             for: pageItem,
             document: document,
             overlays: [],
+            annotations: [],
             overlayImages: [:],
             revision: 0
         )
@@ -63,6 +64,7 @@ final class PDFThumbnailRegressionTests: XCTestCase {
             for: pageItem,
             document: document,
             overlays: [overlay],
+            annotations: [],
             overlayImages: [assetID: greenImage],
             revision: 1
         )
@@ -93,6 +95,7 @@ final class PDFThumbnailRegressionTests: XCTestCase {
             for: pageItem,
             document: document,
             overlays: [],
+            annotations: [],
             overlayImages: [:],
             revision: 0
         )
@@ -100,6 +103,7 @@ final class PDFThumbnailRegressionTests: XCTestCase {
             for: pageItem,
             document: document,
             overlays: [],
+            annotations: [],
             overlayImages: [:],
             revision: 1
         )

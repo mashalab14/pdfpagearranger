@@ -19,7 +19,14 @@ enum PDFTextSelectionEngine {
             return nil
         }
 
-        return PDFTextSelection(text: text, anchorRect: anchorRect)
+        let normalizedRects = normalizedRects(from: pdfSelection, page: page)
+        guard !normalizedRects.isEmpty else { return nil }
+
+        return PDFTextSelection(
+            text: text,
+            anchorRect: anchorRect,
+            normalizedRects: normalizedRects
+        )
     }
 
     static func anchorRect(
@@ -44,5 +51,27 @@ enum PDFTextSelectionEngine {
         let y = (mediaBox.maxY - selectionBounds.maxY) * scaleY
 
         return CGRect(x: x, y: y, width: width, height: height)
+    }
+
+    static func normalizedRects(from pdfSelection: PDFSelection, page: PDFPage) -> [PageNormalizedRect] {
+        let mediaBox = page.bounds(for: .mediaBox)
+        guard mediaBox.width > 0, mediaBox.height > 0 else { return [] }
+
+        let lineSelections = pdfSelection.selectionsByLine()
+        let selections = lineSelections.isEmpty ? [pdfSelection] : lineSelections
+
+        return selections.compactMap { lineSelection in
+            let bounds = lineSelection.bounds(for: page)
+            guard !bounds.isNull, !bounds.isEmpty else { return nil }
+
+            let x = (bounds.minX - mediaBox.minX) / mediaBox.width
+            let width = bounds.width / mediaBox.width
+            let height = bounds.height / mediaBox.height
+            let y = (mediaBox.maxY - bounds.maxY) / mediaBox.height
+
+            return AnnotationGeometryEngine.clampNormalizedRect(
+                PageNormalizedRect(x: x, y: y, width: width, height: height)
+            )
+        }
     }
 }

@@ -8,6 +8,7 @@
 - **Searchable PDF OCR (scan-to-PDF)** — on-device Vision text recognition; invisible text layer in generated PDFs; Make PDF Searchable toggle (default on, persisted)
 - Image overlays
 - **Text overlays (V1)** — tap-to-place editable text with formatting, Recent Texts, vector export
+- **Page annotations (V1)** — PDF text highlights, freehand drawing mode, tap-to-place sticky notes, text comments from PDF selection; composited in Page Mode, thumbnails, and export
 - Signature library, Quick Signature, default signature, stroke thickness
 - Page numbers (document-level)
 - **Text and image watermark (document-level)** — including above/behind content layer placement; image stored in session `imageAssets` via `imageAssetID`

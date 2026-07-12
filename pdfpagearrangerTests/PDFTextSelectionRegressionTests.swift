@@ -10,7 +10,7 @@ final class PageModeSelectionModelTests: XCTestCase {
         XCTAssertNil(PageModeSelection.none.pdfTextSelection)
         XCTAssertEqual(PageModeSelection.overlay(overlayID).selectedOverlayID, overlayID)
         XCTAssertEqual(
-            PageModeSelection.pdfText(PDFTextSelection(text: "A", anchorRect: .zero)).pdfTextSelection?.text,
+            PageModeSelection.pdfText(PDFTextSelection(text: "A", anchorRect: .zero, normalizedRects: [])).pdfTextSelection?.text,
             "A"
         )
     }

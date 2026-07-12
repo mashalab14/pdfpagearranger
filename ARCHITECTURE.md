@@ -62,10 +62,11 @@ Examples (implemented):
 - Image/logo overlays (add, move, resize, rotate, delete)
 - Text overlays (add, edit, move, resize, rotate, duplicate, delete)
 - Signature overlays (add, move, resize, delete; edit appearance per placement)
-- Undo overlay operations
+- **Page annotations (V1)** — text highlights, freehand drawing, sticky notes, and text comments anchored to PDF text selection
+- Undo overlay and annotation operations
 - Page numbers, watermarks *(document-level; text and image watermark implemented)*
 
-**Current code:** Page Mode (`PageEditorView`) edits overlays for one `PageItem`. Overlays are stored in `pageObjectsByPage[pageItemID]`.
+**Current code:** Page Mode (`PageEditorView`) edits overlays and annotations for one `PageItem`. Overlays are stored in `pageObjectsByPage[pageItemID]`. Annotations are stored in `annotationsByPage[pageItemID]`.
 
 ### Export *(final output step)*
 
@@ -76,6 +77,7 @@ Examples (implemented):
 - Export rearranged page order
 - Export page rotation
 - Export with image, text, and signature overlays composited on top
+- Export with page annotations (highlights, drawings, sticky-note markers, text-comment anchors) composited above vector page content
 - Preserve selectable/searchable text where possible (vector page draw, not full-page rasterization; scan-generated PDFs may include invisible OCR text layer)
 
 **Current code:** `PDFEditorViewModel.exportPDF()` → `PDFService.exportPDF()`.
@@ -89,7 +91,7 @@ Examples (implemented):
 How this works today:
 
 1. **Import** copies the PDF to a temporary local path (`PDFService.importPDF`). The user’s original file is never written to.
-2. **Editing** updates in-memory (and undo-snapshot) state: `PageItem` list, rotations, and `PageObject` overlays.
+2. **Editing** updates in-memory (and undo-snapshot) state: `PageItem` list, rotations, `PageObject` overlays, and `PageAnnotation` annotations.
 3. **Preview** (thumbnails, Page Mode) renders from the source `PDFDocument` plus app state.
 4. **Export** builds a new `PDFDocument`, inserts transformed pages, and writes to a new temp output URL for sharing.
 
@@ -103,8 +105,10 @@ Never edit the imported source bytes in place. Never assume export output overwr
 |--------|------|
 | **`PageItem`** | One page in the document list. Stable `id`, `originalPageIndex` into the source PDF, `rotation`, optional `duplicateSourceID`. |
 | **`PageObject`** | One overlay on a page (image, text, or signature). Normalized `position` / `size`, `rotation`, `zIndex`, `imageAssetID`. Text overlays store `textContent`, `textFontSizePoints`, `textColorRGBA`, `textBold`, `textListMode`. Signatures may also store `signatureSourceImageAssetID`, library baseline appearance, and per-placement ink color/thickness overrides. |
+| **`PageAnnotation`** | One non-overlay annotation on a page: highlight (multi-rect), drawing (strokes), sticky note (point + text), or text comment (anchor rects + text). Coordinates stored normalized to the unrotated page. |
 | **`pageObjectsByPage`** | `[UUID: [PageObject]]` in `PDFEditorViewModel` — overlays keyed by `PageItem.id`. |
-| **`EditorSnapshot`** | Undo entry: pages, overlays, overlay revisions, and image asset references. |
+| **`annotationsByPage`** | `[UUID: [PageAnnotation]]` in `PDFEditorViewModel` — annotations keyed by `PageItem.id`. |
+| **`EditorSnapshot`** | Undo entry: pages, overlays, annotations, overlay revisions, and image asset references. |
 | **`PDFEditorViewModel`** | Session state, page ops, overlay ops, undo stack, export entry point. |
 | **`PDFService`** | Import (copy to temp), export (assemble new PDF), initial `PageItem` list. |
 | **`PDFPreviewRenderer`** | On-screen PDF page rasterization via `PDFPage.thumbnail` (correct orientation). |
@@ -113,10 +117,15 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`WatermarkSettings`** | Document-level watermark configuration (`watermarkType`, text, `imageAssetID`, opacity, normalized scale, color, rotation, position, layer, apply scope). |
 | **`WatermarkGeometryEngine`** | Single source of truth for watermark normalized position, scale, rotation, and bounds across all watermark types; derives text font size or image content size from render target width. |
 | **`WatermarkRenderer`** | Branches by `watermarkType`: text (vector PDF / raster preview), image (raster via `OverlayGeometryEngine`). Delegates placement to `WatermarkGeometryEngine`. |
-| **`PageModeSelection`** | Page Mode focus: `none`, `overlay(UUID)`, or `pdfText(PDFTextSelection)` — separate from user overlays. |
-| **`PDFTextSelectionEngine`** | Maps PDFKit selection bounds to Page Mode display coordinates for menu placement. |
+| **`PageModeSelection`** | Page Mode focus: `none`, `overlay(UUID)`, `pdfText(PDFTextSelection)`, `highlight(UUID)`, `drawing(UUID)`, `stickyNote(UUID)`, or `textComment(UUID)` — only one active at a time. |
+| **`PDFTextSelectionEngine`** | Maps PDFKit selection bounds to normalized storage rects and Page Mode display coordinates for menu placement. |
+| **`AnnotationGeometryEngine`** | Normalized ↔ display mapping for annotations (reuses rotation rules complementary to `OverlayGeometryEngine`). |
+| **`AnnotationRenderer`** | Draws highlights, drawings, sticky-note markers, and text-comment anchors for Page Mode and thumbnails. |
+| **`AnnotationPDFExporter`** | Draws annotations into PDF export `CGContext` using PDF media-box coordinates. |
+| **`AnnotationCompositor`** | Composites annotations onto thumbnail/page bitmaps. |
+| **`AnnotationHitTestEngine`** | Tap hit testing for annotation selection and stroke erasing. |
 | **`PDFPageTextSelectionView`** | Lazy-mounted `PDFView` for native text selection; disables internal scrolling; forwards page swipes when active. |
-| **`ThumbnailService`** | Cached document thumbnails; composited with overlays when present. |
+| **`ThumbnailService`** | Cached document thumbnails; composited with overlays and annotations when present. |
 | **`OverlayCompositor`** | Draws image overlays onto a thumbnail/page bitmap using `OverlayGeometryEngine`. |
 | **`OverlayPDFExporter`** | Draws image and text overlays into a PDF `CGContext` using `OverlayGeometryEngine` and `TextOverlayRenderer`. |
 | **`TextOverlayRenderer`** | Vector text drawing for Page Mode compositing, thumbnails, and PDF export. |
@@ -152,10 +161,11 @@ Never edit the imported source bytes in place. Never assume export output overwr
 
 ### Export pipeline (overlays, watermark, page numbers)
 
-1. For pages **without** overlays, watermark, or page numbers: copy source `PDFPage`, apply rotation, insert.
+1. For pages **without** overlays, annotations, watermark, or page numbers: copy source `PDFPage`, apply rotation, insert.
 2. For pages **with** decorations:
    - **Behind content** watermark (if enabled): rendered by `watermarkType` (text vector or image raster)
    - Source page vector content via `PDFPage.draw` (preserves selectable text)
+   - Page annotations via `AnnotationPDFExporter` (highlights → drawings → text-comment anchors → sticky-note markers)
    - **Above content** watermark (if enabled): rendered by `watermarkType`
    - Overlay images and vector text via `OverlayPDFExporter` / `TextOverlayRenderer`
    - Page numbers
@@ -175,7 +185,17 @@ Stored on `PageObject` relative to the **unrotated** page media box:
 - `size`: width/height as fractions of unrotated page width and height
 - `rotation`: overlay rotation in degrees (object-local)
 
-Page rotation (`PageItem.rotation`) is applied at **render time**, not by mutating stored overlay coordinates on rotate.
+Page rotation (`PageItem.rotation`) is applied at **render time**, not by mutating stored overlay or annotation coordinates on rotate.
+
+### Annotation storage *(source of truth)*
+
+Stored on `PageAnnotation` relative to the **unrotated** page media box:
+
+- Highlights and text comments: one or more normalized rectangles (`PageNormalizedRect`)
+- Drawings: strokes of normalized points and normalized line width (fraction of page width)
+- Sticky notes: normalized anchor point (`PageNormalizedPoint`) plus note text
+
+`AnnotationGeometryEngine` mirrors the overlay rotation transform rules for annotation render surfaces.
 
 ### SwiftUI / Page Mode *(top-left origin)*
 
@@ -268,4 +288,4 @@ When in doubt: if it **transforms an imported PDF locally** and **exports a new 
 
 ---
 
-*Last updated to reflect scan-to-PDF with searchable OCR, V1 text overlays, and the Project → Document → Page → Export hierarchy.*
+*Last updated to reflect V1 page annotations (highlights, drawing, sticky notes, text comments), scan-to-PDF with searchable OCR, V1 text overlays, and the Project → Document → Page → Export hierarchy.*

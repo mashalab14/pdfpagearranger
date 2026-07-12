@@ -39,6 +39,7 @@ final class OverlayRotationRegressionTests: XCTestCase {
             for: pageItem,
             document: document,
             overlays: [overlay],
+            annotations: [],
             overlayImages: [assetID: greenImage],
             revision: 1
         )

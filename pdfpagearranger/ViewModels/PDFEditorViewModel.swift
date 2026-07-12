@@ -15,6 +15,7 @@ final class PDFEditorViewModel {
 
     private var undoStack: [EditorSnapshot] = []
     private var pageObjectsByPage: [UUID: [PageObject]] = [:]
+    private var annotationsByPage: [UUID: [PageAnnotation]] = [:]
     private var imageAssets: [UUID: UIImage] = [:]
     private var overlayRevisions: [UUID: Int] = [:]
     private(set) var pageNumberSettings: PageNumberSettings = .default
@@ -121,6 +122,7 @@ final class PDFEditorViewModel {
         pushUndoSnapshot()
         pages.remove(at: index)
         removeOverlays(forPageItemID: id)
+        removeAnnotations(forPageItemID: id)
     }
 
     func rotatePage(id: UUID) {
@@ -136,12 +138,14 @@ final class PDFEditorViewModel {
         let duplicate = pages[index].duplicated()
         pages.insert(duplicate, at: index + 1)
         copyOverlays(fromPageItemID: id, toPageItemID: duplicate.id)
+        copyAnnotations(fromPageItemID: id, toPageItemID: duplicate.id)
     }
 
     func undo() {
         guard let snapshot = undoStack.popLast() else { return }
         pages = snapshot.pages
         pageObjectsByPage = snapshot.pageObjectsByPage
+        annotationsByPage = snapshot.annotationsByPage
         overlayRevisions = snapshot.overlayRevisions
         imageAssets = snapshot.imageAssets
         pageNumberSettings = snapshot.pageNumberSettings
@@ -160,6 +164,7 @@ final class PDFEditorViewModel {
             sourceDocument: sourceDocument,
             outputName: documentName.isEmpty ? "document" : documentName,
             overlaysByPage: pageObjectsByPage,
+            annotationsByPage: annotationsByPage,
             imageAssets: imageAssets,
             pageNumberSettings: pageNumberSettings,
             watermarkSettings: watermarkSettings,
@@ -749,6 +754,203 @@ final class PDFEditorViewModel {
         bumpOverlayRevision(for: pageItemID)
     }
 
+    // MARK: - Page annotations
+
+    func annotations(for pageItemID: UUID) -> [PageAnnotation] {
+        annotationsByPage[pageItemID] ?? []
+    }
+
+    @discardableResult
+    func addHighlight(
+        to pageItemID: UUID,
+        normalizedRects: [PageNormalizedRect],
+        selectedText: String,
+        color: HighlightPresetColor = .defaultPreset,
+        opacity: Double = Double(HighlightPresetColor.defaultOpacity)
+    ) -> UUID? {
+        guard !normalizedRects.isEmpty else { return nil }
+        pushUndoSnapshot()
+
+        let annotation = PageAnnotation(
+            pageItemID: pageItemID,
+            kind: .highlight,
+            normalizedRects: normalizedRects,
+            selectedText: selectedText,
+            highlightColor: color,
+            highlightOpacity: opacity
+        )
+        appendAnnotation(annotation, pageItemID: pageItemID)
+        return annotation.id
+    }
+
+    func updateHighlightColor(id: UUID, pageItemID: UUID, color: HighlightPresetColor) -> Bool {
+        guard var annotations = annotationsByPage[pageItemID],
+              let index = annotations.firstIndex(where: { $0.id == id && $0.kind == .highlight }) else {
+            return false
+        }
+        guard annotations[index].highlightColor != color else { return false }
+
+        pushUndoSnapshot()
+        annotations[index].highlightColor = color
+        annotationsByPage[pageItemID] = annotations
+        bumpOverlayRevision(for: pageItemID)
+        return true
+    }
+
+    @discardableResult
+    func addTextComment(
+        to pageItemID: UUID,
+        normalizedRects: [PageNormalizedRect],
+        selectedText: String,
+        commentText: String,
+        linkedHighlightID: UUID? = nil
+    ) -> UUID? {
+        let trimmed = commentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !normalizedRects.isEmpty else { return nil }
+
+        pushUndoSnapshot()
+        let annotation = PageAnnotation(
+            pageItemID: pageItemID,
+            kind: .textComment,
+            normalizedRects: normalizedRects,
+            selectedText: selectedText,
+            commentText: trimmed,
+            linkedHighlightID: linkedHighlightID,
+            anchorColorRGBA: TextCommentStyle.defaultAnchorColor
+        )
+        appendAnnotation(annotation, pageItemID: pageItemID)
+        return annotation.id
+    }
+
+    func updateTextComment(id: UUID, pageItemID: UUID, commentText: String) -> Bool {
+        let trimmed = commentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        guard var annotations = annotationsByPage[pageItemID],
+              let index = annotations.firstIndex(where: { $0.id == id && $0.kind == .textComment }) else {
+            return false
+        }
+        guard annotations[index].commentText != trimmed else { return false }
+
+        pushUndoSnapshot()
+        annotations[index].commentText = trimmed
+        annotationsByPage[pageItemID] = annotations
+        bumpOverlayRevision(for: pageItemID)
+        return true
+    }
+
+    @discardableResult
+    func addStickyNote(
+        to pageItemID: UUID,
+        normalizedPosition: PageNormalizedPoint,
+        noteText: String
+    ) -> UUID? {
+        let trimmed = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        pushUndoSnapshot()
+        let clamped = PageNormalizedPoint(
+            AnnotationGeometryEngine.clampNormalizedPoint(normalizedPosition.cgPoint)
+        )
+        let annotation = PageAnnotation(
+            pageItemID: pageItemID,
+            kind: .stickyNote,
+            normalizedPosition: clamped,
+            noteText: trimmed,
+            noteColorRGBA: StickyNoteStyle.defaultColor
+        )
+        appendAnnotation(annotation, pageItemID: pageItemID)
+        return annotation.id
+    }
+
+    func updateStickyNote(id: UUID, pageItemID: UUID, noteText: String) -> Bool {
+        let trimmed = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        guard var annotations = annotationsByPage[pageItemID],
+              let index = annotations.firstIndex(where: { $0.id == id && $0.kind == .stickyNote }) else {
+            return false
+        }
+        guard annotations[index].noteText != trimmed else { return false }
+
+        pushUndoSnapshot()
+        annotations[index].noteText = trimmed
+        annotationsByPage[pageItemID] = annotations
+        bumpOverlayRevision(for: pageItemID)
+        return true
+    }
+
+    func moveStickyNote(id: UUID, pageItemID: UUID, normalizedPosition: PageNormalizedPoint) -> Bool {
+        guard var annotations = annotationsByPage[pageItemID],
+              let index = annotations.firstIndex(where: { $0.id == id && $0.kind == .stickyNote }) else {
+            return false
+        }
+
+        let clamped = PageNormalizedPoint(
+            AnnotationGeometryEngine.clampNormalizedPoint(normalizedPosition.cgPoint)
+        )
+        guard annotations[index].normalizedPosition != clamped else { return false }
+
+        pushUndoSnapshot()
+        annotations[index].normalizedPosition = clamped
+        annotationsByPage[pageItemID] = annotations
+        bumpOverlayRevision(for: pageItemID)
+        return true
+    }
+
+    @discardableResult
+    func addDrawingAnnotation(
+        to pageItemID: UUID,
+        strokes: [DrawingStroke]
+    ) -> UUID? {
+        guard !strokes.isEmpty else { return nil }
+        pushUndoSnapshot()
+
+        let annotation = PageAnnotation(
+            pageItemID: pageItemID,
+            kind: .drawing,
+            strokes: strokes
+        )
+        appendAnnotation(annotation, pageItemID: pageItemID)
+        return annotation.id
+    }
+
+    @discardableResult
+    func replaceDrawingAnnotation(
+        id: UUID,
+        pageItemID: UUID,
+        strokes: [DrawingStroke]
+    ) -> Bool {
+        guard !strokes.isEmpty else { return false }
+        guard var annotations = annotationsByPage[pageItemID],
+              let index = annotations.firstIndex(where: { $0.id == id && $0.kind == .drawing }) else {
+            return false
+        }
+
+        pushUndoSnapshot()
+        annotations[index].strokes = strokes
+        annotationsByPage[pageItemID] = annotations
+        bumpOverlayRevision(for: pageItemID)
+        return true
+    }
+
+    func deleteAnnotation(id: UUID, pageItemID: UUID) {
+        guard var annotations = annotationsByPage[pageItemID],
+              annotations.contains(where: { $0.id == id }) else { return }
+
+        pushUndoSnapshot()
+        annotations.removeAll { $0.id == id }
+        annotationsByPage[pageItemID] = annotations
+        bumpOverlayRevision(for: pageItemID)
+    }
+
+    func annotation(id: UUID, pageItemID: UUID) -> PageAnnotation? {
+        annotations(for: pageItemID).first { $0.id == id }
+    }
+
+    private func appendAnnotation(_ annotation: PageAnnotation, pageItemID: UUID) {
+        annotationsByPage[pageItemID, default: []].append(annotation)
+        bumpOverlayRevision(for: pageItemID)
+    }
+
     private func bumpOverlayRevision(for pageItemID: UUID) {
         overlayRevisions[pageItemID, default: 0] += 1
     }
@@ -821,14 +1023,27 @@ final class PDFEditorViewModel {
 
     private func clearOverlays() {
         pageObjectsByPage.removeAll()
+        annotationsByPage.removeAll()
         imageAssets.removeAll()
         overlayRevisions.removeAll()
+    }
+
+    private func removeAnnotations(forPageItemID pageItemID: UUID) {
+        annotationsByPage.removeValue(forKey: pageItemID)
+    }
+
+    private func copyAnnotations(fromPageItemID sourceID: UUID, toPageItemID destinationID: UUID) {
+        let sourceAnnotations = annotationsByPage[sourceID] ?? []
+        guard !sourceAnnotations.isEmpty else { return }
+        annotationsByPage[destinationID] = sourceAnnotations.map { $0.duplicated(forPageItemID: destinationID) }
+        bumpOverlayRevision(for: destinationID)
     }
 
     private func pushUndoSnapshot() {
         undoStack.append(EditorSnapshot(
             pages: pages,
             pageObjectsByPage: pageObjectsByPage,
+            annotationsByPage: annotationsByPage,
             overlayRevisions: overlayRevisions,
             imageAssets: imageAssets,
             pageNumberSettings: pageNumberSettings,

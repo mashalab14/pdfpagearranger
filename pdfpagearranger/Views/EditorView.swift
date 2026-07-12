@@ -130,6 +130,7 @@ struct EditorView: View {
             document: document,
             overlays: viewModel.overlayObjects(for: item.id),
             overlayImages: viewModel.overlayImages(for: item.id),
+            annotations: viewModel.annotations(for: item.id),
             overlayRevision: viewModel.overlayRevision(for: item.id),
             pageNumberSettings: viewModel.pageNumberSettings,
             watermarkSettings: viewModel.watermarkSettings,

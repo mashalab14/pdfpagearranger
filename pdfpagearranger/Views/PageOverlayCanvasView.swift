@@ -8,6 +8,7 @@ struct PageOverlayCanvasView: View {
     let pageRotation: Int
     let pageLoadKey: String
     let objects: [PageObject]
+    let annotations: [PageAnnotation]
     let placementAnimatingOverlayIDs: Set<UUID>
     let onPlacementAnimationFinished: (UUID) -> Void
     let signaturePlacementActive: Bool
@@ -16,6 +17,18 @@ struct PageOverlayCanvasView: View {
     let textPlacementActive: Bool
     let onTextPlacementTap: ((CGPoint, CGSize) -> Void)?
     let onTextPlacementDismiss: (() -> Void)?
+    let stickyNotePlacementActive: Bool
+    let onStickyNotePlacementTap: ((CGPoint, CGSize) -> Void)?
+    let onStickyNotePlacementDismiss: (() -> Void)?
+    let drawingModeActive: Bool
+    let drawingCommittedStrokes: [DrawingStroke]
+    let drawingSessionStrokes: [DrawingStroke]
+    let drawingPreviewStroke: DrawingStroke?
+    let drawingEraserActive: Bool
+    let onDrawingStrokeBegan: (CGPoint, CGSize) -> Void
+    let onDrawingStrokeChanged: (CGPoint, CGSize) -> Void
+    let onDrawingStrokeEnded: () -> Void
+    let onDrawingEraseAt: (CGPoint, CGSize) -> Void
     @Binding var pageSelection: PageModeSelection
     let pdfSelectionClearToken: UUID
     let imageProvider: (UUID) -> UIImage?
@@ -23,6 +36,15 @@ struct PageOverlayCanvasView: View {
     let onDelete: (UUID) -> Void
     let onPageSwipe: ((PageModeNavigationDirection) -> Void)?
     let onPDFTextMenuCopy: (String) -> Void
+    let onPDFTextHighlight: (PDFTextSelection) -> Void
+    let onPDFTextComment: (PDFTextSelection) -> Void
+    let onSelectAnnotation: (PageAnnotation) -> Void
+    let onDeleteAnnotation: (UUID) -> Void
+    let onHighlightColorChange: (UUID, HighlightPresetColor) -> Void
+    let onHighlightComment: (UUID) -> Void
+    let onEditStickyNote: (UUID) -> Void
+    let onEditTextComment: (UUID) -> Void
+    let onMoveStickyNote: (UUID, PageNormalizedPoint) -> Void
     @Binding var signatureEditOverlayID: UUID?
     let pageItemID: UUID
     let onUpdateSignatureAppearance: (UUID, SignatureInkColor, Int) -> Void
@@ -40,26 +62,64 @@ struct PageOverlayCanvasView: View {
     @State private var steadyOffset: CGSize = .zero
     @State private var overlayManipulationState = OverlayManipulationState()
     @State private var pdfTextSelectionLayerActive = false
+    @State private var stickyNoteDragOffset: CGSize = .zero
+    @State private var stickyNoteDragOrigin: PageNormalizedPoint?
 
     private let minScale: CGFloat = 1
     private let maxScale: CGFloat = 4
 
     private var pageZoomEnabled: Bool {
-        pageSelection.selectedOverlayID == nil && !signaturePlacementActive && !textPlacementActive
+        pageSelection.selectedOverlayID == nil
+            && pageSelection.selectedAnnotationID == nil
+            && !signaturePlacementActive
+            && !textPlacementActive
+            && !stickyNotePlacementActive
+            && !drawingModeActive
+    }
+
+    private var pageSwipeEnabled: Bool {
+        !signaturePlacementActive
+            && !textPlacementActive
+            && !stickyNotePlacementActive
+            && !drawingModeActive
+            && stickyNoteDragOrigin == nil
+            && onPageSwipe != nil
+            && PageModeNavigationEngine.shouldAllowPageSwipe(
+                overlayManipulationActive: overlayManipulationState.isActive,
+                isPageZoomed: isPageZoomed
+            )
+    }
+
+    private var selectedHighlight: PageAnnotation? {
+        guard case .highlight(let id) = pageSelection else { return nil }
+        return annotations.first { $0.id == id && $0.kind == .highlight }
+    }
+
+    private var selectedStickyNote: PageAnnotation? {
+        guard case .stickyNote(let id) = pageSelection else { return nil }
+        return annotations.first { $0.id == id && $0.kind == .stickyNote }
+    }
+
+    private var selectedTextComment: PageAnnotation? {
+        guard case .textComment(let id) = pageSelection else { return nil }
+        return annotations.first { $0.id == id && $0.kind == .textComment }
+    }
+
+    private var selectedDrawing: PageAnnotation? {
+        guard case .drawing(let id) = pageSelection else { return nil }
+        return annotations.first { $0.id == id && $0.kind == .drawing }
     }
 
     private var isPageZoomed: Bool {
         scale > minScale + 0.01 || offset != .zero
     }
 
-    private var pageSwipeEnabled: Bool {
+    private var annotationInteractionEnabled: Bool {
         !signaturePlacementActive
             && !textPlacementActive
-            && onPageSwipe != nil
-            && PageModeNavigationEngine.shouldAllowPageSwipe(
-                overlayManipulationActive: overlayManipulationState.isActive,
-                isPageZoomed: isPageZoomed
-            )
+            && !stickyNotePlacementActive
+            && !drawingModeActive
+            && signatureEditOverlayID == nil
     }
 
     private var selectedSignatureOverlay: PageObject? {
@@ -133,7 +193,10 @@ struct PageOverlayCanvasView: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("pageModeCanvas")
             .onLongPressGesture(minimumDuration: 0.35) {
-                guard !signaturePlacementActive else { return }
+                guard !signaturePlacementActive,
+                      !textPlacementActive,
+                      !stickyNotePlacementActive,
+                      !drawingModeActive else { return }
                 pdfTextSelectionLayerActive = true
             }
             .onChange(of: signaturePlacementActive) { _, isActive in
@@ -190,7 +253,10 @@ struct PageOverlayCanvasView: View {
                     pageRotation: pageRotation,
                     pageLoadKey: pageLoadKey,
                     displaySize: fitSize,
-                    isInteractionEnabled: !signaturePlacementActive,
+                    isInteractionEnabled: !signaturePlacementActive
+                        && !textPlacementActive
+                        && !stickyNotePlacementActive
+                        && !drawingModeActive,
                     pageSwipeEnabled: pageSwipeEnabled,
                     onPageSwipe: onPageSwipe,
                     clearSelectionToken: pdfSelectionClearToken,
@@ -216,6 +282,56 @@ struct PageOverlayCanvasView: View {
                     .scaledToFit()
                     .frame(width: fitSize.width, height: fitSize.height)
                     .allowsHitTesting(false)
+
+                if let stickyNote = selectedStickyNote,
+                   annotationInteractionEnabled,
+                   let storagePosition = stickyNote.normalizedPosition {
+                    stickyNoteDragHandle(
+                        noteID: stickyNote.id,
+                        storagePosition: storagePosition,
+                        fitSize: fitSize
+                    )
+                }
+
+                if !drawingModeActive {
+                    AnnotationCanvasLayer(
+                        annotations: annotations,
+                        pageRotation: pageRotation,
+                        pageSize: fitSize,
+                        selectedAnnotationID: pageSelection.selectedAnnotationID,
+                        isInteractionEnabled: annotationInteractionEnabled,
+                        onSelect: { annotation in
+                            signatureEditOverlayID = nil
+                            deactivatePDFTextSelectionLayer()
+                            switch annotation.kind {
+                            case .highlight:
+                                pageSelection = .highlight(annotation.id)
+                            case .drawing:
+                                pageSelection = .drawing(annotation.id)
+                            case .stickyNote:
+                                pageSelection = .stickyNote(annotation.id)
+                            case .textComment:
+                                pageSelection = .textComment(annotation.id)
+                            }
+                            onSelectAnnotation(annotation)
+                        }
+                    )
+                }
+
+                if drawingModeActive {
+                    DrawingCanvasOverlay(
+                        pageRotation: pageRotation,
+                        pageSize: fitSize,
+                        committedStrokes: drawingCommittedStrokes,
+                        sessionStrokes: drawingSessionStrokes,
+                        previewStroke: drawingPreviewStroke,
+                        eraserActive: drawingEraserActive,
+                        onStrokeBegan: { point in onDrawingStrokeBegan(point, fitSize) },
+                        onStrokeChanged: { point in onDrawingStrokeChanged(point, fitSize) },
+                        onStrokeEnded: onDrawingStrokeEnded,
+                        onEraseAt: { point in onDrawingEraseAt(point, fitSize) }
+                    )
+                }
 
                 ForEach(sortedObjects) { object in
                     if object.isTextOverlay {
@@ -282,13 +398,86 @@ struct PageOverlayCanvasView: View {
                 }
 
                 Group {
-                    if let textSelection = pageSelection.pdfTextSelection, !signaturePlacementActive {
+                    if let textSelection = pageSelection.pdfTextSelection,
+                       !signaturePlacementActive,
+                       !drawingModeActive {
                         PDFTextSelectionContextMenu(
                             anchorRect: textSelection.anchorRect,
                             onCopy: { onPDFTextMenuCopy(textSelection.text) },
-                            onHighlight: {},
-                            onComment: {},
+                            onHighlight: { onPDFTextHighlight(textSelection) },
+                            onComment: { onPDFTextComment(textSelection) },
                             onMore: {}
+                        )
+                        .transition(.contextualGlass)
+                    }
+
+                    if let highlight = selectedHighlight, annotationInteractionEnabled {
+                        HighlightContextMenu(
+                            anchorPoint: AnnotationMenuEngine.anchorPoint(
+                                for: highlight,
+                                pageRotation: pageRotation,
+                                pageSize: fitSize
+                            ),
+                            onColor: { color in
+                                onHighlightColorChange(highlight.id, color)
+                            },
+                            onDelete: {
+                                onDeleteAnnotation(highlight.id)
+                                pageSelection = .none
+                            },
+                            onComment: {
+                                onHighlightComment(highlight.id)
+                            }
+                        )
+                        .transition(.contextualGlass)
+                    }
+
+                    if let stickyNote = selectedStickyNote, annotationInteractionEnabled {
+                        StickyNoteContextMenu(
+                            anchorPoint: AnnotationMenuEngine.anchorPoint(
+                                for: stickyNote,
+                                pageRotation: pageRotation,
+                                pageSize: fitSize
+                            ),
+                            noteText: stickyNote.noteText ?? "",
+                            onEdit: { onEditStickyNote(stickyNote.id) },
+                            onDelete: {
+                                onDeleteAnnotation(stickyNote.id)
+                                pageSelection = .none
+                            }
+                        )
+                        .transition(.contextualGlass)
+                    }
+
+                    if let comment = selectedTextComment, annotationInteractionEnabled {
+                        TextCommentPopover(
+                            anchorPoint: AnnotationMenuEngine.anchorPoint(
+                                for: comment,
+                                pageRotation: pageRotation,
+                                pageSize: fitSize
+                            ),
+                            selectedText: comment.selectedText ?? "",
+                            commentText: comment.commentText ?? "",
+                            onEdit: { onEditTextComment(comment.id) },
+                            onDelete: {
+                                onDeleteAnnotation(comment.id)
+                                pageSelection = .none
+                            }
+                        )
+                        .transition(.contextualGlass)
+                    }
+
+                    if let drawing = selectedDrawing, annotationInteractionEnabled {
+                        DrawingContextMenu(
+                            anchorPoint: AnnotationMenuEngine.anchorPoint(
+                                for: drawing,
+                                pageRotation: pageRotation,
+                                pageSize: fitSize
+                            ),
+                            onDelete: {
+                                onDeleteAnnotation(drawing.id)
+                                pageSelection = .none
+                            }
                         )
                         .transition(.contextualGlass)
                     }
@@ -472,6 +661,15 @@ struct PageOverlayCanvasView: View {
             return
         }
 
+        if stickyNotePlacementActive {
+            guard AnnotationGeometryEngine.isDisplayTapInsidePage(location, displayPageSize: displaySize) else {
+                onStickyNotePlacementDismiss?()
+                return
+            }
+            onStickyNotePlacementTap?(location, displaySize)
+            return
+        }
+
         if textPlacementActive {
             guard TextOverlayPlacementEngine.isDisplayTapInsidePage(location, displayPageSize: displaySize) else {
                 return
@@ -495,6 +693,11 @@ struct PageOverlayCanvasView: View {
     private func handleCanvasBackgroundTap() {
         if signatureEditOverlayID != nil {
             signatureEditOverlayID = nil
+            return
+        }
+
+        if stickyNotePlacementActive {
+            onStickyNotePlacementDismiss?()
             return
         }
 
@@ -544,6 +747,69 @@ struct PageOverlayCanvasView: View {
 
     private func deactivatePDFTextSelectionLayer() {
         pdfTextSelectionLayerActive = false
+    }
+
+    @ViewBuilder
+    private func stickyNoteDragHandle(
+        noteID: UUID,
+        storagePosition: PageNormalizedPoint,
+        fitSize: CGSize
+    ) -> some View {
+        let origin = stickyNoteDragOrigin ?? storagePosition
+        let markerCenter = AnnotationMenuEngine.stickyNoteMarkerCenter(
+            storagePosition: origin,
+            pageRotation: pageRotation,
+            pageSize: fitSize
+        )
+        let markerSize = StickyNoteStyle.markerSizeFraction * fitSize.width
+
+        Circle()
+            .fill(Color.clear)
+            .frame(width: max(markerSize * 1.6, 44), height: max(markerSize * 1.6, 44))
+            .contentShape(Circle())
+            .position(
+                x: markerCenter.x + stickyNoteDragOffset.width,
+                y: markerCenter.y + stickyNoteDragOffset.height
+            )
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        if stickyNoteDragOrigin == nil {
+                            stickyNoteDragOrigin = storagePosition
+                        }
+                        stickyNoteDragOffset = value.translation
+                    }
+                    .onEnded { value in
+                        let displayOrigin = AnnotationGeometryEngine.displayPoint(
+                            from: origin,
+                            pageRotation: pageRotation
+                        )
+                        let pixelOrigin = AnnotationGeometryEngine.pixelPoint(
+                            normalizedPoint: displayOrigin,
+                            renderSize: fitSize,
+                            coordinateSpace: .topLeftOrigin
+                        )
+                        let newPixel = CGPoint(
+                            x: pixelOrigin.x + value.translation.width,
+                            y: pixelOrigin.y + value.translation.height
+                        )
+                        let normalizedDisplay = CGPoint(
+                            x: newPixel.x / fitSize.width,
+                            y: newPixel.y / fitSize.height
+                        )
+                        let clampedDisplay = AnnotationGeometryEngine.clampNormalizedPoint(normalizedDisplay)
+                        let storagePoint = AnnotationGeometryEngine.storagePoint(
+                            from: PageNormalizedPoint(clampedDisplay),
+                            pageRotation: pageRotation
+                        )
+                        onMoveStickyNote(noteID, storagePoint)
+                        stickyNoteDragOffset = .zero
+                        stickyNoteDragOrigin = nil
+                    }
+            )
+            .accessibilityLabel("Sticky note marker")
+            .accessibilityIdentifier("stickyNoteMarker")
+            .accessibilityAddTraits(.isButton)
     }
 
 }

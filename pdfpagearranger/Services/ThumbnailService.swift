@@ -17,6 +17,7 @@ actor ThumbnailService {
         for item: PageItem,
         document: PDFDocument,
         overlays: [PageObject],
+        annotations: [PageAnnotation],
         overlayImages: [UUID: UIImage],
         revision: Int,
         pageNumberSettings: PageNumberSettings = .default,
@@ -38,6 +39,7 @@ actor ThumbnailService {
             page: page,
             rotation: item.rotation,
             overlays: overlays,
+            annotations: annotations,
             overlayImages: overlayImages,
             pageNumberSettings: pageNumberSettings,
             watermarkSettings: watermarkSettings,
@@ -61,6 +63,7 @@ actor ThumbnailService {
         page: PDFPage,
         rotation: Int,
         overlays: [PageObject],
+        annotations: [PageAnnotation],
         overlayImages: [UUID: UIImage],
         pageNumberSettings: PageNumberSettings,
         watermarkSettings: WatermarkSettings,
@@ -87,6 +90,14 @@ actor ThumbnailService {
                     settings: watermarkSettings,
                     mediaBox: mediaBox,
                     watermarkImage: watermarkImage
+                )
+            }
+
+            if !annotations.isEmpty {
+                image = AnnotationCompositor.composite(
+                    baseImage: image,
+                    annotations: annotations,
+                    pageRotation: rotation
                 )
             }
 

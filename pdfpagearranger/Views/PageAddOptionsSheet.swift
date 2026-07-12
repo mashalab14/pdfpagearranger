@@ -5,6 +5,8 @@ struct PageAddOptionsSheet: View {
 
     let onTextTapped: () -> Void
     let onImageTapped: () -> Void
+    let onDrawTapped: () -> Void
+    let onStickyNoteTapped: () -> Void
     let onQuickSignatureTapped: () -> Void
     let onSignatureLibraryTapped: () -> Void
 
@@ -24,6 +26,26 @@ struct PageAddOptionsSheet: View {
                 addOption(icon: "photo", title: "Image", subtitle: "Import from Photos or Files", isEnabled: true) {
                     dismiss()
                     onImageTapped()
+                }
+                addOption(
+                    icon: "pencil.tip",
+                    title: "Draw",
+                    subtitle: "Draw on the page",
+                    isEnabled: true,
+                    accessibilityIdentifier: "addDrawOption"
+                ) {
+                    dismiss()
+                    onDrawTapped()
+                }
+                addOption(
+                    icon: "note.text",
+                    title: "Sticky Note",
+                    subtitle: "Place a note on the page",
+                    isEnabled: true,
+                    accessibilityIdentifier: "addStickyNoteOption"
+                ) {
+                    dismiss()
+                    onStickyNoteTapped()
                 }
                 addOption(
                     icon: "signature",
@@ -54,7 +76,7 @@ struct PageAddOptionsSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
 
@@ -95,5 +117,12 @@ struct PageAddOptionsSheet: View {
 }
 
 #Preview {
-    PageAddOptionsSheet(onTextTapped: {}, onImageTapped: {}, onQuickSignatureTapped: {}, onSignatureLibraryTapped: {})
+    PageAddOptionsSheet(
+        onTextTapped: {},
+        onImageTapped: {},
+        onDrawTapped: {},
+        onStickyNoteTapped: {},
+        onQuickSignatureTapped: {},
+        onSignatureLibraryTapped: {}
+    )
 }
