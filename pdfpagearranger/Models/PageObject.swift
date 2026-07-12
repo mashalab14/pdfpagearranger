@@ -30,9 +30,18 @@ struct PageObject: Identifiable, Equatable, Codable {
     var signatureStrokeWidthPoints: Int?
     var signatureBaselineInkColor: SignatureInkColor?
     var signatureBaselineStrokeThickness: SignatureInkThickness?
+    var textContent: String?
+    var textFontSizePoints: CGFloat?
+    var textColorRGBA: SignatureInkRGBA?
+    var textBold: Bool?
+    var textListMode: TextOverlayListMode?
 
     var usesRasterImageAsset: Bool {
         (type == .image || type == .signature) && imageAssetID != nil
+    }
+
+    var isTextOverlay: Bool {
+        type == .text
     }
 
     var effectiveSignatureInkColor: SignatureInkColor {
@@ -108,7 +117,12 @@ struct PageObject: Identifiable, Equatable, Codable {
         signatureStrokeThickness: SignatureInkThickness? = nil,
         signatureStrokeWidthPoints: Int? = nil,
         signatureBaselineInkColor: SignatureInkColor? = nil,
-        signatureBaselineStrokeThickness: SignatureInkThickness? = nil
+        signatureBaselineStrokeThickness: SignatureInkThickness? = nil,
+        textContent: String? = nil,
+        textFontSizePoints: CGFloat? = nil,
+        textColorRGBA: SignatureInkRGBA? = nil,
+        textBold: Bool? = nil,
+        textListMode: TextOverlayListMode? = nil
     ) {
         self.id = id
         self.pageItemID = pageItemID
@@ -127,5 +141,10 @@ struct PageObject: Identifiable, Equatable, Codable {
         self.signatureStrokeWidthPoints = signatureStrokeWidthPoints
         self.signatureBaselineInkColor = signatureBaselineInkColor
         self.signatureBaselineStrokeThickness = signatureBaselineStrokeThickness
+        self.textContent = textContent
+        self.textFontSizePoints = textFontSizePoints
+        self.textColorRGBA = textColorRGBA
+        self.textBold = textBold
+        self.textListMode = textListMode
     }
 }

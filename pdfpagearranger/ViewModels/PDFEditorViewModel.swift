@@ -300,6 +300,127 @@ final class PDFEditorViewModel {
     }
 
     @discardableResult
+    func addTextOverlay(
+        to pageItemID: UUID,
+        draft: TextOverlayDraft,
+        pageAspectRatio: CGFloat,
+        at position: CGPoint
+    ) -> UUID {
+        pushUndoSnapshot()
+
+        let storedText = TextOverlayFormattingEngine.displayText(
+            draft.trimmedText,
+            listMode: draft.listMode
+        )
+        let normalizedSize = TextOverlayLayoutEngine.measuredSize(
+            text: storedText,
+            fontSizePoints: draft.fontSizePoints,
+            bold: draft.isBold,
+            listMode: draft.listMode,
+            pageAspectRatio: pageAspectRatio
+        )
+
+        let clampedPosition = OverlayInteractionEngine.clampNormalizedCenter(
+            position,
+            normalizedSize: normalizedSize
+        )
+
+        let nextZIndex = (pageObjectsByPage[pageItemID]?.map(\.zIndex).max() ?? -1) + 1
+        let object = PageObject(
+            pageItemID: pageItemID,
+            type: .text,
+            position: clampedPosition,
+            size: normalizedSize,
+            zIndex: nextZIndex,
+            textContent: storedText,
+            textFontSizePoints: TextOverlayLayoutEngine.clampedFontSize(draft.fontSizePoints),
+            textColorRGBA: draft.colorRGBA,
+            textBold: draft.isBold,
+            textListMode: draft.listMode
+        )
+
+        pageObjectsByPage[pageItemID, default: []].append(object)
+        bumpOverlayRevision(for: pageItemID)
+        RecentTextsSettings.recordCommittedText(storedText)
+        return object.id
+    }
+
+    func updateTextOverlay(
+        id: UUID,
+        pageItemID: UUID,
+        draft: TextOverlayDraft
+    ) -> Bool {
+        guard var objects = pageObjectsByPage[pageItemID],
+              let index = objects.firstIndex(where: { $0.id == id }),
+              objects[index].type == .text else {
+            return false
+        }
+
+        let storedText = TextOverlayFormattingEngine.displayText(
+            draft.trimmedText,
+            listMode: draft.listMode
+        )
+        guard !storedText.isEmpty else { return false }
+
+        pushUndoSnapshot()
+
+        var object = objects[index]
+        object.textContent = storedText
+        object.textFontSizePoints = TextOverlayLayoutEngine.clampedFontSize(draft.fontSizePoints)
+        object.textColorRGBA = draft.colorRGBA
+        object.textBold = draft.isBold
+        object.textListMode = draft.listMode
+
+        objects[index] = object
+        pageObjectsByPage[pageItemID] = objects
+        bumpOverlayRevision(for: pageItemID)
+        RecentTextsSettings.recordCommittedText(storedText)
+        return true
+    }
+
+    @discardableResult
+    func duplicateOverlay(id: UUID, pageItemID: UUID) -> UUID? {
+        guard let objects = pageObjectsByPage[pageItemID],
+              let source = objects.first(where: { $0.id == id }) else {
+            return nil
+        }
+
+        pushUndoSnapshot()
+
+        let offset = CGPoint(x: 0.03, y: 0.03)
+        let nextZIndex = (objects.map(\.zIndex).max() ?? -1) + 1
+        let duplicate = PageObject(
+            pageItemID: pageItemID,
+            type: source.type,
+            position: OverlayInteractionEngine.clampNormalizedCenter(
+                CGPoint(x: source.position.x + offset.x, y: source.position.y + offset.y),
+                normalizedSize: source.size
+            ),
+            size: source.size,
+            rotation: source.rotation,
+            opacity: source.opacity,
+            zIndex: nextZIndex,
+            imageAssetID: source.imageAssetID,
+            signatureLibrarySourceID: source.signatureLibrarySourceID,
+            signatureSourceImageAssetID: source.signatureSourceImageAssetID,
+            signatureInkColor: source.signatureInkColor,
+            signatureCustomInkRGBA: source.signatureCustomInkRGBA,
+            signatureStrokeWidthPoints: source.signatureStrokeWidthPoints,
+            signatureBaselineInkColor: source.signatureBaselineInkColor,
+            signatureBaselineStrokeThickness: source.signatureBaselineStrokeThickness,
+            textContent: source.textContent,
+            textFontSizePoints: source.textFontSizePoints,
+            textColorRGBA: source.textColorRGBA,
+            textBold: source.textBold,
+            textListMode: source.textListMode
+        )
+
+        pageObjectsByPage[pageItemID, default: []].append(duplicate)
+        bumpOverlayRevision(for: pageItemID)
+        return duplicate.id
+    }
+
+    @discardableResult
     func addImageOverlay(to pageItemID: UUID, image: UIImage, pageAspectRatio: CGFloat) -> UUID {
         addRasterOverlay(
             to: pageItemID,
@@ -652,7 +773,12 @@ final class PDFEditorViewModel {
                 signatureCustomInkRGBA: overlay.signatureCustomInkRGBA,
                 signatureStrokeWidthPoints: overlay.signatureStrokeWidthPoints,
                 signatureBaselineInkColor: overlay.signatureBaselineInkColor,
-                signatureBaselineStrokeThickness: overlay.signatureBaselineStrokeThickness
+                signatureBaselineStrokeThickness: overlay.signatureBaselineStrokeThickness,
+                textContent: overlay.textContent,
+                textFontSizePoints: overlay.textFontSizePoints,
+                textColorRGBA: overlay.textColorRGBA,
+                textBold: overlay.textBold,
+                textListMode: overlay.textListMode
             )
         }
 

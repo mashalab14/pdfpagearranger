@@ -27,6 +27,12 @@ struct PageEditorView: View {
     @State private var lastPageNavigationUptime: TimeInterval = 0
     @State private var signatureEditOverlayID: UUID?
     @State private var signatureSaveErrorMessage: String?
+    @State private var pendingTextDraft: TextOverlayDraft?
+    @State private var editingTextOverlayID: UUID?
+    @State private var showTextEditorSheet = false
+    @State private var textEditorDraft = TextOverlayDraft.default
+    @State private var recentTexts = RecentTextsSettings.storedEntries()
+    @State private var textEditorErrorMessage: String?
 
     private let signatureLibraryStore: SignatureLibraryStore
 
@@ -67,8 +73,21 @@ struct PageEditorView: View {
         pendingSignaturePlacement != nil
     }
 
+    private var textPlacementActive: Bool {
+        pendingTextDraft != nil
+    }
+
     var body: some View {
         VStack(spacing: 0) {
+            if textPlacementActive {
+                Text("Tap the page to place text")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(.bar)
+                    .accessibilityIdentifier("textPlacementGuidance")
+            }
+
             pageContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -97,6 +116,10 @@ struct PageEditorView: View {
         }
         .sheet(isPresented: $showAddSheet) {
             PageAddOptionsSheet(
+                onTextTapped: {
+                    clearPDFTextSelection()
+                    beginNewTextOverlay()
+                },
                 onImageTapped: {
                     clearPDFTextSelection()
                     showPhotosPicker = true
@@ -109,6 +132,21 @@ struct PageEditorView: View {
                     clearPDFTextSelection()
                     signatureLibraryShowsDefaultGuidance = false
                     showSignatureLibrary = true
+                }
+            )
+        }
+        .sheet(isPresented: $showTextEditorSheet) {
+            TextOverlayEditorSheet(
+                title: editingTextOverlayID == nil ? "Add Text" : "Edit Text",
+                confirmTitle: editingTextOverlayID == nil ? "Add" : "Update",
+                draft: $textEditorDraft,
+                recentTexts: recentTexts,
+                onRemoveRecent: { entry in
+                    RecentTextsSettings.removeEntry(entry)
+                    recentTexts = RecentTextsSettings.storedEntries()
+                },
+                onConfirm: {
+                    handleTextEditorConfirm()
                 }
             )
         }
@@ -130,6 +168,7 @@ struct PageEditorView: View {
         .onChange(of: showAddSheet) { _, isPresented in
             if isPresented {
                 cancelSignaturePlacement()
+                cancelTextPlacement()
                 clearPDFTextSelection()
                 pageSelection = .none
                 signatureEditOverlayID = nil
@@ -137,7 +176,10 @@ struct PageEditorView: View {
         }
         .onChange(of: pageRoute.pageItemID) { _, _ in
             cancelSignaturePlacement()
+            cancelTextPlacement()
             signatureEditOverlayID = nil
+            editingTextOverlayID = nil
+            showTextEditorSheet = false
             pageSelection = .none
             bumpPDFSelectionClearToken()
             placementAnimatingOverlayIDs.removeAll()
@@ -157,6 +199,14 @@ struct PageEditorView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(signatureSaveErrorMessage ?? "")
+        }
+        .alert("Text Required", isPresented: Binding(
+            get: { textEditorErrorMessage != nil },
+            set: { if !$0 { textEditorErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(textEditorErrorMessage ?? "")
         }
     }
 
@@ -179,6 +229,13 @@ struct PageEditorView: View {
                 },
                 onSignaturePlacementDismiss: {
                     cancelSignaturePlacement()
+                },
+                textPlacementActive: textPlacementActive,
+                onTextPlacementTap: { location, displaySize in
+                    placeText(atDisplayTap: location, displayPageSize: displaySize)
+                },
+                onTextPlacementDismiss: {
+                    cancelTextPlacement()
                 },
                 pageSelection: $pageSelection,
                 pdfSelectionClearToken: pdfSelectionClearToken,
@@ -215,6 +272,18 @@ struct PageEditorView: View {
                 },
                 onSaveSignatureToLibrary: { overlayID in
                     savePlacedSignatureToLibrary(overlayID: overlayID, pageItemID: pageItem.id)
+                },
+                onEditTextOverlay: { overlayID in
+                    beginEditingTextOverlay(id: overlayID, pageItemID: pageItem.id)
+                },
+                onDuplicateTextOverlay: { overlayID in
+                    duplicateTextOverlay(id: overlayID, pageItemID: pageItem.id)
+                },
+                onDeleteTextOverlay: { overlayID in
+                    viewModel.deleteOverlay(id: overlayID, pageItemID: pageItem.id)
+                    if pageSelection.selectedOverlayID == overlayID {
+                        pageSelection = .none
+                    }
                 },
                 pageTransitionEdge: pageTransitionEdge
             )
@@ -410,6 +479,95 @@ struct PageEditorView: View {
         } catch {
             signatureSaveErrorMessage = error.localizedDescription
         }
+    }
+
+    private func beginNewTextOverlay() {
+        cancelSignaturePlacement()
+        editingTextOverlayID = nil
+        textEditorDraft = .default
+        recentTexts = RecentTextsSettings.storedEntries()
+        showTextEditorSheet = true
+    }
+
+    private func beginEditingTextOverlay(id: UUID, pageItemID: UUID) {
+        guard let overlay = viewModel.overlayObjects(for: pageItemID).first(where: { $0.id == id && $0.type == .text }) else {
+            textEditorErrorMessage = "This text overlay is no longer available."
+            return
+        }
+        cancelTextPlacement()
+        cancelSignaturePlacement()
+        editingTextOverlayID = id
+        textEditorDraft = TextOverlayDraft(from: overlay)
+        recentTexts = RecentTextsSettings.storedEntries()
+        showTextEditorSheet = true
+    }
+
+    private func handleTextEditorConfirm() {
+        guard textEditorDraft.isEmpty == false else {
+            textEditorErrorMessage = "Enter text before continuing."
+            return
+        }
+
+        if let editingTextOverlayID, let pageItem {
+            let updated = viewModel.updateTextOverlay(
+                id: editingTextOverlayID,
+                pageItemID: pageItem.id,
+                draft: textEditorDraft
+            )
+            if !updated {
+                textEditorErrorMessage = "Enter text before continuing."
+                return
+            }
+            self.editingTextOverlayID = nil
+            showTextEditorSheet = false
+            recentTexts = RecentTextsSettings.storedEntries()
+            return
+        }
+
+        pendingTextDraft = textEditorDraft
+        showTextEditorSheet = false
+        pageSelection = .none
+    }
+
+    private func cancelTextPlacement() {
+        pendingTextDraft = nil
+    }
+
+    private func placeText(atDisplayTap tap: CGPoint, displayPageSize: CGSize) {
+        guard let pageItem, let draft = pendingTextDraft else { return }
+        guard TextOverlayPlacementEngine.isDisplayTapInsidePage(tap, displayPageSize: displayPageSize) else {
+            return
+        }
+
+        let normalizedSize = TextOverlayLayoutEngine.measuredSize(
+            text: TextOverlayFormattingEngine.displayText(draft.trimmedText, listMode: draft.listMode),
+            fontSizePoints: draft.fontSizePoints,
+            bold: draft.isBold,
+            listMode: draft.listMode,
+            pageAspectRatio: pageAspectRatio
+        )
+        let position = TextOverlayPlacementEngine.storagePosition(
+            forDisplayTap: tap,
+            displayPageSize: displayPageSize,
+            normalizedOverlaySize: normalizedSize,
+            pageRotation: pageItem.rotation
+        )
+
+        pendingTextDraft = nil
+
+        let overlayID = viewModel.addTextOverlay(
+            to: pageItem.id,
+            draft: draft,
+            pageAspectRatio: pageAspectRatio,
+            at: position
+        )
+        registerNewOverlayPlacement(overlayID: overlayID)
+        recentTexts = RecentTextsSettings.storedEntries()
+    }
+
+    private func duplicateTextOverlay(id: UUID, pageItemID: UUID) {
+        guard let duplicateID = viewModel.duplicateOverlay(id: id, pageItemID: pageItemID) else { return }
+        registerNewOverlayPlacement(overlayID: duplicateID)
     }
 
     private static func makeDefaultSignatureLibraryStore() -> SignatureLibraryStore {

@@ -101,4 +101,30 @@ enum OverlayInteractionEngine {
             y: min(max(center.y, minY), maxY)
         )
     }
+
+    static func nonUniformResizedLayoutSize(
+        startSize: CGSize,
+        translation: CGSize,
+        canvasScale: CGFloat,
+        minSize: CGSize,
+        maxSize: CGSize
+    ) -> CGSize {
+        let adjustedScale = max(canvasScale, 0.01)
+        let dx = translation.width / adjustedScale
+        let dy = translation.height / adjustedScale
+        let width = min(max(startSize.width + dx, minSize.width), maxSize.width)
+        let height = min(max(startSize.height + dy, minSize.height), maxSize.height)
+        return CGSize(width: width, height: height)
+    }
+
+    static func rotationAngle(
+        center: CGPoint,
+        startVector: CGVector,
+        currentVector: CGVector
+    ) -> CGFloat {
+        let startAngle = atan2(startVector.dy, startVector.dx)
+        let currentAngle = atan2(currentVector.dy, currentVector.dx)
+        let delta = (currentAngle - startAngle) * 180 / .pi
+        return delta
+    }
 }

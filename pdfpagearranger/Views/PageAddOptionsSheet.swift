@@ -3,6 +3,7 @@ import SwiftUI
 struct PageAddOptionsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
+    let onTextTapped: () -> Void
     let onImageTapped: () -> Void
     let onQuickSignatureTapped: () -> Void
     let onSignatureLibraryTapped: () -> Void
@@ -10,7 +11,16 @@ struct PageAddOptionsSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                addOption(icon: "textformat", title: "Text", subtitle: "Coming soon", isEnabled: false) {}
+                addOption(
+                    icon: "textformat",
+                    title: "Text",
+                    subtitle: "Add editable text",
+                    isEnabled: true,
+                    accessibilityIdentifier: "addTextOption"
+                ) {
+                    dismiss()
+                    onTextTapped()
+                }
                 addOption(icon: "photo", title: "Image", subtitle: "Import from Photos or Files", isEnabled: true) {
                     dismiss()
                     onImageTapped()
@@ -85,5 +95,5 @@ struct PageAddOptionsSheet: View {
 }
 
 #Preview {
-    PageAddOptionsSheet(onImageTapped: {}, onQuickSignatureTapped: {}, onSignatureLibraryTapped: {})
+    PageAddOptionsSheet(onTextTapped: {}, onImageTapped: {}, onQuickSignatureTapped: {}, onSignatureLibraryTapped: {})
 }

@@ -1,6 +1,5 @@
 import UIKit
 
-/// Composites image overlays onto a rendered PDF page image using shared geometry mapping.
 enum OverlayCompositor {
     static func composite(
         baseImage: UIImage,
@@ -17,6 +16,22 @@ enum OverlayCompositor {
             baseImage.draw(in: CGRect(origin: .zero, size: pageSize))
 
             for object in objects.sorted(by: { $0.zIndex < $1.zIndex }) {
+                if object.isTextOverlay {
+                    let layout = OverlayGeometryEngine.thumbnailLayout(
+                        for: object,
+                        pageRotation: pageRotation,
+                        renderSize: pageSize
+                    )
+                    TextOverlayRenderer.drawTextOverlay(
+                        object,
+                        layout: layout,
+                        opacity: object.opacity,
+                        in: context.cgContext,
+                        coordinateSpace: .topLeftOrigin
+                    )
+                    continue
+                }
+
                 guard object.usesRasterImageAsset,
                       let assetID = object.imageAssetID,
                       let overlayImage = images[assetID] else {

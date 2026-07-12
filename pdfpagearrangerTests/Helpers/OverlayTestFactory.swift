@@ -45,6 +45,33 @@ enum OverlayTestFactory {
         )
     }
 
+    static func makeTextOverlay(
+        pageItemID: UUID,
+        text: String = "Sample text",
+        position: CGPoint = CGPoint(x: 0.5, y: 0.5),
+        size: CGSize = CGSize(width: 0.4, height: 0.12),
+        rotation: CGFloat = 0,
+        fontSizePoints: CGFloat = 14,
+        color: SignatureInkRGBA = TextOverlayDraft.defaultColor,
+        bold: Bool = false,
+        listMode: TextOverlayListMode = .plain,
+        zIndex: Int = 0
+    ) -> PageObject {
+        PageObject(
+            pageItemID: pageItemID,
+            type: .text,
+            position: position,
+            size: size,
+            rotation: rotation,
+            zIndex: zIndex,
+            textContent: text,
+            textFontSizePoints: fontSizePoints,
+            textColorRGBA: color,
+            textBold: bold,
+            textListMode: listMode
+        )
+    }
+
     static func makeSignatureImage(size: CGSize = CGSize(width: 120, height: 40)) -> UIImage {
         UIGraphicsImageRenderer(size: size).image { context in
             UIColor.clear.setFill()

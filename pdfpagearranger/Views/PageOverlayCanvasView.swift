@@ -13,6 +13,9 @@ struct PageOverlayCanvasView: View {
     let signaturePlacementActive: Bool
     let onSignaturePlacementTap: ((CGPoint, CGSize) -> Void)?
     let onSignaturePlacementDismiss: (() -> Void)?
+    let textPlacementActive: Bool
+    let onTextPlacementTap: ((CGPoint, CGSize) -> Void)?
+    let onTextPlacementDismiss: (() -> Void)?
     @Binding var pageSelection: PageModeSelection
     let pdfSelectionClearToken: UUID
     let imageProvider: (UUID) -> UIImage?
@@ -26,6 +29,9 @@ struct PageOverlayCanvasView: View {
     let onUpdateSignatureCustomColor: (UUID, UIColor, Int) -> Void
     let onResetSignatureAppearance: (UUID) -> Void
     let onSaveSignatureToLibrary: (UUID) -> Void
+    let onEditTextOverlay: (UUID) -> Void
+    let onDuplicateTextOverlay: (UUID) -> Void
+    let onDeleteTextOverlay: (UUID) -> Void
     let pageTransitionEdge: Edge
 
     @State private var scale: CGFloat = 1
@@ -39,7 +45,7 @@ struct PageOverlayCanvasView: View {
     private let maxScale: CGFloat = 4
 
     private var pageZoomEnabled: Bool {
-        pageSelection.selectedOverlayID == nil && !signaturePlacementActive
+        pageSelection.selectedOverlayID == nil && !signaturePlacementActive && !textPlacementActive
     }
 
     private var isPageZoomed: Bool {
@@ -48,6 +54,7 @@ struct PageOverlayCanvasView: View {
 
     private var pageSwipeEnabled: Bool {
         !signaturePlacementActive
+            && !textPlacementActive
             && onPageSwipe != nil
             && PageModeNavigationEngine.shouldAllowPageSwipe(
                 overlayManipulationActive: overlayManipulationState.isActive,
@@ -64,10 +71,27 @@ struct PageOverlayCanvasView: View {
         return object
     }
 
+    private var selectedTextOverlay: PageObject? {
+        guard let overlayID = pageSelection.selectedOverlayID,
+              let object = objects.first(where: { $0.id == overlayID }),
+              object.type == .text else {
+            return nil
+        }
+        return object
+    }
+
+    private var showsTextContextMenu: Bool {
+        selectedTextOverlay != nil
+            && !signaturePlacementActive
+            && !textPlacementActive
+            && !overlayManipulationState.isActive
+    }
+
     private var showsSignatureContextMenu: Bool {
         selectedSignatureOverlay != nil
             && signatureEditOverlayID == nil
             && !signaturePlacementActive
+            && !textPlacementActive
             && !overlayManipulationState.isActive
     }
 
@@ -113,6 +137,14 @@ struct PageOverlayCanvasView: View {
                 pdfTextSelectionLayerActive = true
             }
             .onChange(of: signaturePlacementActive) { _, isActive in
+                if isActive {
+                    deactivatePDFTextSelectionLayer()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        resetZoom()
+                    }
+                }
+            }
+            .onChange(of: textPlacementActive) { _, isActive in
                 if isActive {
                     deactivatePDFTextSelectionLayer()
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -186,7 +218,34 @@ struct PageOverlayCanvasView: View {
                     .allowsHitTesting(false)
 
                 ForEach(sortedObjects) { object in
-                    if object.usesRasterImageAsset,
+                    if object.isTextOverlay {
+                        TextOverlayObjectView(
+                            object: object,
+                            pageRotation: pageRotation,
+                            pageSize: fitSize,
+                            canvasScale: scale,
+                            isSelected: pageSelection.selectedOverlayID == object.id,
+                            isInteractionEnabled: !signaturePlacementActive
+                                && !textPlacementActive
+                                && signatureEditOverlayID == nil,
+                            animatePlacement: placementAnimatingOverlayIDs.contains(object.id),
+                            onPlacementAnimationFinished: {
+                                onPlacementAnimationFinished(object.id)
+                            },
+                            onSelect: {
+                                guard !signaturePlacementActive, !textPlacementActive else { return }
+                                signatureEditOverlayID = nil
+                                deactivatePDFTextSelectionLayer()
+                                pageSelection = .overlay(object.id)
+                                bringToFront(object)
+                            },
+                            onEdit: {
+                                onEditTextOverlay(object.id)
+                            },
+                            onUpdate: onUpdate,
+                            manipulationState: overlayManipulationState
+                        )
+                    } else if object.usesRasterImageAsset,
                        let assetID = object.imageAssetID,
                        let overlayImage = imageProvider(assetID) {
                         ImageOverlayObjectView(
@@ -196,13 +255,15 @@ struct PageOverlayCanvasView: View {
                             pageSize: fitSize,
                             canvasScale: scale,
                             isSelected: pageSelection.selectedOverlayID == object.id,
-                            isInteractionEnabled: !signaturePlacementActive && signatureEditOverlayID == nil,
+                            isInteractionEnabled: !signaturePlacementActive
+                                && !textPlacementActive
+                                && signatureEditOverlayID == nil,
                             animatePlacement: placementAnimatingOverlayIDs.contains(object.id),
                             onPlacementAnimationFinished: {
                                 onPlacementAnimationFinished(object.id)
                             },
                             onSelect: {
-                                guard !signaturePlacementActive else { return }
+                                guard !signaturePlacementActive, !textPlacementActive else { return }
                                 signatureEditOverlayID = nil
                                 deactivatePDFTextSelectionLayer()
                                 pageSelection = .overlay(object.id)
@@ -257,6 +318,24 @@ struct PageOverlayCanvasView: View {
                             onSaveToLibrary: {
                                 onSaveSignatureToLibrary(signature.id)
                             }
+                        )
+                        .transition(.contextualGlass)
+                    }
+
+                    if let textOverlay = selectedTextOverlay, showsTextContextMenu {
+                        let layout = OverlayGeometryEngine.pageModeLayout(
+                            for: textOverlay,
+                            pageRotation: pageRotation,
+                            renderSize: fitSize
+                        )
+                        TextOverlayContextMenu(
+                            anchorPoint: TextOverlayMenuEngine.anchorPoint(
+                                for: layout,
+                                pageSize: fitSize
+                            ),
+                            onEdit: { onEditTextOverlay(textOverlay.id) },
+                            onDuplicate: { onDuplicateTextOverlay(textOverlay.id) },
+                            onDelete: { onDeleteTextOverlay(textOverlay.id) }
                         )
                         .transition(.contextualGlass)
                     }
@@ -393,6 +472,14 @@ struct PageOverlayCanvasView: View {
             return
         }
 
+        if textPlacementActive {
+            guard TextOverlayPlacementEngine.isDisplayTapInsidePage(location, displayPageSize: displaySize) else {
+                return
+            }
+            onTextPlacementTap?(location, displaySize)
+            return
+        }
+
         if signaturePlacementActive {
             guard SignaturePlacementEngine.isDisplayTapInsidePage(location, displayPageSize: displaySize) else {
                 return
@@ -408,6 +495,11 @@ struct PageOverlayCanvasView: View {
     private func handleCanvasBackgroundTap() {
         if signatureEditOverlayID != nil {
             signatureEditOverlayID = nil
+            return
+        }
+
+        if textPlacementActive {
+            onTextPlacementDismiss?()
             return
         }
 

@@ -1,7 +1,6 @@
 import CoreGraphics
 import UIKit
 
-/// Draws image overlays into a PDF graphics context using shared geometry mapping.
 enum OverlayPDFExporter {
     static func drawOverlays(
         _ objects: [PageObject],
@@ -11,6 +10,22 @@ enum OverlayPDFExporter {
         context: CGContext
     ) {
         for object in objects.sorted(by: { $0.zIndex < $1.zIndex }) {
+            if object.isTextOverlay {
+                let layout = OverlayGeometryEngine.pdfLayout(
+                    for: object,
+                    pageRotation: pageRotation,
+                    mediaBox: pageBounds
+                )
+                TextOverlayRenderer.drawTextOverlay(
+                    object,
+                    layout: layout,
+                    opacity: object.opacity,
+                    in: context,
+                    coordinateSpace: .pdfMediaBox
+                )
+                continue
+            }
+
             guard object.usesRasterImageAsset,
                   let assetID = object.imageAssetID,
                   let image = images[assetID],
