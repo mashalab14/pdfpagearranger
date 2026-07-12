@@ -132,6 +132,16 @@ final class ScanDraftSessionStorage: Sendable {
         try fileManager.removeItem(at: directory)
     }
 
+    func deleteOriginalImages(
+        _ references: [ScanDraftImageReference],
+        sessionDirectory: URL
+    ) {
+        for reference in references {
+            let url = reference.url(in: sessionDirectory)
+            try? fileManager.removeItem(at: url)
+        }
+    }
+
     func sessionExists(for documentID: UUID) -> Bool {
         fileManager.fileExists(atPath: sessionDirectory(for: documentID).path)
     }

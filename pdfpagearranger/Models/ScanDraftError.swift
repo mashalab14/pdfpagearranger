@@ -11,6 +11,13 @@ enum ScanDraftError: LocalizedError, Equatable {
     case sessionNotFound
     case emptyDraft
     case acquisitionCancelled
+    case scannerUnsupported
+    case cameraPermissionDenied
+    case cameraPermissionRestricted
+    case visionKitScannerFailure
+    case imageExtractionFailure
+    case imageEncodingFailure
+    case draftModelUpdateFailure
 
     var errorDescription: String? {
         switch self {
@@ -33,7 +40,21 @@ enum ScanDraftError: LocalizedError, Equatable {
         case .emptyDraft:
             return "Add at least one page before continuing."
         case .acquisitionCancelled:
-            return "Image capture was cancelled."
+            return nil
+        case .scannerUnsupported:
+            return "Document scanning is not available on this device."
+        case .cameraPermissionDenied:
+            return "Camera access is required to scan documents. You can enable it in Settings."
+        case .cameraPermissionRestricted:
+            return "Camera access is restricted on this device."
+        case .visionKitScannerFailure:
+            return "The document scanner could not complete the scan."
+        case .imageExtractionFailure:
+            return "A scanned page could not be read."
+        case .imageEncodingFailure:
+            return "A scanned page could not be saved."
+        case .draftModelUpdateFailure:
+            return "The scanned pages could not be added to the draft."
         }
     }
 }

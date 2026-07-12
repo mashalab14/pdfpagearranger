@@ -27,17 +27,21 @@ struct ScanDraftRootView: View {
 
         case .sourceSelection:
             ScanDraftSourceSelectionView(
-                onCamera: { sessionViewModel.navigateToCameraAcquisition() },
+                sessionViewModel: sessionViewModel,
+                onCamera: {
+                    Task {
+                        let ready = await sessionViewModel.requestCameraScan(context: .newDocument)
+                        if ready {
+                            sessionViewModel.navigateToCameraAcquisition()
+                        }
+                    }
+                },
                 onPhotos: { sessionViewModel.navigateToPhotosAcquisition() },
                 onCancel: cancelFlow
             )
 
         case .cameraAcquisition:
-            ScanDraftAcquisitionPlaceholderView(
-                title: "Camera",
-                message: "Document camera capture will be implemented in a later milestone.",
-                onCancel: { sessionViewModel.handleAcquisitionCancelled() }
-            )
+            ScanDraftCameraAcquisitionView(sessionViewModel: sessionViewModel)
 
         case .photosAcquisition:
             ScanDraftAcquisitionPlaceholderView(
@@ -48,7 +52,7 @@ struct ScanDraftRootView: View {
 
         case .draftReview:
             ScanDraftReviewPlaceholderView(
-                pageCount: sessionViewModel.document?.pages.count ?? 0,
+                sessionViewModel: sessionViewModel,
                 onClose: cancelFlow
             )
 
@@ -106,14 +110,19 @@ private struct ScanDraftEntryView: View {
 }
 
 private struct ScanDraftSourceSelectionView: View {
+    @Bindable var sessionViewModel: ScanDraftSessionViewModel
     let onCamera: () -> Void
     let onPhotos: () -> Void
     let onCancel: () -> Void
 
     var body: some View {
         VStack(spacing: 16) {
-            Button("Scan with Camera", action: onCamera)
-                .buttonStyle(.borderedProminent)
+            Button("Scan Document") {
+                onCamera()
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityLabel("Scan Document")
+            .accessibilityHint("Opens the document camera to scan one or more pages.")
             Button("Import from Photos", action: onPhotos)
                 .buttonStyle(.bordered)
             Button("Cancel", action: onCancel)
@@ -121,6 +130,84 @@ private struct ScanDraftSourceSelectionView: View {
         .padding()
         .navigationTitle("Choose Source")
         .navigationBarTitleDisplayMode(.inline)
+        .alert(
+            "Scan Error",
+            isPresented: Binding(
+                get: { sessionViewModel.errorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        sessionViewModel.errorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                sessionViewModel.errorMessage = nil
+            }
+        } message: {
+            Text(sessionViewModel.errorMessage ?? "")
+        }
+    }
+}
+
+private struct ScanDraftReviewPlaceholderView: View {
+    @Bindable var sessionViewModel: ScanDraftSessionViewModel
+    let onClose: () -> Void
+
+    private var document: ScanDraftDocument? { sessionViewModel.document }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Draft review placeholder")
+                .font(.headline)
+
+            if let document {
+                Text("Pages: \(document.pages.count)")
+                Text("Selected page: \(document.selectedPageID?.uuidString.prefix(8) ?? "none")")
+                Text("All sources camera: \(document.pages.allSatisfy { $0.sourceType == .camera })")
+                Text(
+                    "Page order preserved: \(document.pages.map { String($0.id.uuidString.prefix(4)) }.joined(separator: ", "))"
+                )
+
+                ForEach(Array(document.pages.enumerated()), id: \.element.id) { index, page in
+                    Text("Page \(index + 1): \(page.originalImage.relativePath)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Button("Scan More Pages") {
+                Task {
+                    _ = await sessionViewModel.beginAddPagesCameraScan()
+                }
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel("Scan More Pages")
+            .accessibilityHint("Adds more scanned pages to this draft.")
+
+            Button("Close", action: onClose)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .navigationTitle("Review Pages")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert(
+            "Scan Error",
+            isPresented: Binding(
+                get: { sessionViewModel.errorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        sessionViewModel.errorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                sessionViewModel.errorMessage = nil
+            }
+        } message: {
+            Text(sessionViewModel.errorMessage ?? "")
+        }
     }
 }
 
@@ -138,22 +225,6 @@ private struct ScanDraftAcquisitionPlaceholderView: View {
         }
         .padding()
         .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-private struct ScanDraftReviewPlaceholderView: View {
-    let pageCount: Int
-    let onClose: () -> Void
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Text("Draft review will host \(pageCount) page(s).")
-                .foregroundStyle(.secondary)
-            Button("Close", action: onClose)
-        }
-        .padding()
-        .navigationTitle("Review Pages")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
