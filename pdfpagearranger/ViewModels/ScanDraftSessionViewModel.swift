@@ -24,6 +24,8 @@ final class ScanDraftSessionViewModel {
     private(set) var batchProgress: ScanDraftVisualBatchProgress = .idle
     private(set) var isBatchProcessing = false
     private(set) var pdfGenerationProgress: ScanDraftPDFGenerationProgress = .idle
+    var pdfGenerationNotice: String?
+    var makePDFSearchable: Bool = ScanOCRSettings.isSearchablePDFEnabled()
     var adjustmentSection: ScanPageAdjustmentSection = .appearance
     var isDocumentScannerPresented = false
     var errorMessage: String?
@@ -1460,12 +1462,19 @@ final class ScanDraftSessionViewModel {
         guard var draft = document else { return }
         guard draft.pages.contains(where: { $0.id == page.id }) else { return }
         draft.updatePage(id: page.id) { existing in
+            if existing.processingFingerprint != page.processingFingerprint,
+               let ocrCache = existing.ocrCache,
+               let sessionDirectory = sessionDirectory {
+                storage.deleteOCRResult(at: ocrCache, sessionDirectory: sessionDirectory)
+                existing.ocrCache = nil
+            }
             existing.processedImage = page.processedImage
             existing.thumbnailImage = page.thumbnailImage
             existing.thumbnailState = page.thumbnailState
             existing.processingState = page.processingState
             existing.processingError = page.processingError
             existing.processingFingerprint = page.processingFingerprint
+            existing.ocrCache = page.ocrCache ?? existing.ocrCache
         }
         document = draft
     }
@@ -1505,7 +1514,8 @@ final class ScanDraftSessionViewModel {
         defer { isGeneratingPDF = false }
 
         do {
-            return try await buildPDFFile(displayName: displayName)
+            let result = try await buildPDFFile(displayName: displayName)
+            return result.url
         } catch {
             cleanupFailedPDFGeneration()
             throw error
@@ -1542,6 +1552,7 @@ final class ScanDraftSessionViewModel {
             totalPages: totalPages,
             isCancelling: false
         )
+        pdfGenerationNotice = nil
         errorMessage = nil
         defer {
             if isActiveSession(draftID) || document == nil {
@@ -1551,8 +1562,14 @@ final class ScanDraftSessionViewModel {
         }
 
         do {
-            _ = try await buildPDFFile(displayName: displayName, draftID: draftID)
+            let result = try await buildPDFFile(displayName: displayName, draftID: draftID)
             guard isActiveSession(draftID) else { return }
+            if !result.nonSearchablePageIDs.isEmpty {
+                let count = result.nonSearchablePageIDs.count
+                pdfGenerationNotice = count == 1
+                    ? "PDF created, but 1 page may not be searchable."
+                    : "PDF created, but \(count) pages may not be searchable."
+            }
             try await handoffToEditor(editorViewModel: editorViewModel)
             guard isActiveSession(draftID) else { return }
             pdfGenerationProgress = .idle
@@ -1569,7 +1586,7 @@ final class ScanDraftSessionViewModel {
         }
     }
 
-    private func buildPDFFile(displayName: String, draftID: UUID? = nil) async throws -> URL {
+    private func buildPDFFile(displayName: String, draftID: UUID? = nil) async throws -> ScanDraftPDFGenerationResult {
         let activeDraftID = draftID ?? document?.id
         guard let draft = document,
               let activeDraftID,
@@ -1583,10 +1600,14 @@ final class ScanDraftSessionViewModel {
 
         document?.processingStatus = .generatingPDF
 
-        let pdfURL = try await pdfGenerator.generatePDF(
+        let result = try await pdfGenerator.generatePDF(
             from: draft.pages,
             sessionDirectory: sessionDirectory,
             displayName: displayName,
+            options: ScanDraftPDFGenerationOptions(
+                makeSearchable: makePDFSearchable,
+                ocrConfiguration: .default
+            ),
             onProgress: { [weak self] update in
                 Task { @MainActor in
                     guard let self, self.isActiveSession(activeDraftID) else { return }
@@ -1610,9 +1631,9 @@ final class ScanDraftSessionViewModel {
             throw CancellationError()
         }
 
-        document?.generatedPDFURL = pdfURL
+        document?.generatedPDFURL = result.url
         document?.processingStatus = .pdfReady
-        return pdfURL
+        return result
     }
 
     private func isActiveSession(_ draftID: UUID) -> Bool {
@@ -1626,6 +1647,13 @@ final class ScanDraftSessionViewModel {
         document?.generatedPDFURL = nil
         document?.processingStatus = .idle
         pdfGenerationProgress = .idle
+    }
+}
+
+extension ScanDraftSessionViewModel {
+    func setMakePDFSearchable(_ enabled: Bool) {
+        makePDFSearchable = enabled
+        ScanOCRSettings.setSearchablePDFEnabled(enabled)
     }
 }
 

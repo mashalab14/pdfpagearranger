@@ -11,13 +11,15 @@ final class ScanDraftPDFGeneratorRegressionTests: XCTestCase {
         let processed = try await orchestrator.processPage(page, sessionDirectory: sessionDirectory)
         let generator = ScanDraftPDFGenerator(storage: storage, processingOrchestrator: orchestrator)
 
-        let pdfURL = try await generator.generatePDF(
+        let result = try await generator.generatePDF(
             from: [processed.page],
             sessionDirectory: sessionDirectory,
             displayName: "Single Page",
+            options: ScanDraftPDFGenerationOptions(makeSearchable: false, ocrConfiguration: .default),
             onProgress: nil,
             onPagePrepared: nil
         )
+        let pdfURL = result.url
 
         let pdfDocument = try XCTUnwrap(PDFDocument(url: pdfURL))
         XCTAssertEqual(pdfDocument.pageCount, 1)
@@ -36,13 +38,15 @@ final class ScanDraftPDFGeneratorRegressionTests: XCTestCase {
         }
 
         let generator = ScanDraftPDFGenerator(storage: storage, processingOrchestrator: orchestrator)
-        let pdfURL = try await generator.generatePDF(
+        let result = try await generator.generatePDF(
             from: processedPages,
             sessionDirectory: sessionDirectory,
             displayName: "Ordered Pages",
+            options: ScanDraftPDFGenerationOptions(makeSearchable: false, ocrConfiguration: .default),
             onProgress: nil,
             onPagePrepared: nil
         )
+        let pdfURL = result.url
 
         let pdfDocument = try XCTUnwrap(PDFDocument(url: pdfURL))
         XCTAssertEqual(pdfDocument.pageCount, 4)
@@ -63,15 +67,16 @@ final class ScanDraftPDFGeneratorRegressionTests: XCTestCase {
         }
 
         let generator = ScanDraftPDFGenerator(storage: storage, processingOrchestrator: orchestrator)
-        let pdfURL = try await generator.generatePDF(
+        let result = try await generator.generatePDF(
             from: processedPages,
             sessionDirectory: sessionDirectory,
             displayName: "Mixed Sources",
+            options: ScanDraftPDFGenerationOptions(makeSearchable: false, ocrConfiguration: .default),
             onProgress: nil,
             onPagePrepared: nil
         )
 
-        XCTAssertEqual(PDFDocument(url: pdfURL)?.pageCount, 3)
+        XCTAssertEqual(PDFDocument(url: result.url)?.pageCount, 3)
     }
 
     func testRotatedPagePreservesOrientationInPDF() async throws {
@@ -95,15 +100,16 @@ final class ScanDraftPDFGeneratorRegressionTests: XCTestCase {
         let orchestrator = ScanPageProcessingOrchestrator(storage: storage)
         let processed = try await orchestrator.processPage(page, sessionDirectory: sessionDirectory)
         let generator = ScanDraftPDFGenerator(storage: storage, processingOrchestrator: orchestrator)
-        let pdfURL = try await generator.generatePDF(
+        let result = try await generator.generatePDF(
             from: [processed.page],
             sessionDirectory: sessionDirectory,
             displayName: "Rotated",
+            options: ScanDraftPDFGenerationOptions(makeSearchable: false, ocrConfiguration: .default),
             onProgress: nil,
             onPagePrepared: nil
         )
 
-        let pdfPage = try XCTUnwrap(PDFDocument(url: pdfURL)?.page(at: 0))
+        let pdfPage = try XCTUnwrap(PDFDocument(url: result.url)?.page(at: 0))
         let bounds = pdfPage.bounds(for: .mediaBox)
         XCTAssertGreaterThan(bounds.width, bounds.height)
     }
@@ -124,6 +130,7 @@ final class ScanDraftPDFGeneratorRegressionTests: XCTestCase {
             from: processedPages,
             sessionDirectory: sessionDirectory,
             displayName: "Cached",
+            options: ScanDraftPDFGenerationOptions(makeSearchable: false, ocrConfiguration: .default),
             onProgress: nil,
             onPagePrepared: nil
         )
@@ -142,15 +149,16 @@ final class ScanDraftPDFGeneratorRegressionTests: XCTestCase {
         }
 
         let generator = ScanDraftPDFGenerator(storage: storage, processingOrchestrator: orchestrator)
-        let pdfURL = try await generator.generatePDF(
+        let result = try await generator.generatePDF(
             from: processedPages,
             sessionDirectory: sessionDirectory,
             displayName: "Twenty Pages",
+            options: ScanDraftPDFGenerationOptions(makeSearchable: false, ocrConfiguration: .default),
             onProgress: nil,
             onPagePrepared: nil
         )
 
-        XCTAssertEqual(PDFDocument(url: pdfURL)?.pageCount, 20)
+        XCTAssertEqual(PDFDocument(url: result.url)?.pageCount, 20)
     }
 
     func testAtomicWriteRemovesStagingFile() async throws {
@@ -163,13 +171,15 @@ final class ScanDraftPDFGeneratorRegressionTests: XCTestCase {
         )
         let generator = ScanDraftPDFGenerator(storage: storage, processingOrchestrator: orchestrator)
 
-        let pdfURL = try await generator.generatePDF(
+        let result = try await generator.generatePDF(
             from: [processed.page],
             sessionDirectory: sessionDirectory,
             displayName: "Atomic",
+            options: ScanDraftPDFGenerationOptions(makeSearchable: false, ocrConfiguration: .default),
             onProgress: nil,
             onPagePrepared: nil
         )
+        let pdfURL = result.url
 
         let generatedDirectory = sessionDirectory.appendingPathComponent("generated", isDirectory: true)
         let stagingFiles = try FileManager.default.contentsOfDirectory(at: generatedDirectory, includingPropertiesForKeys: nil)

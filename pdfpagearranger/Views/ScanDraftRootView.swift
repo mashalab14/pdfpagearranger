@@ -43,6 +43,23 @@ struct ScanDraftRootView: View {
         } message: {
             Text(sessionViewModel.errorMessage ?? "")
         }
+        .alert(
+            "PDF Created",
+            isPresented: Binding(
+                get: { sessionViewModel.pdfGenerationNotice != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        sessionViewModel.pdfGenerationNotice = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                sessionViewModel.pdfGenerationNotice = nil
+            }
+        } message: {
+            Text(sessionViewModel.pdfGenerationNotice ?? "")
+        }
     }
 
     @ViewBuilder

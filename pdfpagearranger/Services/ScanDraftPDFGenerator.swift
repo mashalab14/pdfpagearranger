@@ -10,34 +10,41 @@ protocol ScanDraftPDFGenerating: Sendable {
         from pages: [ScanDraftPage],
         sessionDirectory: URL,
         displayName: String,
+        options: ScanDraftPDFGenerationOptions,
         onProgress: ProgressHandler?,
         onPagePrepared: (@Sendable (ScanDraftPage) -> Void)?
-    ) async throws -> URL
+    ) async throws -> ScanDraftPDFGenerationResult
 }
 
 /// Assembles a multi-page PDF from file-backed processed page images.
 struct ScanDraftPDFGenerator: ScanDraftPDFGenerating {
     private let storage: ScanDraftSessionStorage
     private let processingOrchestrator: ScanPageProcessingOrchestrator
+    private let ocrService: ScanOCRService
 
     init(
         storage: ScanDraftSessionStorage,
-        processingOrchestrator: ScanPageProcessingOrchestrator? = nil
+        processingOrchestrator: ScanPageProcessingOrchestrator? = nil,
+        ocrService: ScanOCRService? = nil
     ) {
         self.storage = storage
         self.processingOrchestrator = processingOrchestrator ?? ScanPageProcessingOrchestrator(storage: storage)
+        self.ocrService = ocrService ?? ScanOCRService(storage: storage)
     }
 
     func generatePDF(
         from pages: [ScanDraftPage],
         sessionDirectory: URL,
         displayName: String,
+        options: ScanDraftPDFGenerationOptions = .default,
         onProgress: ProgressHandler?,
         onPagePrepared: (@Sendable (ScanDraftPage) -> Void)?
-    ) async throws -> URL {
+    ) async throws -> ScanDraftPDFGenerationResult {
         guard !pages.isEmpty else {
             throw ScanDraftError.emptyDraft
         }
+
+        storage.deleteGeneratedPDFStaging(in: sessionDirectory)
 
         let totalPages = pages.count
         var preparedPages: [ScanDraftPage] = []
@@ -61,6 +68,47 @@ struct ScanDraftPDFGenerator: ScanDraftPDFGenerating {
             onPagePrepared?(result.page)
         }
 
+        var ocrResultsByPageID: [UUID: OCRPage] = [:]
+        var nonSearchablePageIDs: [UUID] = []
+
+        if options.makeSearchable {
+            for (index, page) in preparedPages.enumerated() {
+                try Task.checkCancellation()
+                onProgress?(
+                    ScanDraftPDFGenerationUpdate(
+                        phase: .recognizingText,
+                        currentPage: index + 1,
+                        totalPages: totalPages
+                    )
+                )
+
+                guard let processedReference = page.processedImage else {
+                    nonSearchablePageIDs.append(page.id)
+                    continue
+                }
+
+                let imageData = try storage.loadImageData(
+                    at: processedReference,
+                    sessionDirectory: sessionDirectory
+                )
+
+                let (ocrPage, updatedPage) = try await ocrService.recognizePageIfNeeded(
+                    page: page,
+                    processedImageData: imageData,
+                    sessionDirectory: sessionDirectory,
+                    configuration: options.ocrConfiguration
+                )
+                preparedPages[index] = updatedPage
+                onPagePrepared?(updatedPage)
+
+                if ocrPage.status == .succeeded, !ocrPage.lines.isEmpty {
+                    ocrResultsByPageID[page.id] = ocrPage
+                } else {
+                    nonSearchablePageIDs.append(page.id)
+                }
+            }
+        }
+
         let pdfDocument = PDFDocument()
 
         for (index, page) in preparedPages.enumerated() {
@@ -77,7 +125,8 @@ struct ScanDraftPDFGenerator: ScanDraftPDFGenerating {
                 throw ScanDraftError.processingFailure(stage: .generateProcessedImage)
             }
             let imageData = try storage.loadImageData(at: processedReference, sessionDirectory: sessionDirectory)
-            let pdfPage = try makePDFPage(from: imageData)
+            let ocrPage = options.makeSearchable ? ocrResultsByPageID[page.id] : nil
+            let pdfPage = try makePDFPage(from: imageData, ocrPage: ocrPage)
             pdfDocument.insert(pdfPage, at: pdfDocument.pageCount)
         }
 
@@ -86,14 +135,19 @@ struct ScanDraftPDFGenerator: ScanDraftPDFGenerating {
         }
 
         let fileName = Self.sanitizedFileName(from: displayName)
-        return try storage.writeGeneratedPDF(
+        let url = try storage.writeGeneratedPDF(
             pdfDocument,
             sessionDirectory: sessionDirectory,
             fileName: fileName
         )
+
+        return ScanDraftPDFGenerationResult(
+            url: url,
+            nonSearchablePageIDs: nonSearchablePageIDs
+        )
     }
 
-    private func makePDFPage(from imageData: Data) throws -> PDFPage {
+    private func makePDFPage(from imageData: Data, ocrPage: OCRPage?) throws -> PDFPage {
         guard let image = UIImage(data: imageData) else {
             throw ScanDraftError.imageCannotBeLoaded
         }
@@ -103,16 +157,19 @@ struct ScanDraftPDFGenerator: ScanDraftPDFGenerating {
             throw ScanDraftError.imageCannotBeLoaded
         }
 
-        let pageRect = CGRect(
-            x: 0,
-            y: 0,
-            width: CGFloat(cgImage.width),
-            height: CGFloat(cgImage.height)
-        )
+        let pagePixelSize = CGSize(width: cgImage.width, height: cgImage.height)
+        let pageRect = CGRect(origin: .zero, size: pagePixelSize)
 
         let pageData = UIGraphicsPDFRenderer(bounds: pageRect).pdfData { context in
             context.beginPage()
             normalizedImage.draw(in: pageRect)
+            if let ocrPage {
+                ScanOCRPDFTextRenderer.drawInvisibleText(
+                    for: ocrPage,
+                    in: context,
+                    pagePixelSize: pagePixelSize
+                )
+            }
         }
 
         guard let pageDocument = PDFDocument(data: pageData),
@@ -139,9 +196,10 @@ struct UnimplementedScanDraftPDFGenerator: ScanDraftPDFGenerating {
         from pages: [ScanDraftPage],
         sessionDirectory: URL,
         displayName: String,
+        options: ScanDraftPDFGenerationOptions,
         onProgress: ProgressHandler?,
         onPagePrepared: (@Sendable (ScanDraftPage) -> Void)?
-    ) async throws -> URL {
+    ) async throws -> ScanDraftPDFGenerationResult {
         guard !pages.isEmpty else {
             throw ScanDraftError.emptyDraft
         }

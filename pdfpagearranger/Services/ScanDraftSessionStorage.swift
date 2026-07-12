@@ -16,6 +16,7 @@ final class ScanDraftSessionStorage: Sendable {
     static let processedDirectoryName = "processed"
     static let thumbnailsDirectoryName = "thumbnails"
     static let generatedDirectoryName = "generated"
+    static let ocrDirectoryName = "ocr"
 
     private let fileManager: FileManager
     private let sessionsRoot: URL
@@ -42,7 +43,8 @@ final class ScanDraftSessionStorage: Sendable {
             Self.originalsDirectoryName,
             Self.processedDirectoryName,
             Self.thumbnailsDirectoryName,
-            Self.generatedDirectoryName
+            Self.generatedDirectoryName,
+            Self.ocrDirectoryName
         ] {
             try fileManager.createDirectory(
                 at: directory.appendingPathComponent(subdirectory, isDirectory: true),
@@ -245,6 +247,49 @@ final class ScanDraftSessionStorage: Sendable {
             references.append(thumbnailImage)
         }
         deleteOriginalImages(references, sessionDirectory: sessionDirectory)
+        if let ocrCache = page.ocrCache {
+            deleteOCRResult(at: ocrCache, sessionDirectory: sessionDirectory)
+        }
+    }
+
+    func writeOCRResult(
+        _ ocrPage: OCRPage,
+        pageID: UUID,
+        fingerprint: String,
+        sessionDirectory: URL
+    ) throws -> ScanDraftOCRCacheEntry {
+        let ocrDirectory = sessionDirectory
+            .appendingPathComponent(Self.ocrDirectoryName, isDirectory: true)
+        try fileManager.createDirectory(at: ocrDirectory, withIntermediateDirectories: true)
+
+        let relativePath = "\(Self.ocrDirectoryName)/\(pageID.uuidString).json"
+        let url = sessionDirectory.appendingPathComponent(relativePath)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(ocrPage)
+        try data.write(to: url, options: .atomic)
+
+        return ScanDraftOCRCacheEntry(
+            relativePath: relativePath,
+            fingerprint: fingerprint,
+            imagePixelSize: ocrPage.imagePixelSize,
+            status: ocrPage.status,
+            errorMessage: ocrPage.errorMessage
+        )
+    }
+
+    func loadOCRResult(
+        at cacheEntry: ScanDraftOCRCacheEntry,
+        sessionDirectory: URL
+    ) throws -> OCRPage {
+        let url = cacheEntry.url(in: sessionDirectory)
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode(OCRPage.self, from: data)
+    }
+
+    func deleteOCRResult(at cacheEntry: ScanDraftOCRCacheEntry, sessionDirectory: URL) {
+        let url = cacheEntry.url(in: sessionDirectory)
+        try? fileManager.removeItem(at: url)
     }
 
     func duplicatePageAssets(

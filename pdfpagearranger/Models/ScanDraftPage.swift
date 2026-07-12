@@ -18,6 +18,8 @@ struct ScanDraftPage: Identifiable, Equatable, Codable, Sendable {
     var thumbnailState: ScanThumbnailState
     /// Fingerprint of inputs when `processedImage` was last produced.
     var processingFingerprint: String?
+    /// Cached OCR output for the final processed image.
+    var ocrCache: ScanDraftOCRCacheEntry?
 
     init(
         id: UUID = UUID(),
@@ -31,7 +33,8 @@ struct ScanDraftPage: Identifiable, Equatable, Codable, Sendable {
         processingState: ScanPageProcessingState = .pending,
         processingError: String? = nil,
         thumbnailState: ScanThumbnailState = .notGenerated,
-        processingFingerprint: String? = nil
+        processingFingerprint: String? = nil,
+        ocrCache: ScanDraftOCRCacheEntry? = nil
     ) {
         self.id = id
         self.sourceType = sourceType
@@ -45,6 +48,7 @@ struct ScanDraftPage: Identifiable, Equatable, Codable, Sendable {
         self.processingError = processingError
         self.thumbnailState = thumbnailState
         self.processingFingerprint = processingFingerprint
+        self.ocrCache = ocrCache
     }
 
     var needsProcessing: Bool {

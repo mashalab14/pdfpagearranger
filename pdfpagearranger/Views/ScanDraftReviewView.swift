@@ -119,7 +119,10 @@ struct ScanDraftReviewView: View {
         }
         .safeAreaInset(edge: .bottom) {
             if sessionViewModel.document?.isEmpty == false {
-                bottomActions
+                VStack(spacing: 8) {
+                    searchablePDFToggle
+                    bottomActions
+                }
             }
         }
         .overlay {
@@ -286,6 +289,18 @@ struct ScanDraftReviewView: View {
                 }
             }
         }
+    }
+
+    private var searchablePDFToggle: some View {
+        Toggle(isOn: Binding(
+            get: { sessionViewModel.makePDFSearchable },
+            set: { sessionViewModel.setMakePDFSearchable($0) }
+        )) {
+            Text("Make PDF Searchable")
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .accessibilityIdentifier("makePDFSearchableToggle")
     }
 
     private var bottomActions: some View {

@@ -3,6 +3,7 @@ import Foundation
 enum ScanDraftPDFGenerationPhase: Equatable, Sendable {
     case idle
     case preparingPages
+    case recognizingText
     case generatingPDF
     case openingEditor
 }
@@ -26,14 +27,19 @@ struct ScanDraftPDFGenerationProgress: Equatable, Sendable {
             return "Preparing…"
         case .preparingPages:
             if totalPages > 0 {
-                return "Preparing pages (\(currentPage) of \(totalPages))…"
+                return "Preparing pages: page \(currentPage) of \(totalPages)"
             }
             return "Preparing pages…"
+        case .recognizingText:
+            if totalPages > 0 {
+                return "Recognizing text: page \(currentPage) of \(totalPages)"
+            }
+            return "Recognizing text…"
         case .generatingPDF:
             if totalPages > 0 {
-                return "Generating PDF (\(currentPage) of \(totalPages))…"
+                return "Creating PDF: page \(currentPage) of \(totalPages)"
             }
-            return "Generating PDF…"
+            return "Creating PDF…"
         case .openingEditor:
             return "Opening editor…"
         }
