@@ -19,6 +19,10 @@ final class ScanDraftSessionViewModel {
     private(set) var isDetectingEdges = false
     private(set) var isGeneratingVisualPreview = false
     private(set) var visualPreviewImage: UIImage?
+    private(set) var isMultiSelectionMode = false
+    private(set) var batchSelectionPageIDs: Set<UUID> = []
+    private(set) var batchProgress: ScanDraftVisualBatchProgress = .idle
+    private(set) var isBatchProcessing = false
     var adjustmentSection: ScanPageAdjustmentSection = .appearance
     var isDocumentScannerPresented = false
     var errorMessage: String?
@@ -30,6 +34,7 @@ final class ScanDraftSessionViewModel {
     private let cameraScanImporter: ScanCameraScanImporter
     private let photosSelectionImporter: ScanPhotosSelectionImporter
     private let geometryProcessor: ScanDraftPageGeometryProcessor
+    private let visualBatchProcessor: ScanDraftVisualBatchProcessor
     private let edgeDetector: any ScanDocumentEdgeDetecting
     private let permissionChecker: any ScanCameraPermissionChecking
     private let scannerAvailability: any ScanDocumentScannerAvailabilityChecking
@@ -46,6 +51,9 @@ final class ScanDraftSessionViewModel {
     private var visualPreviewOperationID: UUID?
     private var geometryApplyTask: Task<Void, Never>?
     private var visualPreviewTask: Task<Void, Never>?
+    private var batchOperationID: UUID?
+    private var batchCancellationFlag: ScanImportCancellationFlag?
+    private var batchTask: Task<Void, Never>?
 
     init(
         storage: ScanDraftSessionStorage = ScanDraftSessionStorage(),
@@ -55,6 +63,7 @@ final class ScanDraftSessionViewModel {
         cameraScanImporter: ScanCameraScanImporter? = nil,
         photosSelectionImporter: ScanPhotosSelectionImporter? = nil,
         geometryProcessor: ScanDraftPageGeometryProcessor? = nil,
+        visualBatchProcessor: ScanDraftVisualBatchProcessor? = nil,
         edgeDetector: (any ScanDocumentEdgeDetecting)? = nil,
         permissionChecker: (any ScanCameraPermissionChecking)? = nil,
         scannerAvailability: (any ScanDocumentScannerAvailabilityChecking)? = nil
@@ -66,6 +75,7 @@ final class ScanDraftSessionViewModel {
         self.cameraScanImporter = cameraScanImporter ?? ScanCameraScanImporter(storage: storage)
         self.photosSelectionImporter = photosSelectionImporter ?? ScanPhotosSelectionImporter(storage: storage)
         self.geometryProcessor = geometryProcessor ?? ScanDraftPageGeometryProcessor(storage: storage)
+        self.visualBatchProcessor = visualBatchProcessor ?? ScanDraftVisualBatchProcessor(storage: storage)
         self.edgeDetector = edgeDetector ?? VisionScanDocumentEdgeDetector()
         self.permissionChecker = permissionChecker ?? SystemScanCameraPermissionChecker()
         self.scannerAvailability = scannerAvailability ?? SystemScanDocumentScannerAvailabilityChecker()
@@ -135,6 +145,14 @@ final class ScanDraftSessionViewModel {
         geometryApplyTask = nil
         visualPreviewTask?.cancel()
         visualPreviewTask = nil
+        batchTask?.cancel()
+        batchTask = nil
+        batchOperationID = nil
+        batchCancellationFlag = nil
+        batchProgress = .idle
+        isBatchProcessing = false
+        isMultiSelectionMode = false
+        batchSelectionPageIDs = []
         visualPreviewImage = nil
         adjustmentSection = .appearance
         return true
@@ -358,18 +376,48 @@ final class ScanDraftSessionViewModel {
         navigateToDraftReview()
     }
 
-    func applyPageAdjustment() async -> Bool {
-        guard !isApplyingGeometry else { return false }
+    func applyPageAdjustment(scope: ScanVisualBatchApplyScope) async -> Bool {
+        guard !isApplyingGeometry, !isBatchProcessing else { return false }
         guard let session = adjustmentSession else { return false }
-        guard var draft = document, let sessionDirectory = sessionDirectory else { return false }
-        guard let pageIndex = draft.pages.firstIndex(where: { $0.id == session.pageID }) else { return false }
+        guard let draft = document, let sessionDirectory = sessionDirectory else { return false }
+
+        if scope == .selectedPages, batchSelectionPageIDs.isEmpty {
+            errorMessage = ScanDraftError.emptyBatchSelection.localizedDescription
+            return false
+        }
+
+        let targetPageIDs = resolvedTargetPageIDs(for: scope, sourcePageID: session.pageID)
+        guard !targetPageIDs.isEmpty else {
+            errorMessage = ScanDraftError.emptyBatchSelection.localizedDescription
+            return false
+        }
+
+        if scope == .thisPage {
+            return await applySinglePageAdjustment(session: session, sessionDirectory: sessionDirectory)
+        }
+
+        return await applyBatchVisualAdjustment(
+            session: session,
+            scope: scope,
+            targetPageIDs: targetPageIDs,
+            sessionDirectory: sessionDirectory
+        )
+    }
+
+    private func applySinglePageAdjustment(
+        session: ScanPageAdjustmentSession,
+        sessionDirectory: URL
+    ) async -> Bool {
+        guard !isApplyingGeometry else { return false }
+        guard var draft = document else { return false }
+        guard draft.pages.contains(where: { $0.id == session.pageID }) else { return false }
 
         let operationID = UUID()
         geometryApplyOperationID = operationID
         isApplyingGeometry = true
         errorMessage = nil
 
-        let page = draft.pages[pageIndex]
+        let page = draft.pages.first(where: { $0.id == session.pageID })!
         let geometry = session.workingGeometry
         let visualAdjustments = session.workingVisualAdjustments.normalizedForProcessing()
         let processor = geometryProcessor
@@ -400,12 +448,7 @@ final class ScanDraftSessionViewModel {
             }
             draft.selectPage(id: session.pageID)
             document = draft
-            visualPreviewTask?.cancel()
-            visualPreviewOperationID = nil
-            visualPreviewImage = nil
-            adjustmentSession = nil
-            isApplyingGeometry = false
-            geometryApplyOperationID = nil
+            finishAdjustmentSessionCleanup()
             navigateToDraftReview()
             return true
         } catch let error as ScanDraftError {
@@ -421,6 +464,229 @@ final class ScanDraftSessionViewModel {
             geometryApplyOperationID = nil
             return false
         }
+    }
+
+    private func applyBatchVisualAdjustment(
+        session: ScanPageAdjustmentSession,
+        scope: ScanVisualBatchApplyScope,
+        targetPageIDs: [UUID],
+        sessionDirectory: URL
+    ) async -> Bool {
+        guard let draft = document else { return false }
+
+        let operationID = UUID()
+        batchOperationID = operationID
+        let cancellationFlag = ScanImportCancellationFlag()
+        batchCancellationFlag = cancellationFlag
+        isBatchProcessing = true
+        isApplyingGeometry = true
+        errorMessage = nil
+
+        let snapshots = draft.pages
+            .filter { targetPageIDs.contains($0.id) }
+            .map { ScanDraftPageRollbackSnapshot(page: $0) }
+
+        let request = ScanDraftVisualBatchRequest(
+            operationID: operationID,
+            draftID: session.draftID,
+            sourcePageID: session.pageID,
+            sourceGeometry: session.workingGeometry,
+            visualAdjustments: session.workingVisualAdjustments.normalizedForProcessing(),
+            targetPageIDs: targetPageIDs,
+            updateSessionDefaults: scope == .allPages
+        )
+
+        batchProgress = ScanDraftVisualBatchProgress(
+            completed: 0,
+            total: targetPageIDs.count,
+            currentPageID: targetPageIDs.first,
+            currentPageNumber: 1,
+            isCancelling: false
+        )
+
+        do {
+            let result = try await visualBatchProcessor.execute(
+                request: request,
+                pages: draft.pages,
+                sessionDirectory: sessionDirectory,
+                isCancelled: { cancellationFlag.isCancelled },
+                onProgress: { [weak self] progress in
+                    Task { @MainActor in
+                        guard self?.batchOperationID == operationID else { return }
+                        self?.batchProgress = progress
+                        self?.document?.processingStatus = .processingPages(
+                            completed: progress.completed,
+                            total: progress.total
+                        )
+                    }
+                }
+            )
+
+            guard batchOperationID == operationID, document?.id == session.draftID else {
+                return false
+            }
+
+            let committedPages = try visualBatchProcessor.commitBatchResults(
+                request: request,
+                result: result,
+                snapshots: snapshots,
+                sessionDirectory: sessionDirectory
+            )
+
+            guard batchOperationID == operationID, var updatedDraft = document else {
+                return false
+            }
+
+            for committedPage in committedPages {
+                updatedDraft.updatePage(id: committedPage.id) { existing in
+                    if committedPage.id == session.pageID {
+                        existing.geometry = committedPage.geometry
+                    }
+                    existing.visualAdjustments = committedPage.visualAdjustments
+                    existing.processedImage = committedPage.processedImage
+                    existing.thumbnailImage = committedPage.thumbnailImage
+                    existing.thumbnailState = committedPage.thumbnailState
+                    existing.processingState = committedPage.processingState
+                    existing.processingError = committedPage.processingError
+                    existing.processingFingerprint = committedPage.processingFingerprint
+                }
+            }
+
+            if let sessionDefaults = result.sessionDefaultVisualAdjustments {
+                updatedDraft.sessionDefaultVisualAdjustments = sessionDefaults
+            }
+
+            updatedDraft.selectPage(id: session.pageID)
+            updatedDraft.processingStatus = .idle
+            document = updatedDraft
+            finishAdjustmentSessionCleanup(clearBatchSelection: true)
+            navigateToDraftReview()
+            return true
+        } catch is CancellationError {
+            guard batchOperationID == operationID else { return false }
+            finishBatchCancellation()
+            finishAdjustmentSessionCleanup(clearBatchSelection: false)
+            navigateToDraftReview()
+            return false
+        } catch {
+            guard batchOperationID == operationID else { return false }
+            errorMessage = (error as? ScanDraftError)?.localizedDescription
+                ?? ScanDraftError.visualBatchFailure.localizedDescription
+            finishBatchCancellation()
+            isApplyingGeometry = false
+            batchOperationID = nil
+            isBatchProcessing = false
+            document?.processingStatus = .idle
+            return false
+        }
+    }
+
+    func cancelBatchProcessing() {
+        guard isBatchProcessing else { return }
+        batchCancellationFlag?.cancel()
+        batchProgress = ScanDraftVisualBatchProgress(
+            completed: batchProgress.completed,
+            total: batchProgress.total,
+            currentPageID: batchProgress.currentPageID,
+            currentPageNumber: batchProgress.currentPageNumber,
+            isCancelling: true
+        )
+        batchTask?.cancel()
+    }
+
+    private func finishBatchCancellation() {
+        batchCancellationFlag = nil
+        isBatchProcessing = false
+        isApplyingGeometry = false
+        batchOperationID = nil
+        batchProgress = .idle
+        document?.processingStatus = .idle
+    }
+
+    private func finishAdjustmentSessionCleanup(clearBatchSelection: Bool = false) {
+        visualPreviewTask?.cancel()
+        visualPreviewOperationID = nil
+        visualPreviewImage = nil
+        adjustmentSession = nil
+        isApplyingGeometry = false
+        isDetectingEdges = false
+        isGeneratingVisualPreview = false
+        isBatchProcessing = false
+        geometryApplyOperationID = nil
+        batchOperationID = nil
+        batchProgress = .idle
+        adjustmentSection = .appearance
+        if clearBatchSelection {
+            isMultiSelectionMode = false
+            batchSelectionPageIDs = []
+        }
+    }
+
+    func resolvedTargetPageIDs(for scope: ScanVisualBatchApplyScope, sourcePageID: UUID) -> [UUID] {
+        guard let draft = document else { return [] }
+        switch scope {
+        case .thisPage:
+            return [sourcePageID]
+        case .selectedPages:
+            let validIDs = Set(draft.pages.map(\.id))
+            let selected = batchSelectionPageIDs.intersection(validIDs)
+            return draft.pages.map(\.id).filter { selected.contains($0) }
+        case .allPages:
+            return draft.pages.map(\.id)
+        }
+    }
+
+    func batchConfirmationMessage(
+        for scope: ScanVisualBatchApplyScope,
+        visualAdjustments: ScanVisualAdjustments
+    ) -> String {
+        let count: Int
+        if let session = adjustmentSession {
+            count = resolvedTargetPageIDs(for: scope, sourcePageID: session.pageID).count
+        } else {
+            count = 0
+        }
+        let modeName = visualAdjustments.mode.displayName
+        return "Apply \(modeName) and current adjustments to \(count) pages? Page crops and rotations will remain unchanged."
+    }
+
+    // MARK: - Batch page selection
+
+    func enterMultiSelectionMode() {
+        isMultiSelectionMode = true
+        repairBatchSelectionIfNeeded()
+    }
+
+    func exitMultiSelectionMode() {
+        isMultiSelectionMode = false
+        batchSelectionPageIDs = []
+    }
+
+    func toggleBatchSelection(pageID: UUID) {
+        guard document?.pages.contains(where: { $0.id == pageID }) == true else { return }
+        if batchSelectionPageIDs.contains(pageID) {
+            batchSelectionPageIDs.remove(pageID)
+        } else {
+            batchSelectionPageIDs.insert(pageID)
+        }
+    }
+
+    func selectAllPagesForBatch() {
+        guard let draft = document else { return }
+        batchSelectionPageIDs = Set(draft.pages.map(\.id))
+    }
+
+    func repairBatchSelectionIfNeeded() {
+        guard let draft = document else {
+            batchSelectionPageIDs = []
+            return
+        }
+        let validIDs = Set(draft.pages.map(\.id))
+        batchSelectionPageIDs = batchSelectionPageIDs.intersection(validIDs)
+    }
+
+    var batchSelectionCount: Int {
+        batchSelectionPageIDs.count
     }
 
     func handleAcquisitionCancelled() {
@@ -934,7 +1200,14 @@ final class ScanDraftSessionViewModel {
 
     func selectPage(id: UUID?) {
         guard var draft = document else { return }
-        draft.selectPage(id: id)
+        draft.selectedPageID = id
+        if !isMultiSelectionMode {
+            if let id {
+                draft.selectedPageIDs = [id]
+            } else {
+                draft.selectedPageIDs.removeAll()
+            }
+        }
         document = draft
     }
 

@@ -36,7 +36,23 @@ struct ScanDraftReviewView: View {
                     .accessibilityLabel("Close")
                     .accessibilityHint("Closes the draft review.")
             }
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if sessionViewModel.isMultiSelectionMode {
+                    Button("Select All") {
+                        sessionViewModel.selectAllPagesForBatch()
+                    }
+                    .accessibilityLabel("Select All")
+                    Button("Done") {
+                        sessionViewModel.exitMultiSelectionMode()
+                    }
+                    .accessibilityLabel("Exit Selection Mode")
+                } else {
+                    Button("Select") {
+                        sessionViewModel.enterMultiSelectionMode()
+                    }
+                    .disabled(sessionViewModel.isBatchProcessing)
+                    .accessibilityLabel("Enter Selection Mode")
+                }
                 Button("Create PDF") {}
                     .disabled(true)
                     .accessibilityLabel("Create PDF")
@@ -51,6 +67,8 @@ struct ScanDraftReviewView: View {
         .overlay {
             if sessionViewModel.isImportingCameraScan || sessionViewModel.isImportingPhotos {
                 acquisitionOverlay
+            } else if sessionViewModel.isBatchProcessing {
+                batchProcessingOverlay
             }
         }
         .confirmationDialog(
@@ -122,6 +140,14 @@ struct ScanDraftReviewView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 thumbnailStrip(document: document, sessionDirectory: sessionDirectory)
+
+                if sessionViewModel.isMultiSelectionMode {
+                    Text("\(sessionViewModel.batchSelectionCount) pages selected")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityLabel("\(sessionViewModel.batchSelectionCount) pages selected")
+                }
             } else {
                 ProgressView("Loading draft…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -141,9 +167,14 @@ struct ScanDraftReviewView: View {
                             page: page,
                             pageNumber: index + 1,
                             isSelected: document.selectedPageID == page.id,
+                            isBatchSelected: sessionViewModel.batchSelectionPageIDs.contains(page.id),
+                            showsBatchSelection: sessionViewModel.isMultiSelectionMode,
                             sessionDirectory: sessionDirectory,
                             imageLoader: imageLoader,
                             onSelect: {
+                                if sessionViewModel.isMultiSelectionMode {
+                                    sessionViewModel.toggleBatchSelection(pageID: page.id)
+                                }
                                 sessionViewModel.selectPage(id: page.id)
                             }
                         )
@@ -174,7 +205,10 @@ struct ScanDraftReviewView: View {
             }
             .buttonStyle(.borderedProminent)
             .frame(maxWidth: .infinity, minHeight: 44)
-            .disabled(sessionViewModel.document?.selectedPageID == nil)
+            .disabled(
+                sessionViewModel.document?.selectedPageID == nil
+                || sessionViewModel.isBatchProcessing
+            )
             .accessibilityLabel("Adjust Page")
             .accessibilityHint("Opens detailed adjustment for the selected page.")
 
@@ -183,7 +217,7 @@ struct ScanDraftReviewView: View {
             }
             .buttonStyle(.bordered)
             .frame(maxWidth: .infinity, minHeight: 44)
-            .disabled(sessionViewModel.isImportingCameraScan || sessionViewModel.isImportingPhotos)
+            .disabled(sessionViewModel.isImportingCameraScan || sessionViewModel.isImportingPhotos || sessionViewModel.isBatchProcessing)
             .accessibilityLabel("Add Pages")
             .accessibilityHint("Adds more pages from the camera or Photos.")
         }
@@ -221,6 +255,34 @@ struct ScanDraftReviewView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemGroupedBackground))
+    }
+
+    private var batchProcessingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.2)
+                .ignoresSafeArea()
+
+            VStack(spacing: 12) {
+                if sessionViewModel.batchProgress.isCancelling {
+                    ProgressView("Cancelling…")
+                } else if let pageNumber = sessionViewModel.batchProgress.currentPageNumber {
+                    ProgressView(
+                        "Applying settings to page \(pageNumber) of \(sessionViewModel.batchProgress.total)…"
+                    )
+                } else {
+                    ProgressView("Applying visual settings…")
+                }
+
+                Button("Cancel") {
+                    sessionViewModel.cancelBatchProcessing()
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Cancel Processing")
+            }
+            .padding(24)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .accessibilityElement(children: .combine)
+        }
     }
 
     private var acquisitionOverlay: some View {

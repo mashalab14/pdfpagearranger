@@ -91,7 +91,7 @@ final class ScanDraftSessionViewModelVisualAdjustmentRegressionTests: XCTestCase
         adjustments.mode = .enhanced
         viewModel.updateAdjustmentWorkingVisualAdjustments(adjustments)
 
-        let applied = await viewModel.applyPageAdjustment()
+        let applied = await viewModel.applyPageAdjustment(scope: .thisPage)
 
         XCTAssertTrue(applied)
         XCTAssertEqual(viewModel.document?.pages.first?.visualAdjustments.mode, .enhanced)

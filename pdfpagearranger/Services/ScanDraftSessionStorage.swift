@@ -185,4 +185,75 @@ final class ScanDraftSessionStorage: Sendable {
     func sessionExists(for documentID: UUID) -> Bool {
         fileManager.fileExists(atPath: sessionDirectory(for: documentID).path)
     }
+
+    private static let batchStagingDirectoryName = ".batch"
+
+    func writeBatchStagingProcessedImage(
+        data: Data,
+        pageID: UUID,
+        operationID: UUID,
+        sessionDirectory: URL,
+        fileExtension: String = "jpg"
+    ) throws -> ScanDraftImageReference {
+        try writeBatchStagingImage(
+            data: data,
+            pageID: pageID,
+            operationID: operationID,
+            subdirectory: Self.processedDirectoryName,
+            sessionDirectory: sessionDirectory,
+            fileExtension: fileExtension
+        )
+    }
+
+    func writeBatchStagingThumbnailImage(
+        data: Data,
+        pageID: UUID,
+        operationID: UUID,
+        sessionDirectory: URL,
+        fileExtension: String = "jpg"
+    ) throws -> ScanDraftImageReference {
+        try writeBatchStagingImage(
+            data: data,
+            pageID: pageID,
+            operationID: operationID,
+            subdirectory: Self.thumbnailsDirectoryName,
+            sessionDirectory: sessionDirectory,
+            fileExtension: fileExtension
+        )
+    }
+
+    func deleteBatchStagingFiles(operationID: UUID, sessionDirectory: URL) throws {
+        let batchRoot = sessionDirectory
+            .appendingPathComponent(Self.batchStagingDirectoryName, isDirectory: true)
+            .appendingPathComponent(operationID.uuidString, isDirectory: true)
+        guard fileManager.fileExists(atPath: batchRoot.path) else { return }
+        try fileManager.removeItem(at: batchRoot)
+    }
+
+    private func writeBatchStagingImage(
+        data: Data,
+        pageID: UUID,
+        operationID: UUID,
+        subdirectory: String,
+        sessionDirectory: URL,
+        fileExtension: String
+    ) throws -> ScanDraftImageReference {
+        let relativeDirectory = "\(Self.batchStagingDirectoryName)/\(operationID.uuidString)/\(subdirectory)"
+        let relativePath = "\(relativeDirectory)/\(pageID.uuidString).\(fileExtension)"
+        let destinationURL = sessionDirectory.appendingPathComponent(relativePath)
+        let parent = destinationURL.deletingLastPathComponent()
+        try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
+
+        do {
+            try data.write(to: destinationURL, options: .atomic)
+        } catch {
+            if (error as NSError).domain == NSPOSIXErrorDomain,
+               (error as NSError).code == Int(POSIXErrorCode.ENOSPC.rawValue) {
+                throw ScanDraftError.insufficientStorage
+            }
+            throw ScanDraftError.temporaryFileWriteFailure
+        }
+
+        return ScanDraftImageReference(relativePath: relativePath)
+    }
 }

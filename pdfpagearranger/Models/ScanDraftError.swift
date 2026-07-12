@@ -25,6 +25,9 @@ enum ScanDraftError: LocalizedError, Equatable {
     case invalidPageGeometry
     case perspectiveCorrectionFailure
     case visualAdjustmentFailure
+    case visualBatchFailure
+    case emptyBatchSelection
+    case batchOperationInProgress
 
     var errorDescription: String? {
         switch self {
@@ -76,6 +79,12 @@ enum ScanDraftError: LocalizedError, Equatable {
             return "The page could not be corrected. Try adjusting the corners and apply again."
         case .visualAdjustmentFailure:
             return "The page appearance could not be updated. Try again."
+        case .visualBatchFailure:
+            return "Visual settings could not be applied to every page. No changes were saved."
+        case .emptyBatchSelection:
+            return "Select at least one page before applying visual settings."
+        case .batchOperationInProgress:
+            return "Another batch operation is already in progress."
         }
     }
 }

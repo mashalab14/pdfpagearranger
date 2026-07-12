@@ -75,7 +75,7 @@ final class ScanDraftSessionViewModelAdjustmentRegressionTests: XCTestCase {
         geometry.perspectiveCorrectionEnabled = true
         viewModel.updateAdjustmentWorkingGeometry(geometry)
 
-        let applied = await viewModel.applyPageAdjustment()
+        let applied = await viewModel.applyPageAdjustment(scope: .thisPage)
 
         XCTAssertTrue(applied)
         XCTAssertNil(viewModel.adjustmentSession)
@@ -143,7 +143,7 @@ final class ScanDraftSessionViewModelAdjustmentRegressionTests: XCTestCase {
         geometry.perspectiveCorrectionEnabled = true
         viewModel.updateAdjustmentWorkingGeometry(geometry)
 
-        _ = await viewModel.applyPageAdjustment()
+        _ = await viewModel.applyPageAdjustment(scope: .thisPage)
 
         XCTAssertTrue(viewModel.document?.hasUnsavedChanges == true)
         XCTAssertEqual(viewModel.document?.selectedPageID, pageID)

@@ -4,6 +4,8 @@ struct ScanDraftPageThumbnailView: View {
     let page: ScanDraftPage
     let pageNumber: Int
     let isSelected: Bool
+    let isBatchSelected: Bool
+    let showsBatchSelection: Bool
     let sessionDirectory: URL
     let imageLoader: any ScanDraftPreviewImageLoading
     let onSelect: () -> Void
@@ -21,13 +23,22 @@ struct ScanDraftPageThumbnailView: View {
                     .overlay {
                         RoundedRectangle(cornerRadius: 8)
                             .strokeBorder(
-                                isSelected ? Color.accentColor : Color(.separator),
-                                lineWidth: isSelected ? 2 : 0.5
+                                selectionBorderColor,
+                                lineWidth: selectionBorderWidth
                             )
                     }
                     .frame(minWidth: 44, minHeight: 44)
                     .contentShape(Rectangle())
                     .onTapGesture(perform: onSelect)
+
+                if showsBatchSelection {
+                    Image(systemName: isBatchSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.body)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(isBatchSelected ? Color.accentColor : Color.secondary, Color(.systemBackground))
+                        .padding(6)
+                        .accessibilityHidden(true)
+                }
 
                 Text("\(pageNumber)")
                     .font(.caption2.bold())
@@ -48,12 +59,63 @@ struct ScanDraftPageThumbnailView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Page \(pageNumber)")
-        .accessibilityValue(isSelected ? "Selected" : "Not selected")
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityHint("Shows this page in the main preview.")
+        .accessibilityValue(accessibilityValueText)
+        .accessibilityAddTraits(accessibilityTraits)
+        .accessibilityHint(accessibilityHintText)
         .task(id: taskKey) {
             await loadThumbnail()
         }
+    }
+
+    private var selectionBorderColor: Color {
+        if showsBatchSelection, isBatchSelected {
+            return .accentColor
+        }
+        if isSelected {
+            return .accentColor
+        }
+        return Color(.separator)
+    }
+
+    private var selectionBorderWidth: CGFloat {
+        if showsBatchSelection, isBatchSelected {
+            return 2
+        }
+        if isSelected {
+            return 2
+        }
+        return 0.5
+    }
+
+    private var accessibilityValueText: String {
+        if showsBatchSelection {
+            if isBatchSelected, isSelected {
+                return "Selected for batch and preview"
+            }
+            if isBatchSelected {
+                return "Selected for batch"
+            }
+            if isSelected {
+                return "Preview page"
+            }
+            return "Not selected"
+        }
+        return isSelected ? "Selected" : "Not selected"
+    }
+
+    private var accessibilityTraits: AccessibilityTraits {
+        var traits: AccessibilityTraits = .isButton
+        if isBatchSelected || (isSelected && !showsBatchSelection) {
+            traits.formUnion(.isSelected)
+        }
+        return traits
+    }
+
+    private var accessibilityHintText: String {
+        if showsBatchSelection {
+            return "Tap to select or deselect this page for batch visual adjustments."
+        }
+        return "Shows this page in the main preview."
     }
 
     private var taskKey: String {

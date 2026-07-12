@@ -6,6 +6,9 @@ struct ScanDraftPageAdjustmentView: View {
 
     @State private var sourceImage: UIImage?
     @State private var imageLoadFailed = false
+    @State private var showApplyScopeDialog = false
+    @State private var pendingApplyScope: ScanVisualBatchApplyScope?
+    @State private var showBatchConfirmation = false
 
     private let imageLoader = ScanDraftPreviewImageLoader()
 
@@ -88,6 +91,43 @@ struct ScanDraftPageAdjustmentView: View {
         .onChange(of: sessionViewModel.adjustmentSection) { _, newSection in
             if newSection == .appearance {
                 sessionViewModel.scheduleVisualPreviewUpdate()
+            }
+        }
+        .confirmationDialog(
+            "Apply Settings To",
+            isPresented: $showApplyScopeDialog,
+            titleVisibility: .visible
+        ) {
+            Button(ScanVisualBatchApplyScope.thisPage.title) {
+                Task { _ = await sessionViewModel.applyPageAdjustment(scope: .thisPage) }
+            }
+            Button(ScanVisualBatchApplyScope.selectedPages.title) {
+                pendingApplyScope = .selectedPages
+                showBatchConfirmation = true
+            }
+            .disabled(sessionViewModel.batchSelectionPageIDs.isEmpty)
+            Button(ScanVisualBatchApplyScope.allPages.title) {
+                pendingApplyScope = .allPages
+                showBatchConfirmation = true
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .alert(
+            "Apply Visual Settings?",
+            isPresented: $showBatchConfirmation
+        ) {
+            Button("Apply", role: .none) {
+                guard let scope = pendingApplyScope else { return }
+                Task { _ = await sessionViewModel.applyPageAdjustment(scope: scope) }
+                pendingApplyScope = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingApplyScope = nil
+            }
+        } message: {
+            if let scope = pendingApplyScope,
+               let adjustments = sessionViewModel.adjustmentSession?.workingVisualAdjustments {
+                Text(sessionViewModel.batchConfirmationMessage(for: scope, visualAdjustments: adjustments))
             }
         }
     }
@@ -342,9 +382,7 @@ struct ScanDraftPageAdjustmentView: View {
             .accessibilityLabel("Cancel")
 
             Button("Apply") {
-                Task {
-                    _ = await sessionViewModel.applyPageAdjustment()
-                }
+                showApplyScopeDialog = true
             }
             .buttonStyle(.borderedProminent)
             .frame(maxWidth: .infinity, minHeight: 44)
