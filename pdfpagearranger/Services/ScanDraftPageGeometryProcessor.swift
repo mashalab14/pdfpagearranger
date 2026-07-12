@@ -8,6 +8,8 @@ struct ScanPageAdjustmentSession: Equatable, Sendable {
     let sourceType: ScanPageSource
     var workingGeometry: ScanPageGeometry
     let committedGeometry: ScanPageGeometry
+    var workingVisualAdjustments: ScanVisualAdjustments
+    let committedVisualAdjustments: ScanVisualAdjustments
 }
 
 struct ScanDraftPageGeometryProcessor: Sendable {
@@ -22,6 +24,20 @@ struct ScanDraftPageGeometryProcessor: Sendable {
         geometry: ScanPageGeometry,
         sessionDirectory: URL
     ) async throws -> ScanDraftPage {
+        try await applyAdjustment(
+            to: page,
+            geometry: geometry,
+            visualAdjustments: page.visualAdjustments,
+            sessionDirectory: sessionDirectory
+        )
+    }
+
+    func applyAdjustment(
+        to page: ScanDraftPage,
+        geometry: ScanPageGeometry,
+        visualAdjustments: ScanVisualAdjustments,
+        sessionDirectory: URL
+    ) async throws -> ScanDraftPage {
         guard case .success(let validatedCorners) = ScanPageGeometryEngine.validateCorners(
             geometry.effectiveCorners ?? ScanPageGeometryEngine.fullBoundsCorners()
         ) else {
@@ -32,12 +48,16 @@ struct ScanDraftPageGeometryProcessor: Sendable {
         committedGeometry.userAdjustedCorners = validatedCorners
         committedGeometry.perspectiveCorrectionEnabled = geometry.perspectiveCorrectionEnabled
 
+        let committedVisualAdjustments = visualAdjustments.normalizedForProcessing()
         let originalData = try storage.loadImageData(at: page.originalImage, sessionDirectory: sessionDirectory)
+
         let processed = try await Task.detached(priority: .userInitiated) {
-            try ScanPerspectiveCorrectionEngine.process(
+            try ScanDraftPageImageProcessor.process(
                 sourceData: originalData,
                 geometry: committedGeometry,
-                pixelSize: page.originalPixelSize
+                visualAdjustments: committedVisualAdjustments,
+                pixelSize: page.originalPixelSize,
+                maxOutputPixelDimension: ScanDraftPageImageProcessor.fullResolutionMaxDimension
             )
         }.value
 
@@ -51,14 +71,14 @@ struct ScanDraftPageGeometryProcessor: Sendable {
 
         var updatedPage = page
         updatedPage.geometry = committedGeometry
+        updatedPage.visualAdjustments = committedVisualAdjustments
         updatedPage.processedImage = processedReference
         updatedPage.processingState = .ready
         updatedPage.processingError = nil
         updatedPage.processingFingerprint = ScanProcessingFingerprint.value(for: updatedPage)
 
-        let thumbnailData = processed.data
         let thumbnailReference = try storage.writeThumbnailImage(
-            data: thumbnailData,
+            data: processed.data,
             pageID: page.id,
             sessionDirectory: sessionDirectory
         )

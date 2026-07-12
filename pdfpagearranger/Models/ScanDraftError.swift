@@ -24,6 +24,7 @@ enum ScanDraftError: LocalizedError, Equatable {
     case draftCleanupFailure
     case invalidPageGeometry
     case perspectiveCorrectionFailure
+    case visualAdjustmentFailure
 
     var errorDescription: String? {
         switch self {
@@ -73,6 +74,8 @@ enum ScanDraftError: LocalizedError, Equatable {
             return "The selected crop area is invalid. Adjust the corners and try again."
         case .perspectiveCorrectionFailure:
             return "The page could not be corrected. Try adjusting the corners and apply again."
+        case .visualAdjustmentFailure:
+            return "The page appearance could not be updated. Try again."
         }
     }
 }

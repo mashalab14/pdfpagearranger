@@ -6,14 +6,21 @@ struct ScanDraftPageAdjustmentView: View {
 
     @State private var sourceImage: UIImage?
     @State private var imageLoadFailed = false
-    @State private var previewContainerSize: CGSize = .zero
 
     private let imageLoader = ScanDraftPreviewImageLoader()
 
     var body: some View {
         VStack(spacing: 0) {
+            sectionPicker
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+
             previewArea
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if sessionViewModel.adjustmentSection == .appearance {
+                visualControls
+            }
 
             bottomBar
         }
@@ -23,28 +30,38 @@ struct ScanDraftPageAdjustmentView: View {
         .accessibilityLabel(accessibilityPageContext)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button("Rotate") {
-                    sessionViewModel.rotateAdjustmentGeometryClockwise()
-                }
-                .accessibilityLabel("Rotate clockwise")
+                if sessionViewModel.adjustmentSection == .crop {
+                    Button("Rotate") {
+                        sessionViewModel.rotateAdjustmentGeometryClockwise()
+                    }
+                    .accessibilityLabel("Rotate clockwise")
 
-                if showsRedetectAction {
-                    Button("Redetect") {
-                        Task { await sessionViewModel.redetectDocumentEdges() }
+                    if showsRedetectAction {
+                        Button("Redetect") {
+                            Task { await sessionViewModel.redetectDocumentEdges() }
+                        }
+                        .disabled(sessionViewModel.isDetectingEdges || sessionViewModel.isApplyingGeometry)
+                        .accessibilityLabel("Redetect document")
+                    } else {
+                        Button("Reset") {
+                            sessionViewModel.resetAdjustmentGeometry()
+                        }
+                        .disabled(sessionViewModel.isDetectingEdges || sessionViewModel.isApplyingGeometry)
+                        .accessibilityLabel("Reset corners")
                     }
-                    .disabled(sessionViewModel.isDetectingEdges || sessionViewModel.isApplyingGeometry)
-                    .accessibilityLabel("Redetect document")
                 } else {
-                    Button("Reset") {
-                        sessionViewModel.resetAdjustmentGeometry()
+                    Button("Reset Visual") {
+                        sessionViewModel.resetAdjustmentVisualAdjustments()
                     }
-                    .disabled(sessionViewModel.isDetectingEdges || sessionViewModel.isApplyingGeometry)
-                    .accessibilityLabel("Reset corners")
+                    .disabled(sessionViewModel.isApplyingGeometry)
+                    .accessibilityLabel("Reset visual adjustments")
                 }
             }
         }
         .overlay {
-            if sessionViewModel.isApplyingGeometry || sessionViewModel.isDetectingEdges {
+            if sessionViewModel.isApplyingGeometry
+                || sessionViewModel.isDetectingEdges
+                || sessionViewModel.isGeneratingVisualPreview {
                 processingOverlay
             }
         }
@@ -68,6 +85,21 @@ struct ScanDraftPageAdjustmentView: View {
         .task(id: pageID) {
             await loadSourceImage()
         }
+        .onChange(of: sessionViewModel.adjustmentSection) { _, newSection in
+            if newSection == .appearance {
+                sessionViewModel.scheduleVisualPreviewUpdate()
+            }
+        }
+    }
+
+    private var sectionPicker: some View {
+        Picker("Adjustment Section", selection: $sessionViewModel.adjustmentSection) {
+            ForEach(ScanPageAdjustmentSection.allCases) { section in
+                Text(section.rawValue).tag(section)
+            }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityLabel("Adjustment section")
     }
 
     private var navigationTitle: String {
@@ -94,8 +126,11 @@ struct ScanDraftPageAdjustmentView: View {
             ZStack {
                 Color(.secondarySystemBackground)
 
-                if let sourceImage,
-                   sessionViewModel.adjustmentSession != nil {
+                if sessionViewModel.adjustmentSection == .appearance,
+                   let previewImage = sessionViewModel.visualPreviewImage {
+                    fittedImage(previewImage, in: geometry.size)
+                } else if let sourceImage,
+                          sessionViewModel.adjustmentSession != nil {
                     let displayRect = ScanPageGeometryEngine.aspectFitDisplayRect(
                         imageSize: sourceImage.size,
                         in: geometry.size
@@ -125,14 +160,175 @@ struct ScanDraftPageAdjustmentView: View {
                     ProgressView("Loading page…")
                 }
             }
-            .onAppear {
-                previewContainerSize = geometry.size
-            }
-            .onChange(of: geometry.size) { _, newSize in
-                previewContainerSize = newSize
-            }
         }
         .padding(16)
+    }
+
+    @ViewBuilder
+    private var visualControls: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                modeSelector
+                brightnessControl
+                contrastControl
+                if showsSaturationControl {
+                    saturationControl
+                }
+                if showsThresholdControl {
+                    thresholdControl
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .frame(maxHeight: 280)
+        .background(.bar)
+    }
+
+    private var modeSelector: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Mode")
+                .font(.subheadline.weight(.semibold))
+
+            Picker("Visual Mode", selection: modeBinding) {
+                ForEach(ScanVisualMode.allCases, id: \.self) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityLabel("Visual mode")
+        }
+    }
+
+    private var brightnessControl: some View {
+        adjustmentSlider(
+            title: "Brightness",
+            value: brightnessBinding,
+            range: ScanVisualAdjustments.minimumAdjustmentValue...ScanVisualAdjustments.maximumAdjustmentValue,
+            accessibilityFormat: "Brightness"
+        )
+    }
+
+    private var contrastControl: some View {
+        adjustmentSlider(
+            title: "Contrast",
+            value: contrastBinding,
+            range: ScanVisualAdjustments.minimumAdjustmentValue...ScanVisualAdjustments.maximumAdjustmentValue,
+            accessibilityFormat: "Contrast"
+        )
+    }
+
+    private var saturationControl: some View {
+        adjustmentSlider(
+            title: "Saturation",
+            value: saturationBinding,
+            range: -0.5...0.5,
+            accessibilityFormat: "Saturation"
+        )
+    }
+
+    private var thresholdControl: some View {
+        adjustmentSlider(
+            title: "Threshold",
+            value: thresholdBinding,
+            range: ScanVisualAdjustments.minimumBlackAndWhiteThreshold...ScanVisualAdjustments.maximumBlackAndWhiteThreshold,
+            accessibilityFormat: "Black and white threshold"
+        )
+    }
+
+    private var showsSaturationControl: Bool {
+        workingVisualAdjustments.mode.supportsSaturationControl
+    }
+
+    private var showsThresholdControl: Bool {
+        workingVisualAdjustments.mode.supportsThresholdControl
+    }
+
+    private var workingVisualAdjustments: ScanVisualAdjustments {
+        sessionViewModel.adjustmentSession?.workingVisualAdjustments ?? .neutral
+    }
+
+    private var modeBinding: Binding<ScanVisualMode> {
+        Binding(
+            get: { workingVisualAdjustments.mode },
+            set: { newMode in
+                var adjustments = workingVisualAdjustments
+                adjustments.mode = newMode
+                if !newMode.supportsSaturationControl {
+                    adjustments.saturation = nil
+                }
+                if newMode.supportsThresholdControl, adjustments.blackAndWhiteThreshold == nil {
+                    adjustments.blackAndWhiteThreshold = ScanVisualAdjustments.defaultBlackAndWhiteThreshold
+                }
+                sessionViewModel.updateAdjustmentWorkingVisualAdjustments(adjustments)
+            }
+        )
+    }
+
+    private var brightnessBinding: Binding<Double> {
+        Binding(
+            get: { Double(workingVisualAdjustments.brightness) },
+            set: { value in
+                var adjustments = workingVisualAdjustments
+                adjustments.brightness = CGFloat(value)
+                sessionViewModel.updateAdjustmentWorkingVisualAdjustments(adjustments)
+            }
+        )
+    }
+
+    private var contrastBinding: Binding<Double> {
+        Binding(
+            get: { Double(workingVisualAdjustments.contrast) },
+            set: { value in
+                var adjustments = workingVisualAdjustments
+                adjustments.contrast = CGFloat(value)
+                sessionViewModel.updateAdjustmentWorkingVisualAdjustments(adjustments)
+            }
+        )
+    }
+
+    private var saturationBinding: Binding<Double> {
+        Binding(
+            get: { Double(workingVisualAdjustments.saturation ?? 0) },
+            set: { value in
+                var adjustments = workingVisualAdjustments
+                adjustments.saturation = CGFloat(value)
+                sessionViewModel.updateAdjustmentWorkingVisualAdjustments(adjustments)
+            }
+        )
+    }
+
+    private var thresholdBinding: Binding<Double> {
+        Binding(
+            get: { Double(workingVisualAdjustments.resolvedBlackAndWhiteThreshold) },
+            set: { value in
+                var adjustments = workingVisualAdjustments
+                adjustments.blackAndWhiteThreshold = CGFloat(value)
+                sessionViewModel.updateAdjustmentWorkingVisualAdjustments(adjustments)
+            }
+        )
+    }
+
+    private func adjustmentSlider(
+        title: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        accessibilityFormat: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text(String(format: "%.2f", value.wrappedValue))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            Slider(value: value, in: range)
+                .accessibilityLabel(accessibilityFormat)
+                .accessibilityValue(Text(String(format: "%.2f", value.wrappedValue)))
+        }
     }
 
     private var bottomBar: some View {
@@ -163,10 +359,34 @@ struct ScanDraftPageAdjustmentView: View {
     private var processingOverlay: some View {
         ZStack {
             Color.black.opacity(0.2).ignoresSafeArea()
-            ProgressView(sessionViewModel.isApplyingGeometry ? "Applying correction…" : "Detecting document…")
+            ProgressView(processingMessage)
                 .padding(24)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
         }
+        .accessibilityLabel(processingMessage)
+    }
+
+    private var processingMessage: String {
+        if sessionViewModel.isApplyingGeometry {
+            return "Applying changes…"
+        }
+        if sessionViewModel.isDetectingEdges {
+            return "Detecting document…"
+        }
+        return "Updating preview…"
+    }
+
+    private func fittedImage(_ image: UIImage, in containerSize: CGSize) -> some View {
+        let displayRect = ScanPageGeometryEngine.aspectFitDisplayRect(
+            imageSize: image.size,
+            in: containerSize
+        )
+
+        return Image(uiImage: image)
+            .resizable()
+            .scaledToFit()
+            .frame(width: displayRect.width, height: displayRect.height)
+            .position(x: displayRect.midX, y: displayRect.midY)
     }
 
     private func loadSourceImage() async {
@@ -186,6 +406,7 @@ struct ScanDraftPageAdjustmentView: View {
                 maxPixelDimension: 1_600
             )
             sourceImage = image
+            sessionViewModel.scheduleVisualPreviewUpdate()
         } catch {
             imageLoadFailed = true
         }

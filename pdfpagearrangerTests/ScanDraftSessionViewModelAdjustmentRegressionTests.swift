@@ -43,6 +43,7 @@ final class ScanDraftSessionViewModelAdjustmentRegressionTests: XCTestCase {
         await importPhotos(count: 1)
         let pageID = try XCTUnwrap(viewModel.document?.pages.first?.id)
         let beforeGeometry = viewModel.document?.pages.first?.geometry
+        let beforeVisualAdjustments = viewModel.document?.pages.first?.visualAdjustments
 
         await viewModel.preparePageAdjustment(pageID: pageID)
         viewModel.updateAdjustmentWorkingGeometry(
@@ -51,11 +52,15 @@ final class ScanDraftSessionViewModelAdjustmentRegressionTests: XCTestCase {
                 perspectiveCorrectionEnabled: true
             )
         )
+        var visual = ScanVisualAdjustments.neutral
+        visual.mode = .grayscale
+        viewModel.updateAdjustmentWorkingVisualAdjustments(visual)
         viewModel.navigateToPageAdjustment(pageID: pageID)
         viewModel.cancelPageAdjustment()
 
         XCTAssertNil(viewModel.adjustmentSession)
         XCTAssertEqual(viewModel.document?.pages.first?.geometry, beforeGeometry)
+        XCTAssertEqual(viewModel.document?.pages.first?.visualAdjustments, beforeVisualAdjustments)
         XCTAssertEqual(viewModel.navigationPath, [.draftReview])
     }
 

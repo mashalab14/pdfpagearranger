@@ -17,6 +17,9 @@ final class ScanDraftSessionViewModel {
     private(set) var adjustmentSession: ScanPageAdjustmentSession?
     private(set) var isApplyingGeometry = false
     private(set) var isDetectingEdges = false
+    private(set) var isGeneratingVisualPreview = false
+    private(set) var visualPreviewImage: UIImage?
+    var adjustmentSection: ScanPageAdjustmentSection = .appearance
     var isDocumentScannerPresented = false
     var errorMessage: String?
 
@@ -40,7 +43,9 @@ final class ScanDraftSessionViewModel {
     private var photosImportCancellationFlag: ScanImportCancellationFlag?
     private var geometryApplyOperationID: UUID?
     private var edgeDetectionOperationID: UUID?
+    private var visualPreviewOperationID: UUID?
     private var geometryApplyTask: Task<Void, Never>?
+    private var visualPreviewTask: Task<Void, Never>?
 
     init(
         storage: ScanDraftSessionStorage = ScanDraftSessionStorage(),
@@ -125,8 +130,13 @@ final class ScanDraftSessionViewModel {
         isDetectingEdges = false
         geometryApplyOperationID = nil
         edgeDetectionOperationID = nil
+        visualPreviewOperationID = nil
         geometryApplyTask?.cancel()
         geometryApplyTask = nil
+        visualPreviewTask?.cancel()
+        visualPreviewTask = nil
+        visualPreviewImage = nil
+        adjustmentSection = .appearance
         return true
     }
 
@@ -180,8 +190,11 @@ final class ScanDraftSessionViewModel {
             totalPages: draft.pages.count,
             sourceType: page.sourceType,
             workingGeometry: workingGeometry,
-            committedGeometry: page.geometry
+            committedGeometry: page.geometry,
+            workingVisualAdjustments: page.visualAdjustments,
+            committedVisualAdjustments: page.visualAdjustments
         )
+        visualPreviewImage = nil
 
         if page.sourceType == .photos,
            page.geometry.userAdjustedCorners == nil,
@@ -193,18 +206,88 @@ final class ScanDraftSessionViewModel {
             session.workingGeometry.perspectiveCorrectionEnabled = page.sourceType == .photos
             adjustmentSession = session
         }
+
+        scheduleVisualPreviewUpdate()
     }
 
     func updateAdjustmentWorkingGeometry(_ geometry: ScanPageGeometry) {
         guard var session = adjustmentSession else { return }
         session.workingGeometry = geometry
         adjustmentSession = session
+        scheduleVisualPreviewUpdate()
+    }
+
+    func updateAdjustmentWorkingVisualAdjustments(_ adjustments: ScanVisualAdjustments) {
+        guard var session = adjustmentSession else { return }
+        session.workingVisualAdjustments = adjustments.normalizedForProcessing()
+        adjustmentSession = session
+        scheduleVisualPreviewUpdate()
+    }
+
+    func resetAdjustmentVisualAdjustments() {
+        guard var session = adjustmentSession else { return }
+        session.workingVisualAdjustments = .neutral
+        adjustmentSession = session
+        scheduleVisualPreviewUpdate()
+    }
+
+    func scheduleVisualPreviewUpdate() {
+        visualPreviewTask?.cancel()
+        visualPreviewTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.generateVisualPreview()
+        }
+    }
+
+    func generateVisualPreview() async {
+        guard let session = adjustmentSession else { return }
+        guard let sessionDirectory = sessionDirectory else { return }
+        guard let page = document?.pages.first(where: { $0.id == session.pageID }) else { return }
+
+        let operationID = UUID()
+        visualPreviewOperationID = operationID
+        isGeneratingVisualPreview = true
+
+        let geometry = session.workingGeometry
+        let visualAdjustments = session.workingVisualAdjustments.normalizedForProcessing()
+        let pageID = session.pageID
+        let draftID = session.draftID
+
+        do {
+            let originalData = try storage.loadImageData(at: page.originalImage, sessionDirectory: sessionDirectory)
+            let previewData = try await Task.detached(priority: .userInitiated) {
+                try ScanDraftPageImageProcessor.process(
+                    sourceData: originalData,
+                    geometry: geometry,
+                    visualAdjustments: visualAdjustments,
+                    pixelSize: page.originalPixelSize,
+                    maxOutputPixelDimension: ScanDraftPageImageProcessor.previewMaxDimension
+                ).data
+            }.value
+
+            guard visualPreviewOperationID == operationID,
+                  adjustmentSession?.pageID == pageID,
+                  document?.id == draftID,
+                  let image = UIImage(data: previewData) else {
+                return
+            }
+
+            visualPreviewImage = image
+        } catch {
+            guard visualPreviewOperationID == operationID else { return }
+        }
+
+        if visualPreviewOperationID == operationID {
+            isGeneratingVisualPreview = false
+        }
     }
 
     func rotateAdjustmentGeometryClockwise() {
         guard var session = adjustmentSession else { return }
         session.workingGeometry = session.workingGeometry.rotated()
         adjustmentSession = session
+        scheduleVisualPreviewUpdate()
     }
 
     func resetAdjustmentGeometry() {
@@ -216,6 +299,7 @@ final class ScanDraftSessionViewModel {
         }
         session.workingGeometry = geometry
         adjustmentSession = session
+        scheduleVisualPreviewUpdate()
     }
 
     func redetectDocumentEdges() async {
@@ -239,6 +323,7 @@ final class ScanDraftSessionViewModel {
                 session.workingGeometry.userAdjustedCorners = ScanPageGeometryEngine.fullBoundsCorners()
                 session.workingGeometry.perspectiveCorrectionEnabled = session.sourceType == .photos
                 adjustmentSession = session
+                scheduleVisualPreviewUpdate()
                 return
             }
 
@@ -247,22 +332,29 @@ final class ScanDraftSessionViewModel {
             session.workingGeometry.userAdjustedCorners = detection.corners
             session.workingGeometry.perspectiveCorrectionEnabled = true
             adjustmentSession = session
+            scheduleVisualPreviewUpdate()
         } catch {
             guard edgeDetectionOperationID == operationID else { return }
             session.workingGeometry.detectedCorners = ScanPageGeometryEngine.fullBoundsCorners()
             session.workingGeometry.userAdjustedCorners = ScanPageGeometryEngine.fullBoundsCorners()
             session.workingGeometry.perspectiveCorrectionEnabled = session.sourceType == .photos
             adjustmentSession = session
+            scheduleVisualPreviewUpdate()
         }
     }
 
     func cancelPageAdjustment() {
         geometryApplyTask?.cancel()
+        visualPreviewTask?.cancel()
         geometryApplyOperationID = nil
         edgeDetectionOperationID = nil
+        visualPreviewOperationID = nil
         adjustmentSession = nil
+        visualPreviewImage = nil
         isApplyingGeometry = false
         isDetectingEdges = false
+        isGeneratingVisualPreview = false
+        adjustmentSection = .appearance
         navigateToDraftReview()
     }
 
@@ -279,13 +371,15 @@ final class ScanDraftSessionViewModel {
 
         let page = draft.pages[pageIndex]
         let geometry = session.workingGeometry
+        let visualAdjustments = session.workingVisualAdjustments.normalizedForProcessing()
         let processor = geometryProcessor
 
         do {
             let updatedPage = try await Task.detached(priority: .userInitiated) {
-                try await processor.applyGeometry(
+                try await processor.applyAdjustment(
                     to: page,
                     geometry: geometry,
+                    visualAdjustments: visualAdjustments,
                     sessionDirectory: sessionDirectory
                 )
             }.value
@@ -296,6 +390,7 @@ final class ScanDraftSessionViewModel {
 
             draft.updatePage(id: session.pageID) { existing in
                 existing.geometry = updatedPage.geometry
+                existing.visualAdjustments = updatedPage.visualAdjustments
                 existing.processedImage = updatedPage.processedImage
                 existing.thumbnailImage = updatedPage.thumbnailImage
                 existing.thumbnailState = updatedPage.thumbnailState
@@ -305,6 +400,9 @@ final class ScanDraftSessionViewModel {
             }
             draft.selectPage(id: session.pageID)
             document = draft
+            visualPreviewTask?.cancel()
+            visualPreviewOperationID = nil
+            visualPreviewImage = nil
             adjustmentSession = nil
             isApplyingGeometry = false
             geometryApplyOperationID = nil
@@ -318,7 +416,7 @@ final class ScanDraftSessionViewModel {
             return false
         } catch {
             guard geometryApplyOperationID == operationID else { return false }
-            errorMessage = ScanDraftError.perspectiveCorrectionFailure.localizedDescription
+            errorMessage = ScanDraftError.visualAdjustmentFailure.localizedDescription
             isApplyingGeometry = false
             geometryApplyOperationID = nil
             return false

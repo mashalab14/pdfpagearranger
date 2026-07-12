@@ -10,33 +10,20 @@ enum ScanPerspectiveCorrectionEngine {
         geometry: ScanPageGeometry,
         pixelSize: CGSize
     ) throws -> (data: Data, outputSize: CGSize) {
-        guard let sourceImage = UIImage(data: sourceData) else {
-            throw ScanDraftError.imageCannotBeLoaded
-        }
-
-        let normalizedSource = ScanWorkingImageEncoder.orientationNormalizedImage(from: sourceImage) ?? sourceImage
-        let imageSize = normalizedSource.size
-
-        guard let correctedImage = try correctedUIImage(
-            from: normalizedSource,
+        try ScanDraftPageImageProcessor.process(
+            sourceData: sourceData,
             geometry: geometry,
-            imageSize: imageSize
-        ) else {
-            throw ScanDraftError.processingFailure(stage: .applyPerspectiveCorrection)
-        }
-
-        let data = try ScanWorkingImageEncoder.normalizedJPEGData(
-            from: correctedImage,
-            compressionQuality: processedJPEGQuality
+            visualAdjustments: .neutral,
+            pixelSize: pixelSize,
+            maxOutputPixelDimension: maxOutputPixelDimension
         )
-        return (data, correctedImage.size)
     }
 
-    private static func correctedUIImage(
+    static func correctedCIImage(
         from sourceImage: UIImage,
         geometry: ScanPageGeometry,
         imageSize: CGSize
-    ) throws -> UIImage? {
+    ) throws -> CIImage {
         guard let cgImage = sourceImage.cgImage else {
             throw ScanDraftError.imageCannotBeLoaded
         }
@@ -56,9 +43,30 @@ enum ScanPerspectiveCorrectionEngine {
             workingImage = ciImage
         }
 
-        let rotated = rotatedImage(workingImage, rotation: geometry.rotation)
-        let scaled = scaledImageIfNeeded(rotated)
-        return renderUIImage(from: scaled)
+        return rotatedImage(workingImage, rotation: geometry.rotation)
+    }
+
+    static func scaledImageIfNeeded(
+        _ image: CIImage,
+        maxOutputPixelDimension: CGFloat = maxOutputPixelDimension
+    ) -> CIImage {
+        let extent = image.extent
+        let maxDimension = max(extent.width, extent.height)
+        guard maxDimension > maxOutputPixelDimension, maxDimension > 0 else {
+            return image
+        }
+
+        let scale = maxOutputPixelDimension / maxDimension
+        return image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+    }
+
+    static func renderUIImage(from image: CIImage) -> UIImage? {
+        let context = CIContext(options: nil)
+        let extent = image.extent.integral
+        guard let cgImage = context.createCGImage(image, from: extent) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage)
     }
 
     private static func perspectiveCorrectedImage(
@@ -115,25 +123,5 @@ enum ScanPerspectiveCorrectionEngine {
         }
 
         return image.transformed(by: transform)
-    }
-
-    private static func scaledImageIfNeeded(_ image: CIImage) -> CIImage {
-        let extent = image.extent
-        let maxDimension = max(extent.width, extent.height)
-        guard maxDimension > maxOutputPixelDimension, maxDimension > 0 else {
-            return image
-        }
-
-        let scale = maxOutputPixelDimension / maxDimension
-        return image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-    }
-
-    private static func renderUIImage(from image: CIImage) -> UIImage? {
-        let context = CIContext(options: nil)
-        let extent = image.extent.integral
-        guard let cgImage = context.createCGImage(image, from: extent) else {
-            return nil
-        }
-        return UIImage(cgImage: cgImage)
     }
 }

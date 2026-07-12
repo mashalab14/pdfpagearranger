@@ -147,7 +147,7 @@ actor ScanPageProcessingOrchestrator {
         for page: inout ScanDraftPage,
         sessionDirectory: URL
     ) async throws {
-        let outputData = try await generateGeometryProcessedData(for: page, sessionDirectory: sessionDirectory)
+        let outputData = try await generateProcessedData(for: page, sessionDirectory: sessionDirectory)
         let processedReference = try storage.replaceProcessedImage(
             data: outputData,
             pageID: page.id,
@@ -157,24 +157,26 @@ actor ScanPageProcessingOrchestrator {
         page.processedImage = processedReference
     }
 
-    private func generateGeometryProcessedData(
+    private func generateProcessedData(
         for page: ScanDraftPage,
         sessionDirectory: URL
     ) async throws -> Data {
         let originalData = try storage.loadImageData(at: page.originalImage, sessionDirectory: sessionDirectory)
-        let needsProcessing = page.geometry.perspectiveCorrectionEnabled
-            || page.geometry.rotation != 0
-            || page.geometry.effectiveCorners != nil
 
-        guard needsProcessing else {
+        guard ScanDraftPageImageProcessor.needsProcessing(
+            geometry: page.geometry,
+            visualAdjustments: page.visualAdjustments
+        ) else {
             return originalData
         }
 
         return try await Task.detached(priority: .userInitiated) {
-            try ScanPerspectiveCorrectionEngine.process(
+            try ScanDraftPageImageProcessor.process(
                 sourceData: originalData,
                 geometry: page.geometry,
-                pixelSize: page.originalPixelSize
+                visualAdjustments: page.visualAdjustments.normalizedForProcessing(),
+                pixelSize: page.originalPixelSize,
+                maxOutputPixelDimension: ScanDraftPageImageProcessor.fullResolutionMaxDimension
             ).data
         }.value
     }
