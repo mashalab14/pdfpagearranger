@@ -1,4 +1,5 @@
 import Foundation
+import PDFKit
 import UIKit
 
 /// File-backed storage for scan draft sessions.
@@ -14,6 +15,7 @@ final class ScanDraftSessionStorage: Sendable {
     static let originalsDirectoryName = "originals"
     static let processedDirectoryName = "processed"
     static let thumbnailsDirectoryName = "thumbnails"
+    static let generatedDirectoryName = "generated"
 
     private let fileManager: FileManager
     private let sessionsRoot: URL
@@ -39,7 +41,8 @@ final class ScanDraftSessionStorage: Sendable {
         for subdirectory in [
             Self.originalsDirectoryName,
             Self.processedDirectoryName,
-            Self.thumbnailsDirectoryName
+            Self.thumbnailsDirectoryName,
+            Self.generatedDirectoryName
         ] {
             try fileManager.createDirectory(
                 at: directory.appendingPathComponent(subdirectory, isDirectory: true),
@@ -164,6 +167,57 @@ final class ScanDraftSessionStorage: Sendable {
             throw ScanDraftError.imageCannotBeLoaded
         }
         return try Data(contentsOf: url)
+    }
+
+    func deleteGeneratedPDFStaging(in sessionDirectory: URL) {
+        let generatedDirectory = sessionDirectory
+            .appendingPathComponent(Self.generatedDirectoryName, isDirectory: true)
+        guard fileManager.fileExists(atPath: generatedDirectory.path) else { return }
+
+        if let files = try? fileManager.contentsOfDirectory(
+            at: generatedDirectory,
+            includingPropertiesForKeys: nil
+        ) {
+            for file in files where file.lastPathComponent.hasSuffix(".staging.pdf") {
+                try? fileManager.removeItem(at: file)
+            }
+        }
+    }
+
+    func writeGeneratedPDF(
+        _ document: PDFDocument,
+        sessionDirectory: URL,
+        fileName: String
+    ) throws -> URL {
+        let generatedDirectory = sessionDirectory
+            .appendingPathComponent(Self.generatedDirectoryName, isDirectory: true)
+        try fileManager.createDirectory(at: generatedDirectory, withIntermediateDirectories: true)
+
+        let stagingURL = generatedDirectory.appendingPathComponent("\(fileName).staging.pdf")
+        let finalURL = generatedDirectory.appendingPathComponent("\(fileName).pdf")
+
+        try? fileManager.removeItem(at: stagingURL)
+
+        guard document.write(to: stagingURL) else {
+            try? fileManager.removeItem(at: stagingURL)
+            throw ScanDraftError.pdfGenerationFailure
+        }
+
+        do {
+            if fileManager.fileExists(atPath: finalURL.path) {
+                try fileManager.removeItem(at: finalURL)
+            }
+            try fileManager.moveItem(at: stagingURL, to: finalURL)
+        } catch {
+            try? fileManager.removeItem(at: stagingURL)
+            if (error as NSError).domain == NSPOSIXErrorDomain,
+               (error as NSError).code == Int(POSIXErrorCode.ENOSPC.rawValue) {
+                throw ScanDraftError.insufficientStorage
+            }
+            throw ScanDraftError.pdfGenerationFailure
+        }
+
+        return finalURL
     }
 
     func deleteSession(for documentID: UUID) throws {

@@ -39,7 +39,10 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showScanDraftFlow) {
             ScanDraftRootView(
                 sessionViewModel: scanSessionViewModel,
-                editorViewModel: viewModel
+                editorViewModel: viewModel,
+                onEditorHandoffSucceeded: {
+                    showScanDraftFlow = false
+                }
             )
         }
         .fileImporter(

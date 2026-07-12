@@ -5,6 +5,7 @@ import SwiftUI
 struct ScanDraftRootView: View {
     @Bindable var sessionViewModel: ScanDraftSessionViewModel
     @Bindable var editorViewModel: PDFEditorViewModel
+    let onEditorHandoffSucceeded: () -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -17,7 +18,10 @@ struct ScanDraftRootView: View {
                 destination(for: route)
             }
         }
-        .interactiveDismissDisabled(sessionViewModel.document?.hasUnsavedChanges == true)
+        .interactiveDismissDisabled(
+            sessionViewModel.document?.hasUnsavedChanges == true
+            || sessionViewModel.isGeneratingPDF
+        )
     }
 
     @ViewBuilder
@@ -54,7 +58,9 @@ struct ScanDraftRootView: View {
         case .draftReview:
             ScanDraftReviewView(
                 sessionViewModel: sessionViewModel,
-                onClose: dismissReview
+                editorViewModel: editorViewModel,
+                onClose: dismissReview,
+                onPDFHandoffSucceeded: handleEditorHandoffSucceeded
             )
 
         case .pageAdjustment(let pageID):
@@ -64,11 +70,13 @@ struct ScanDraftRootView: View {
             )
 
         case .pdfGenerationProgress:
-            ScanDraftPDFProgressPlaceholderView(
-                isGenerating: sessionViewModel.isGeneratingPDF,
-                onClose: { sessionViewModel.navigateToDraftReview() }
-            )
+            ScanDraftPDFGenerationProgressView(sessionViewModel: sessionViewModel)
         }
+    }
+
+    private func handleEditorHandoffSucceeded() {
+        sessionViewModel.navigateToDraftReview()
+        onEditorHandoffSucceeded()
     }
 
     private func startFlow() {
@@ -158,25 +166,5 @@ private struct ScanDraftSourceSelectionView: View {
         } message: {
             Text(sessionViewModel.errorMessage ?? "")
         }
-    }
-}
-
-private struct ScanDraftPDFProgressPlaceholderView: View {
-    let isGenerating: Bool
-    let onClose: () -> Void
-
-    var body: some View {
-        VStack(spacing: 12) {
-            if isGenerating {
-                ProgressView("Generating PDF…")
-            } else {
-                Text("PDF generation UI will appear here.")
-                    .foregroundStyle(.secondary)
-            }
-            Button("Back", action: onClose)
-        }
-        .padding()
-        .navigationTitle("Create PDF")
-        .navigationBarTitleDisplayMode(.inline)
     }
 }

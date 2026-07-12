@@ -3,7 +3,9 @@ import UniformTypeIdentifiers
 
 struct ScanDraftReviewView: View {
     @Bindable var sessionViewModel: ScanDraftSessionViewModel
+    @Bindable var editorViewModel: PDFEditorViewModel
     let onClose: () -> Void
+    let onPDFHandoffSucceeded: () -> Void
 
     @State private var showAddPagesDialog = false
     @State private var showDiscardConfirmation = false
@@ -16,11 +18,15 @@ struct ScanDraftReviewView: View {
 
     init(
         sessionViewModel: ScanDraftSessionViewModel,
+        editorViewModel: PDFEditorViewModel,
         onClose: @escaping () -> Void,
+        onPDFHandoffSucceeded: @escaping () -> Void,
         imageLoader: ScanDraftPreviewImageLoader = ScanDraftPreviewImageLoader()
     ) {
         self.sessionViewModel = sessionViewModel
+        self.editorViewModel = editorViewModel
         self.onClose = onClose
+        self.onPDFHandoffSucceeded = onPDFHandoffSucceeded
         self.imageLoader = imageLoader
     }
 
@@ -93,10 +99,22 @@ struct ScanDraftReviewView: View {
                     .disabled(sessionViewModel.isBatchProcessing)
                     .accessibilityLabel("Enter Selection Mode")
                 }
-                Button("Create PDF") {}
-                    .disabled(true)
-                    .accessibilityLabel("Create PDF")
-                    .accessibilityHint("PDF generation is not available yet.")
+                Button("Create PDF") {
+                    sessionViewModel.createPDFAndOpenEditor(
+                        editorViewModel: editorViewModel,
+                        onSuccess: onPDFHandoffSucceeded
+                    )
+                }
+                .disabled(
+                    sessionViewModel.document?.isEmpty != false
+                    || sessionViewModel.isGeneratingPDF
+                    || sessionViewModel.isBatchProcessing
+                    || sessionViewModel.isImportingCameraScan
+                    || sessionViewModel.isImportingPhotos
+                )
+                .accessibilityLabel("Create PDF")
+                .accessibilityIdentifier("createDraftPDFButton")
+                .accessibilityHint("Generates a PDF from the current draft and opens it in the editor.")
             }
         }
         .safeAreaInset(edge: .bottom) {

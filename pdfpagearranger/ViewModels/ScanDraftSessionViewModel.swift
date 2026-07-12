@@ -23,6 +23,7 @@ final class ScanDraftSessionViewModel {
     private(set) var batchSelectionPageIDs: Set<UUID> = []
     private(set) var batchProgress: ScanDraftVisualBatchProgress = .idle
     private(set) var isBatchProcessing = false
+    private(set) var pdfGenerationProgress: ScanDraftPDFGenerationProgress = .idle
     var adjustmentSection: ScanPageAdjustmentSection = .appearance
     var isDocumentScannerPresented = false
     var errorMessage: String?
@@ -54,11 +55,12 @@ final class ScanDraftSessionViewModel {
     private var batchOperationID: UUID?
     private var batchCancellationFlag: ScanImportCancellationFlag?
     private var batchTask: Task<Void, Never>?
+    private var pdfGenerationTask: Task<Void, Never>?
 
     init(
         storage: ScanDraftSessionStorage = ScanDraftSessionStorage(),
-        processingOrchestrator: ScanPageProcessingOrchestrator = ScanPageProcessingOrchestrator(),
-        pdfGenerator: any ScanDraftPDFGenerating = UnimplementedScanDraftPDFGenerator(),
+        processingOrchestrator: ScanPageProcessingOrchestrator? = nil,
+        pdfGenerator: (any ScanDraftPDFGenerating)? = nil,
         editorHandoff: ScanEditorHandoffService? = nil,
         cameraScanImporter: ScanCameraScanImporter? = nil,
         photosSelectionImporter: ScanPhotosSelectionImporter? = nil,
@@ -69,8 +71,12 @@ final class ScanDraftSessionViewModel {
         scannerAvailability: (any ScanDocumentScannerAvailabilityChecking)? = nil
     ) {
         self.storage = storage
-        self.processingOrchestrator = processingOrchestrator
-        self.pdfGenerator = pdfGenerator
+        let orchestrator = processingOrchestrator ?? ScanPageProcessingOrchestrator(storage: storage)
+        self.processingOrchestrator = orchestrator
+        self.pdfGenerator = pdfGenerator ?? ScanDraftPDFGenerator(
+            storage: storage,
+            processingOrchestrator: orchestrator
+        )
         self.editorHandoff = editorHandoff ?? ScanEditorHandoffService()
         self.cameraScanImporter = cameraScanImporter ?? ScanCameraScanImporter(storage: storage)
         self.photosSelectionImporter = photosSelectionImporter ?? ScanPhotosSelectionImporter(storage: storage)
@@ -151,6 +157,10 @@ final class ScanDraftSessionViewModel {
         batchCancellationFlag = nil
         batchProgress = .idle
         isBatchProcessing = false
+        pdfGenerationTask?.cancel()
+        pdfGenerationTask = nil
+        pdfGenerationProgress = .idle
+        isGeneratingPDF = false
         isMultiSelectionMode = false
         batchSelectionPageIDs = []
         visualPreviewImage = nil
@@ -1414,30 +1424,44 @@ final class ScanDraftSessionViewModel {
 
     // MARK: - PDF generation and editor handoff
 
-    func generatePDF(displayName: String = "Scanned Document") async throws -> URL {
+    func createPDFAndOpenEditor(
+        editorViewModel: PDFEditorViewModel,
+        displayName: String = "Scanned Document",
+        onSuccess: @escaping () -> Void
+    ) {
+        guard !isGeneratingPDF else { return }
         guard let draft = document, !draft.isEmpty else {
-            throw ScanDraftError.emptyDraft
-        }
-        guard let sessionDirectory = sessionDirectory else {
-            throw ScanDraftError.sessionNotFound
+            errorMessage = ScanDraftError.emptyDraft.localizedDescription
+            return
         }
 
+        pdfGenerationTask?.cancel()
+        pdfGenerationTask = Task { [weak self] in
+            await self?.performPDFCreationAndHandoff(
+                editorViewModel: editorViewModel,
+                displayName: displayName,
+                onSuccess: onSuccess
+            )
+        }
+    }
+
+    func cancelPDFGeneration() {
+        guard isGeneratingPDF else { return }
+        pdfGenerationProgress.isCancelling = true
+        pdfGenerationTask?.cancel()
+    }
+
+    func generatePDF(displayName: String = "Scanned Document") async throws -> URL {
         isGeneratingPDF = true
         navigateToPDFGenerationProgress()
         defer { isGeneratingPDF = false }
 
-        document?.processingStatus = .generatingPDF
-
-        let pdfURL = try await pdfGenerator.generatePDF(
-            from: draft.pages,
-            sessionDirectory: sessionDirectory,
-            displayName: displayName
-        )
-
-        document?.generatedPDFURL = pdfURL
-        document?.processingStatus = .pdfReady
-        document?.hasUnsavedChanges = false
-        return pdfURL
+        do {
+            return try await buildPDFFile(displayName: displayName)
+        } catch {
+            cleanupFailedPDFGeneration()
+            throw error
+        }
     }
 
     func handoffToEditor(editorViewModel: PDFEditorViewModel) async throws {
@@ -1445,14 +1469,93 @@ final class ScanDraftSessionViewModel {
             throw ScanDraftError.pdfGenerationFailure
         }
 
-        let sessionID = document?.id
+        pdfGenerationProgress = ScanDraftPDFGenerationProgress(
+            phase: .openingEditor,
+            currentPage: pdfGenerationProgress.totalPages,
+            totalPages: pdfGenerationProgress.totalPages,
+            isCancelling: false
+        )
         try await editorHandoff.handoff(pdfURL: pdfURL, to: editorViewModel)
+    }
 
-        if let sessionID {
-            try? storage.deleteSession(for: sessionID)
+    private func performPDFCreationAndHandoff(
+        editorViewModel: PDFEditorViewModel,
+        displayName: String,
+        onSuccess: @escaping () -> Void
+    ) async {
+        let totalPages = document?.pages.count ?? 0
+        isGeneratingPDF = true
+        navigateToPDFGenerationProgress()
+        pdfGenerationProgress = ScanDraftPDFGenerationProgress(
+            phase: .preparingPages,
+            currentPage: 0,
+            totalPages: totalPages,
+            isCancelling: false
+        )
+        errorMessage = nil
+        defer {
+            isGeneratingPDF = false
+            pdfGenerationTask = nil
         }
-        document = nil
-        navigationPath = []
+
+        do {
+            _ = try await buildPDFFile(displayName: displayName)
+            try await handoffToEditor(editorViewModel: editorViewModel)
+            pdfGenerationProgress = .idle
+            onSuccess()
+        } catch is CancellationError {
+            cleanupFailedPDFGeneration()
+            navigateToDraftReview()
+        } catch {
+            errorMessage = (error as? ScanDraftError)?.localizedDescription ?? error.localizedDescription
+            cleanupFailedPDFGeneration()
+            navigateToDraftReview()
+        }
+    }
+
+    private func buildPDFFile(displayName: String) async throws -> URL {
+        guard let draft = document, !draft.isEmpty else {
+            throw ScanDraftError.emptyDraft
+        }
+        guard let sessionDirectory = sessionDirectory else {
+            throw ScanDraftError.sessionNotFound
+        }
+
+        document?.processingStatus = .generatingPDF
+
+        let pdfURL = try await pdfGenerator.generatePDF(
+            from: draft.pages,
+            sessionDirectory: sessionDirectory,
+            displayName: displayName,
+            onProgress: { [weak self] update in
+                Task { @MainActor in
+                    self?.pdfGenerationProgress = ScanDraftPDFGenerationProgress(
+                        phase: update.phase,
+                        currentPage: update.currentPage,
+                        totalPages: update.totalPages,
+                        isCancelling: self?.pdfGenerationProgress.isCancelling ?? false
+                    )
+                }
+            },
+            onPagePrepared: { [weak self] page in
+                Task { @MainActor in
+                    self?.mergeProcessedPage(page)
+                }
+            }
+        )
+
+        document?.generatedPDFURL = pdfURL
+        document?.processingStatus = .pdfReady
+        return pdfURL
+    }
+
+    private func cleanupFailedPDFGeneration() {
+        if let sessionDirectory = sessionDirectory {
+            storage.deleteGeneratedPDFStaging(in: sessionDirectory)
+        }
+        document?.generatedPDFURL = nil
+        document?.processingStatus = .idle
+        pdfGenerationProgress = .idle
     }
 }
 
