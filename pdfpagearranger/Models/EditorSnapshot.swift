@@ -1,6 +1,8 @@
 import UIKit
 
 struct EditorSnapshot {
+    static let maxHistoryDepth = 50
+
     let pages: [PageItem]
     let pageObjectsByPage: [UUID: [PageObject]]
     let annotationsByPage: [UUID: [PageAnnotation]]

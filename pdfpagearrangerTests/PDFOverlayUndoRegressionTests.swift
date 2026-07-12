@@ -122,7 +122,7 @@ final class PDFOverlayUndoRegressionTests: XCTestCase {
 
         viewModel.deleteOverlay(id: overlayID, pageItemID: page.id)
         XCTAssertEqual(viewModel.overlayObjects(for: page.id).count, 0)
-        XCTAssertNil(viewModel.imageAsset(for: assetID))
+        XCTAssertNotNil(viewModel.imageAsset(for: assetID))
 
         viewModel.undo()
 

@@ -53,7 +53,7 @@ final class PDFOverlayRegressionTests: XCTestCase {
         XCTAssertEqual(updated.size.height, 0.5, accuracy: 0.001)
     }
 
-    func testDeleteOverlayRemovesObjectAndCleansAssets() throws {
+    func testDeleteOverlayRemovesObjectAndRetainsAssetForUndo() throws {
         let page = try XCTUnwrap(viewModel.pages.first)
         let overlay = OverlayTestFactory.seedOverlay(on: viewModel, pageItemID: page.id)
         let assetID = try XCTUnwrap(overlay.imageAssetID)
@@ -61,6 +61,13 @@ final class PDFOverlayRegressionTests: XCTestCase {
         viewModel.deleteOverlay(id: overlay.id, pageItemID: page.id)
 
         XCTAssertEqual(viewModel.overlayObjects(for: page.id).count, 0)
+        XCTAssertNotNil(viewModel.imageAsset(for: assetID))
+
+        viewModel.undo()
+        XCTAssertEqual(viewModel.overlayObjects(for: page.id).count, 1)
+
+        viewModel.undo()
+        viewModel.rotatePage(id: page.id)
         XCTAssertNil(viewModel.imageAsset(for: assetID))
     }
 

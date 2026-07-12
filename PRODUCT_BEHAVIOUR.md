@@ -34,7 +34,7 @@ This document describes **exactly how the app behaves today** from the user's pe
 21. [Overlay selection and manipulation](#21-overlay-selection-and-manipulation)
 22. [Gesture reference (complete)](#22-gesture-reference-complete)
 23. [Gesture priorities and conflicts](#23-gesture-priorities-and-conflicts)
-24. [Undo](#24-undo)
+24. [Undo and Redo](#24-undo-and-redo)
 25. [Empty, loading, and error states](#25-empty-loading-and-error-states)
 26. [Accessibility](#26-accessibility)
 27. [Persistence and app restart](#27-persistence-and-app-restart)
@@ -59,7 +59,7 @@ This document describes **exactly how the app behaves today** from the user's pe
 - Compress the document
 - Export a new PDF reflecting all changes
 - Change app appearance (light / dark / device)
-- Undo many editing operations
+- Undo and redo many editing operations
 
 The app does **not** modify the user's original imported file. All edits are held in memory (and temporary app storage for the working copy) until export. Scan-to-PDF drafts are stored in temporary on-device storage until discarded or converted to a PDF.
 
@@ -159,7 +159,7 @@ Starting **Scan Document** or **Import Photos** from home **discards any in-prog
 - User is taken directly to **Document Mode**
 - Navigation title becomes the **file name without extension** (e.g. `Report` from `Report.pdf`)
 - All pages from the PDF appear in the grid
-- Undo history is **cleared**
+- Undo and redo history are **cleared**
 - Any previous overlays, page-number settings, and thumbnail cache are **reset**
 
 ### On failed import
@@ -333,8 +333,9 @@ Draft files live under temporary app storage. Discarding or successful handoff r
 
 - Navigation title: **document file name** (without `.pdf`)
 - **Toolbar (leading):**
-  - **New PDF** — starts a new session
-  - **Undo** — undoes last action (disabled when nothing to undo)
+  - **New PDF** — starts a new session (compact toolbar icon with accessibility label **New PDF**; identifier `newPDFButton`)
+  - **Undo** — undoes last action (disabled when undo stack is empty; `arrow.uturn.backward` icon)
+  - **Redo** — redoes last undone action (disabled when redo stack is empty; `arrow.uturn.forward` icon)
 - **Toolbar (trailing):**
   - **Search** (magnifying glass) — opens document search (disabled if all pages deleted)
   - **⋯ (ellipsis.circle)** — Document Actions menu (disabled if all pages deleted)
@@ -358,7 +359,7 @@ Tapping **New PDF**:
 1. Any temporary export file from a previous share is deleted
 2. Paywall and share sheets are dismissed if open
 3. The working PDF copy in temp storage is deleted
-4. All session state is cleared (pages, overlays, annotations, undo, page numbers, **search**)
+4. All session state is cleared (pages, overlays, annotations, undo, redo, page numbers, **search**)
 5. Thumbnail cache is cleared
 6. User returns to **home / empty state**
 
@@ -879,7 +880,11 @@ After success:
 
 - Navigation title: **"Page N"** (N = position in current list, 1-based)
 - **Back** chevron (system) — returns to Document Mode
-- **Done** button (top-right) — same as back; returns to Document Mode
+- **Toolbar (leading):**
+  - **Search** (magnifying glass) — toggles Page Mode document search
+  - **Undo** — same shared document-session undo as Document Mode (disabled when undo stack is empty)
+  - **Redo** — same shared document-session redo as Document Mode (disabled when redo stack is empty)
+- **Done** button (top-right) — returns to Document Mode
 - **Main area:** page preview scaled to **fill the maximum horizontal width** (16 pt margin from each safe-area edge); aspect ratio preserved; document centered horizontally; any extra vertical space remains below the page
 - **Bottom bar:** prominent **Add** button (plus.circle.fill)
 
@@ -1529,7 +1534,7 @@ All create **undo** entries.
 |---------|--------|--------|
 | Tap | Thumbnail | Open Page Mode |
 | Tap | Rotate / Duplicate / Delete | Page action |
-| Tap | New PDF / Undo / ⋯ menu | Toolbar actions |
+| Tap | New PDF / Undo / Redo / ⋯ menu | Toolbar actions |
 | **Drag** | Thumbnail | Reorder pages |
 | **Scroll** | Grid | Scroll document |
 
@@ -1624,72 +1629,114 @@ All create **undo** entries.
 
 ---
 
-## 24. Undo
+## 24. Undo and Redo
 
-### Entry point
+### Shared document-session history
 
-- **Undo** button in Document Mode toolbar (leading)
-- **Disabled** when undo stack is empty (greyed out)
-- **Not available** in Page Mode toolbar (user must return to Document Mode)
+Document Mode and Page Mode use **one** undo stack and **one** redo stack for the active document session. Actions performed in either mode participate in the same history.
+
+### Entry points
+
+**Document Mode toolbar (leading, after New PDF):**
+
+- **Undo** — `arrow.uturn.backward` icon; accessibility identifier `undoButton`
+- **Redo** — `arrow.uturn.forward` icon; accessibility identifier `redoButton`
+
+**Page Mode toolbar (leading, after Search):**
+
+- **Undo** — accessibility identifier `pageModeUndoButton`
+- **Redo** — accessibility identifier `pageModeRedoButton`
+
+Undo and Redo remain visible even when an overlay or annotation is selected. Enabled/disabled state always reflects the shared stacks (not the current selection).
+
+### Enabled and disabled states
+
+| Control | Enabled when |
+|---------|----------------|
+| **Undo** | Undo stack is not empty |
+| **Redo** | Redo stack is not empty |
+
+Both are disabled after import until the first undoable edit.
 
 ### Animation
 
-- Undo runs with SwiftUI **animation**
+- Undo and Redo run with SwiftUI **animation** in both modes.
 
-### What undo restores
+### Semantics
 
-Single snapshot of:
+| User action | History behaviour |
+|-------------|-------------------|
+| New undoable edit | Push pre-edit snapshot onto undo stack; **clear redo stack** |
+| **Undo** | Push current state onto redo stack; restore latest undo snapshot |
+| **Redo** | Push current state onto undo stack; restore latest redo snapshot |
+
+Example: rotate a page, undo (redo becomes available), then add a sticky note instead of redo — **redo history is cleared**.
+
+### What snapshots restore
+
+Single snapshot of all editable document state:
 
 - Page list (order, rotations, which pages exist)
-- All overlays on all pages
+- All overlays on all pages (including z-order and appearance)
 - All annotations on all pages
 - Overlay image assets in memory
 - Page number settings
+- Watermark settings and watermark image asset references
 
-### Actions that push undo (one entry each)
+Temporary UI state is **not** restored: selection, search query, zoom/pan, open sheets, placement modes, uncommitted drawing strokes.
 
-- Page delete
-- Page rotate
-- Page duplicate
-- Page reorder (entire drag operation)
-- Add overlay (image, text, or signature)
-- Edit text overlay (Update in editor)
-- Duplicate text overlay
-- Move overlay (on release)
-- Resize overlay (handle or pinch, on release)
-- Rotate text overlay (on release)
-- Delete overlay
+### Page Mode after Undo or Redo
+
+- If the current page still exists, remain on it.
+- If the current page was deleted by the restored state, navigate to the nearest valid page index.
+- If no pages remain, exit Page Mode to Document Mode empty-document state.
+- If the selected overlay or annotation no longer exists, selection and contextual UI are cleared (no auto-replacement).
+- Restored objects reappear on the canvas but are not auto-selected.
+
+### Actions that push undo (one entry each, all support Redo)
+
+- Page delete, rotate, duplicate, reorder (entire drag)
+- Add / edit / move / resize / rotate / duplicate / delete overlay (image, text, signature)
+- Signature appearance changes on a placed signature (committed when control interaction ends)
 - Add / change color / delete highlight
 - Add / edit / delete text comment
 - Add / edit / move / delete sticky note
-- Add / delete drawing annotation
+- Add / delete drawing annotation (one completed Drawing Mode session)
 - Bring overlay to front (only if z-order actually changes)
-- Apply page numbers
-- Remove page numbers
+- Apply / change / remove page numbers
+- Apply / change / remove watermark (text or image)
+
+### Grouped gesture behaviour
+
+- Page reorder: one entry when drag completes
+- Overlay move / resize / sticky-note move: one entry on gesture end
+- Drawing Mode: one entry when user taps **Done** (`Undo Last Stroke` inside Drawing Mode is local to the uncommitted session only)
+- Continuous sliders / color pickers: one entry when the editor is dismissed (not per intermediate value)
 
 ### Actions that do NOT push undo
 
 - Navigating in Page Mode (swipe between pages)
-- Opening/closing sheets
-- Importing / New PDF (clears undo stack)
+- Opening/closing sheets (except committed edits inside them)
+- Importing / New PDF (clears **both** stacks)
 - Export / share
-- Compression (unless **Continue Editing** replaces document — that is a new import with cleared undo)
+- Compression preview alone; **Continue Editing** re-import clears both stacks
 - Changing appearance settings
-- Selecting/deselecting overlay without moving it
+- Selecting/deselecting without editing
 - Searching or navigating search matches
 - Zooming/panning page in Page Mode
+- Undo / Redo themselves (beyond stack movement)
 
-### Undo limit
+### History limit
 
-- Maximum **50** undo steps; oldest entries dropped
+- Maximum **50** steps on **each** of undo and redo; oldest entries dropped
 
-### Repeat undo
+### Repeat undo / redo
 
-- Each tap undoes **one** more step
+- Each tap moves **one** step through the respective stack
 
 ### After app restart
 
-- Undo history is **empty**
+- Undo and redo history are **empty** (not persisted)
 
 ---
 
@@ -1720,6 +1767,8 @@ Single snapshot of:
 - Page Mode view exposes `accessibilityValue`: **"page N of M"**
 - Settings gear: accessibility label **"Settings"**
 - Document Actions: accessibility label **"More"**
+- Document Mode Undo / Redo: accessibility labels **"Undo"** / **"Redo"**; identifiers `undoButton`, `redoButton`
+- Page Mode Undo / Redo: accessibility labels **"Undo"** / **"Redo"**; identifiers `pageModeUndoButton`, `pageModeRedoButton`
 - Thumbnail action buttons: accessibility labels **"Rotate"**, **"Duplicate"**, **"Delete"**
 - Overlay delete button: **"Delete image"** (image overlays only)
 - Signature contextual menu: **"Edit Signature"**, **"Delete Signature"**, **"More Signature Actions"**
@@ -1750,7 +1799,7 @@ Single snapshot of:
 | Last signature ink thickness (capture UI) | **Yes** |
 | Open document / pages / overlays | **No** |
 | Scan draft session | **No** |
-| Undo history | **No** |
+| Undo / redo history | **No** |
 | Page number settings | **No** |
 | Pro unlock | **No** |
 | Import temp files | **No** (cleaned on New PDF / close) |
@@ -1765,6 +1814,7 @@ After restart: user sees **home screen** and must **Open PDF**, **Scan Document*
 |------|-------|
 | Free export page limit | **20 pages** |
 | Undo stack depth | **50** |
+| Redo stack depth | **50** |
 | Page zoom max | **4×** |
 | Overlay min size | **8%** of page |
 | Overlay max size | **95%** of page |
@@ -1801,18 +1851,16 @@ After restart: user sees **home screen** and must **Open PDF**, **Scan Document*
 8. **Page number font size and opacity** — not user-configurable in UI.
 9. **Image/signature overlay rotation** — not user-configurable in UI (text overlays support rotate).
 10. **No multi-select** for pages or overlays in the editor (scan review supports batch page selection).
-11. **No redo** — only undo.
-12. **Deleting a page** — no confirmation dialog.
-13. **New PDF** — no confirmation; immediate session loss.
-14. **Image import failure** — silent (no error if photo data invalid).
-15. **Signature rename failure** — silent (no error alert).
-16. **Compression "Continue Editing"** replaces the entire session and clears undo (by design of re-import).
-17. **Document name** in title comes from imported file name (or **Scanned Document** for scan handoff); user cannot rename in app.
-18. **Thumbnail position badge** (1, 2, 3…) is always list position; it is independent of page-number feature formatting unless values coincide.
-19. **Page Numbers preview** in setup sheet always reflects the **last page** in the document, not the page currently being edited in Page Mode.
-20. **Scan draft sessions** do not resume after app restart.
-
----
+11. **Deleting a page** — no confirmation dialog.
+12. **New PDF** — no confirmation; immediate session loss.
+13. **Image import failure** — silent (no error if photo data invalid).
+14. **Signature rename failure** — silent (no error alert).
+15. **Compression "Continue Editing"** replaces the entire session and clears undo and redo (by design of re-import).
+16. **Document name** in title comes from imported file name (or **Scanned Document** for scan handoff); user cannot rename in app.
+17. **Thumbnail position badge** (1, 2, 3…) is always list position; it is independent of page-number feature formatting unless values coincide.
+18. **Page Numbers preview** in setup sheet always reflects the **last page** in the document, not the page currently being edited in Page Mode.
+19. **Scan draft sessions** do not resume after app restart.
+20. **No visible undo history panel** — only step-by-step Undo and Redo buttons.
 
 ## 30. Features not implemented
 
@@ -1828,7 +1876,6 @@ The following are **not** available in the current product (do not test for them
 - Document information panel
 - Batch tools
 - Real in-app purchase / subscription
-- Redo
 - Multi-selection (pages or overlays)
 - Keyboard shortcuts
 - Apple Pencil-only mode for signatures (Pencil works, but finger is equally accepted)

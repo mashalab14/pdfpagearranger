@@ -109,8 +109,8 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`PageAnnotation`** | One non-overlay annotation on a page: highlight (multi-rect), drawing (strokes), sticky note (point + text), or text comment (anchor rects + text). Coordinates stored normalized to the unrotated page. |
 | **`pageObjectsByPage`** | `[UUID: [PageObject]]` in `PDFEditorViewModel` — overlays keyed by `PageItem.id`. |
 | **`annotationsByPage`** | `[UUID: [PageAnnotation]]` in `PDFEditorViewModel` — annotations keyed by `PageItem.id`. |
-| **`EditorSnapshot`** | Undo entry: pages, overlays, annotations, overlay revisions, and image asset references. |
-| **`PDFEditorViewModel`** | Session state, page ops, overlay ops, undo stack, export entry point, document search state. |
+| **`EditorSnapshot`** | History entry: pages, overlays, annotations, overlay revisions, image assets, page numbers, and watermark settings. |
+| **`PDFEditorViewModel`** | Session state, page ops, overlay ops, shared undo/redo stacks, export entry point, document search state. |
 | **`DocumentSearchEngine`** | Shared document-wide text search over PDFKit page text (native + OCR-embedded). Case/diacritic insensitive; returns normalized match geometry via `PDFTextSelectionEngine`. |
 | **`DocumentSearchState`** | Ephemeral search UI state in `PDFEditorViewModel` (query, matches, current index). Not part of undo snapshots or export. |
 | **`SearchHighlightRenderer`** | Temporary orange search highlights in Page Mode only (distinct from permanent highlight annotations). |
@@ -177,7 +177,51 @@ Never edit the imported source bytes in place. Never assume export output overwr
 
 ---
 
-## 5. Coordinate systems
+## 5. Undo and Redo (shared document session)
+
+**Rule:** Document Mode and Page Mode share **one** document-session history. There is no separate Page Mode stack, annotation stack, or per-page history.
+
+### Stacks
+
+| Stack | Role |
+|-------|------|
+| **Undo stack** | Snapshots captured **before** each undoable edit (`EditorSnapshot`). Undo pops the latest snapshot and restores it. |
+| **Redo stack** | Snapshots captured **before** each Undo or Redo operation. Redo pops the latest snapshot and restores it. |
+| **Current state** | Live `PDFEditorViewModel` session fields (pages, overlays, annotations, assets, page numbers, watermark). |
+
+Maximum depth for **both** stacks: **`EditorSnapshot.maxHistoryDepth` (50)**. Oldest entries are dropped when exceeded.
+
+### Recording flow
+
+1. Before a committed undoable mutation: `pushUndoSnapshot()` captures current state onto the undo stack and **clears the redo stack**.
+2. Apply the mutation.
+3. Grouped gestures (page reorder drag, overlay move/resize release, completed drawing session) call `pushUndoSnapshot()` once per completed interaction — not per frame.
+
+Undo and Redo themselves do **not** create new history entries beyond moving snapshots between stacks.
+
+### Restoration flow
+
+`undo()` / `redo()`:
+
+1. No-op if the target stack is empty.
+2. Push **current** state onto the opposite stack (trim if needed).
+3. Pop and `applySnapshot(_:)` — atomic replacement of all editable session fields.
+4. Increment `historyRevision` (Page Mode observes this for page validity, selection clearing, and render refresh).
+5. Clear thumbnail cache; refresh document search if active.
+
+Temporary UI state (selection, search focus, placement modes, uncommitted drawing strokes, zoom/pan) is **not** in snapshots. Page Mode clears incompatible transient state before validating page route and selection after history changes.
+
+### Asset retention
+
+`isImageAssetReferenced(_:)` checks **current state plus every snapshot in undo and redo stacks** before `releaseImageAssetIfUnreferenced` deletes session image data. Assets reachable only from history remain until all three (current, undo, redo) no longer reference them.
+
+### Session reset
+
+Both stacks are cleared on: new import, **New PDF**, **Continue Editing** after compression (re-import), `closeSession()`, and app restart (history is not persisted).
+
+---
+
+## 6. Coordinate systems
 
 Overlays use **multiple coordinate spaces**. They must stay consistent or the same overlay will appear in different places in Page Mode, thumbnails, and export.
 
@@ -225,7 +269,7 @@ Any new surface that renders overlays (e.g. a new preview or print path) must us
 
 ---
 
-## 6. Regression rule
+## 7. Regression rule
 
 Quality is guarded by an automated regression suite (`PDFPagesTests`, `PDFPagesUITests`).
 
@@ -252,7 +296,7 @@ Test helpers live under `pdfpagearrangerTests/Helpers/` (`PDFTestFactory`, `Over
 
 ---
 
-## 7. Future boundaries
+## 8. Future boundaries
 
 ### Belongs in PDF Pages
 

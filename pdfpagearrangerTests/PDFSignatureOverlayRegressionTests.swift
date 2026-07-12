@@ -153,7 +153,7 @@ final class PDFSignatureOverlayRegressionTests: XCTestCase {
 
         viewModel.deleteOverlay(id: signature.id, pageItemID: page.id)
         XCTAssertEqual(viewModel.overlayObjects(for: page.id).count, 0)
-        XCTAssertNil(viewModel.imageAsset(for: assetID))
+        XCTAssertNotNil(viewModel.imageAsset(for: assetID))
 
         viewModel.undo()
 

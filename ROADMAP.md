@@ -15,7 +15,7 @@
 - **Text and image watermark (document-level)** — including above/behind content layer placement; image stored in session `imageAssets` via `imageAssetID`
 - Compression (metadata optimization)
 - Export with vector page preservation
-- Undo (single-level stack)
+- **Shared Undo and Redo** — one document-session history used from Document Mode and Page Mode; up to 50 undo and 50 redo steps; restores pages, overlays, annotations, page numbers, watermarks, and session image assets
 
 ## Planned / not implemented
 
@@ -23,7 +23,6 @@
 - Password protect
 - Document rename and information panel
 - Recent documents / project save
-- Redo
 - Custom watermark fonts
 - Batch tools
 - Real in-app purchase

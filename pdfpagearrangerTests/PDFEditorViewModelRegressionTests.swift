@@ -104,6 +104,11 @@ final class PDFEditorViewModelRegressionTests: XCTestCase {
 
         let overlayID = try XCTUnwrap(viewModel.overlayObjects(for: sourcePage.id).first?.id)
         viewModel.deleteOverlay(id: overlayID, pageItemID: sourcePage.id)
+        XCTAssertNotNil(viewModel.imageAsset(for: assetID))
+
+        viewModel.undo()
+        viewModel.undo()
+        viewModel.rotatePage(id: sourcePage.id)
         XCTAssertNil(viewModel.imageAsset(for: assetID))
     }
 

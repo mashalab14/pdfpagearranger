@@ -47,17 +47,32 @@ struct EditorView: View {
         .navigationTitle(viewModel.documentName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button("New PDF") {
+            ToolbarItemGroup(placement: .topBarLeading) {
+                Button {
                     closeEditor()
+                } label: {
+                    Image(systemName: "doc.badge.plus")
                 }
-            }
-            ToolbarItem(placement: .topBarLeading) {
-                Button("Undo") {
+                .accessibilityLabel("New PDF")
+                .accessibilityIdentifier("newPDFButton")
+
+                Button {
                     withAnimation { viewModel.undo() }
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
                 }
                 .disabled(!viewModel.canUndo)
+                .accessibilityLabel("Undo")
                 .accessibilityIdentifier("undoButton")
+
+                Button {
+                    withAnimation { viewModel.redo() }
+                } label: {
+                    Image(systemName: "arrow.uturn.forward")
+                }
+                .disabled(!viewModel.canRedo)
+                .accessibilityLabel("Redo")
+                .accessibilityIdentifier("redoButton")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {

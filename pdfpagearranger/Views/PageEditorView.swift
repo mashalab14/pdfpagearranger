@@ -120,6 +120,9 @@ struct PageEditorView: View {
                     signatureEditOverlayID = nil
                 }
             }
+            .onChange(of: viewModel.historyRevision) { _, _ in
+                handleHistoryRestoration()
+            }
             .task(id: renderTaskKey) { await loadPageImage() }
             .alert("Could Not Save Signature", isPresented: signatureSaveErrorBinding) {
                 Button("OK", role: .cancel) {}
@@ -195,7 +198,7 @@ struct PageEditorView: View {
 
     @ToolbarContentBuilder
     private var pageToolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
+        ToolbarItemGroup(placement: .topBarLeading) {
             Button {
                 togglePageModeSearch()
             } label: {
@@ -203,6 +206,24 @@ struct PageEditorView: View {
             }
             .accessibilityLabel("Search")
             .accessibilityIdentifier("pageModeSearchButton")
+
+            Button {
+                withAnimation { viewModel.undo() }
+            } label: {
+                Image(systemName: "arrow.uturn.backward")
+            }
+            .disabled(!viewModel.canUndo)
+            .accessibilityLabel("Undo")
+            .accessibilityIdentifier("pageModeUndoButton")
+
+            Button {
+                withAnimation { viewModel.redo() }
+            } label: {
+                Image(systemName: "arrow.uturn.forward")
+            }
+            .disabled(!viewModel.canRedo)
+            .accessibilityLabel("Redo")
+            .accessibilityIdentifier("pageModeRedoButton")
         }
         ToolbarItem(placement: .topBarTrailing) {
             Button("Done") { dismiss() }
@@ -515,7 +536,7 @@ struct PageEditorView: View {
     private var renderTaskKey: String {
         guard let pageItem else { return "missing-page" }
         let exportIndex = viewModel.pageIndex(for: pageItem.id) ?? (pageNumber - 1)
-        return "\(pageItem.id.uuidString)-\(pageItem.rotation)-\(viewModel.pageNumberSettings.thumbnailCacheKeySuffix)-\(viewModel.watermarkSettings.thumbnailCacheKeySuffix)-\(exportIndex)-\(viewModel.pageCount)"
+        return "\(pageItem.id.uuidString)-\(pageItem.rotation)-\(viewModel.pageNumberSettings.thumbnailCacheKeySuffix)-\(viewModel.watermarkSettings.thumbnailCacheKeySuffix)-\(exportIndex)-\(viewModel.pageCount)-\(viewModel.historyRevision)-\(viewModel.overlayRevision(for: pageItem.id))"
     }
 
     private var pageAspectRatio: CGFloat {
@@ -644,6 +665,77 @@ struct PageEditorView: View {
             pageSelection = .none
         }
         bumpPDFSelectionClearToken()
+    }
+
+    private func handleHistoryRestoration() {
+        clearTransientInteractionStateForHistoryRestore()
+
+        if viewModel.pages.isEmpty {
+            dismiss()
+            return
+        }
+
+        let preferredIndex = max(0, pageNumber - 1)
+        guard let resolvedID = viewModel.resolvedPageItemID(
+            currentID: pageRoute.pageItemID,
+            preferredIndex: preferredIndex
+        ) else {
+            dismiss()
+            return
+        }
+
+        if resolvedID != pageRoute.pageItemID {
+            pageRoute = PageEditorRoute(pageItemID: resolvedID)
+        }
+
+        validateSelectionAfterHistoryRestore()
+    }
+
+    private func clearTransientInteractionStateForHistoryRestore() {
+        clearPDFTextSelection()
+        pendingSignaturePlacement = nil
+        pendingTextDraft = nil
+        signatureEditOverlayID = nil
+        editingTextOverlayID = nil
+        showTextEditorSheet = false
+        drawingModeActive = false
+        drawingSessionStrokes = []
+        drawingCurrentPoints = []
+        editingDrawingID = nil
+        drawingEraserActive = false
+        pendingStickyNotePosition = nil
+        stickyNotePlacementActive = false
+        editingStickyNoteID = nil
+        showStickyNoteEditor = false
+        pendingCommentSelection = nil
+        pendingCommentHighlightID = nil
+        editingTextCommentID = nil
+        showCommentEditor = false
+        showAddSheet = false
+    }
+
+    private func validateSelectionAfterHistoryRestore() {
+        guard let pageItem else {
+            pageSelection = .none
+            signatureEditOverlayID = nil
+            return
+        }
+
+        switch pageSelection {
+        case .none:
+            break
+        case .overlay(let id):
+            if !viewModel.overlayExists(id: id, pageItemID: pageItem.id) {
+                pageSelection = .none
+                signatureEditOverlayID = nil
+            }
+        case .pdfText:
+            pageSelection = .none
+        case .highlight(let id), .drawing(let id), .stickyNote(let id), .textComment(let id):
+            if !viewModel.annotationExists(id: id, pageItemID: pageItem.id) {
+                pageSelection = .none
+            }
+        }
     }
 
     private func bumpPDFSelectionClearToken() {

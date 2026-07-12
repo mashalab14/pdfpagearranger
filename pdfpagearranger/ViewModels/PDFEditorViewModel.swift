@@ -14,6 +14,8 @@ final class PDFEditorViewModel {
     private(set) var errorMessage: String?
 
     private var undoStack: [EditorSnapshot] = []
+    private var redoStack: [EditorSnapshot] = []
+    private(set) var historyRevision: Int = 0
     private var pageObjectsByPage: [UUID: [PageObject]] = [:]
     private var annotationsByPage: [UUID: [PageAnnotation]] = [:]
     private var imageAssets: [UUID: UIImage] = [:]
@@ -36,6 +38,7 @@ final class PDFEditorViewModel {
     }
 
     var canUndo: Bool { !undoStack.isEmpty }
+    var canRedo: Bool { !redoStack.isEmpty }
     var hasDocument: Bool { sourceDocument != nil }
 
     var pageCount: Int { pages.count }
@@ -151,6 +154,8 @@ final class PDFEditorViewModel {
             documentName = imported.displayName
             pages = pdfService.makeInitialPages(pageCount: imported.pageCount)
             undoStack.removeAll()
+            redoStack.removeAll()
+            historyRevision = 0
             pageNumberSettings = .default
             watermarkSettings = .default
             clearOverlays()
@@ -186,6 +191,8 @@ final class PDFEditorViewModel {
         sourceDocument = nil
         localSourceURL = nil
         undoStack.removeAll()
+        redoStack.removeAll()
+        historyRevision = 0
         pageNumberSettings = .default
         watermarkSettings = .default
         errorMessage = nil
@@ -246,6 +253,19 @@ final class PDFEditorViewModel {
 
     func undo() {
         guard let snapshot = undoStack.popLast() else { return }
+        redoStack.append(makeCurrentSnapshot())
+        trimHistoryStack(&redoStack)
+        applySnapshot(snapshot)
+    }
+
+    func redo() {
+        guard let snapshot = redoStack.popLast() else { return }
+        undoStack.append(makeCurrentSnapshot())
+        trimHistoryStack(&undoStack)
+        applySnapshot(snapshot)
+    }
+
+    private func applySnapshot(_ snapshot: EditorSnapshot) {
         pages = snapshot.pages
         pageObjectsByPage = snapshot.pageObjectsByPage
         annotationsByPage = snapshot.annotationsByPage
@@ -254,9 +274,40 @@ final class PDFEditorViewModel {
         pageNumberSettings = snapshot.pageNumberSettings
         watermarkSettings = snapshot.watermarkSettings
         refreshDocumentSearchIfNeeded()
+        historyRevision += 1
         Task {
             await ThumbnailService.shared.clear()
         }
+    }
+
+    private func makeCurrentSnapshot() -> EditorSnapshot {
+        EditorSnapshot(
+            pages: pages,
+            pageObjectsByPage: pageObjectsByPage,
+            annotationsByPage: annotationsByPage,
+            overlayRevisions: overlayRevisions,
+            imageAssets: imageAssets,
+            pageNumberSettings: pageNumberSettings,
+            watermarkSettings: watermarkSettings
+        )
+    }
+
+    /// Resolves a valid page ID after history restoration when the current page may have been deleted.
+    func resolvedPageItemID(currentID: UUID, preferredIndex: Int) -> UUID? {
+        if pages.contains(where: { $0.id == currentID }) {
+            return currentID
+        }
+        guard !pages.isEmpty else { return nil }
+        let clampedIndex = min(max(preferredIndex, 0), pages.count - 1)
+        return pages[clampedIndex].id
+    }
+
+    func overlayExists(id: UUID, pageItemID: UUID) -> Bool {
+        overlayObjects(for: pageItemID).contains { $0.id == id }
+    }
+
+    func annotationExists(id: UUID, pageItemID: UUID) -> Bool {
+        annotations(for: pageItemID).contains { $0.id == id }
     }
 
     func exportPDF() throws -> URL {
@@ -1122,6 +1173,20 @@ final class PDFEditorViewModel {
                 if object.signatureSourceImageAssetID == assetID { return true }
             }
         }
+        for snapshot in undoStack + redoStack {
+            if snapshot.watermarkSettings.imageAssetID == assetID {
+                return true
+            }
+            if snapshot.imageAssets[assetID] != nil {
+                return true
+            }
+            for objects in snapshot.pageObjectsByPage.values {
+                for object in objects {
+                    if object.imageAssetID == assetID { return true }
+                    if object.signatureSourceImageAssetID == assetID { return true }
+                }
+            }
+        }
         return false
     }
 
@@ -1144,17 +1209,14 @@ final class PDFEditorViewModel {
     }
 
     private func pushUndoSnapshot() {
-        undoStack.append(EditorSnapshot(
-            pages: pages,
-            pageObjectsByPage: pageObjectsByPage,
-            annotationsByPage: annotationsByPage,
-            overlayRevisions: overlayRevisions,
-            imageAssets: imageAssets,
-            pageNumberSettings: pageNumberSettings,
-            watermarkSettings: watermarkSettings
-        ))
-        if undoStack.count > 50 {
-            undoStack.removeFirst()
+        undoStack.append(makeCurrentSnapshot())
+        trimHistoryStack(&undoStack)
+        redoStack.removeAll()
+    }
+
+    private func trimHistoryStack(_ stack: inout [EditorSnapshot]) {
+        while stack.count > EditorSnapshot.maxHistoryDepth {
+            stack.removeFirst()
         }
     }
 }
