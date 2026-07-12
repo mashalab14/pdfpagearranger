@@ -182,6 +182,59 @@ final class ScanDraftSessionStorage: Sendable {
         }
     }
 
+    func deletePageAssets(for page: ScanDraftPage, sessionDirectory: URL) {
+        var references = [page.originalImage]
+        if let processedImage = page.processedImage {
+            references.append(processedImage)
+        }
+        if let thumbnailImage = page.thumbnailImage {
+            references.append(thumbnailImage)
+        }
+        deleteOriginalImages(references, sessionDirectory: sessionDirectory)
+    }
+
+    func duplicatePageAssets(
+        from sourcePage: ScanDraftPage,
+        newPageID: UUID,
+        sessionDirectory: URL
+    ) throws -> ScanDraftPage {
+        let originalData = try loadImageData(at: sourcePage.originalImage, sessionDirectory: sessionDirectory)
+        var duplicatedPage = try importOriginalImage(
+            data: originalData,
+            pageID: newPageID,
+            sourceType: sourcePage.sourceType,
+            sessionDirectory: sessionDirectory
+        )
+
+        duplicatedPage.geometry = sourcePage.geometry
+        duplicatedPage.visualAdjustments = sourcePage.visualAdjustments.copied()
+        duplicatedPage.originalPixelSize = sourcePage.originalPixelSize
+        duplicatedPage.processingError = nil
+
+        if let processedImage = sourcePage.processedImage {
+            let processedData = try loadImageData(at: processedImage, sessionDirectory: sessionDirectory)
+            duplicatedPage.processedImage = try writeProcessedImage(
+                data: processedData,
+                pageID: newPageID,
+                sessionDirectory: sessionDirectory
+            )
+            duplicatedPage.processingState = sourcePage.processingState
+        }
+
+        if let thumbnailImage = sourcePage.thumbnailImage {
+            let thumbnailData = try loadImageData(at: thumbnailImage, sessionDirectory: sessionDirectory)
+            duplicatedPage.thumbnailImage = try writeThumbnailImage(
+                data: thumbnailData,
+                pageID: newPageID,
+                sessionDirectory: sessionDirectory
+            )
+            duplicatedPage.thumbnailState = sourcePage.thumbnailState
+        }
+
+        duplicatedPage.processingFingerprint = ScanProcessingFingerprint.value(for: duplicatedPage)
+        return duplicatedPage
+    }
+
     func sessionExists(for documentID: UUID) -> Bool {
         fileManager.fileExists(atPath: sessionDirectory(for: documentID).path)
     }

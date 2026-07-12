@@ -60,22 +60,42 @@ struct ScanDraftDocument: Identifiable, Equatable, Codable, Sendable {
 
     @discardableResult
     mutating func removePage(id: UUID) -> Bool {
-        guard let index = pages.firstIndex(where: { $0.id == id }) else { return false }
+        !removePages(ids: [id]).isEmpty
+    }
 
-        pages.remove(at: index)
-        selectedPageIDs.remove(id)
+    @discardableResult
+    mutating func removePages(ids: Set<UUID>) -> Set<UUID> {
+        guard !ids.isEmpty else { return [] }
 
-        if selectedPageID == id {
+        let removableIDs = ids.intersection(Set(pages.map(\.id)))
+        guard !removableIDs.isEmpty else { return [] }
+
+        let selectedIndex = selectedPageID.flatMap { id in
+            pages.firstIndex(where: { $0.id == id })
+        }
+
+        pages.removeAll { removableIDs.contains($0.id) }
+        selectedPageIDs.subtract(removableIDs)
+
+        if let selectedPageID, removableIDs.contains(selectedPageID) {
             if pages.isEmpty {
-                selectedPageID = nil
+                self.selectedPageID = nil
+            } else if let selectedIndex {
+                let fallbackIndex = min(selectedIndex, pages.count - 1)
+                self.selectedPageID = pages[fallbackIndex].id
             } else {
-                let fallbackIndex = min(index, pages.count - 1)
-                selectedPageID = pages[fallbackIndex].id
+                self.selectedPageID = pages.first?.id
             }
         }
 
         hasUnsavedChanges = true
-        return true
+        return removableIDs
+    }
+
+    mutating func insertDuplicatedPage(_ page: ScanDraftPage, after sourceID: UUID) {
+        guard let index = pages.firstIndex(where: { $0.id == sourceID }) else { return }
+        pages.insert(page, at: index + 1)
+        hasUnsavedChanges = true
     }
 
     mutating func reorderPages(from source: Int, to destination: Int) {

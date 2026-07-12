@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ScanDraftReviewView: View {
     @Bindable var sessionViewModel: ScanDraftSessionViewModel
@@ -6,7 +7,10 @@ struct ScanDraftReviewView: View {
 
     @State private var showAddPagesDialog = false
     @State private var showDiscardConfirmation = false
+    @State private var showDeleteConfirmation = false
+    @State private var deleteTargetPageIDs: Set<UUID> = []
     @State private var previewReloadToken = UUID()
+    @State private var draggedPageID: UUID?
 
     private let imageLoader: ScanDraftPreviewImageLoader
 
@@ -38,6 +42,18 @@ struct ScanDraftReviewView: View {
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if sessionViewModel.isMultiSelectionMode {
+                    Button(role: .destructive) {
+                        prepareDeleteConfirmation()
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .disabled(
+                        sessionViewModel.pageIDsForDeletion().isEmpty
+                        || sessionViewModel.isBatchProcessing
+                    )
+                    .accessibilityLabel("Delete Selected Pages")
+                    .accessibilityIdentifier("deleteSelectedDraftPagesButton")
+
                     Button("Select All") {
                         sessionViewModel.selectAllPagesForBatch()
                     }
@@ -47,6 +63,30 @@ struct ScanDraftReviewView: View {
                     }
                     .accessibilityLabel("Exit Selection Mode")
                 } else {
+                    Button {
+                        sessionViewModel.rotateSelectedPage()
+                    } label: {
+                        Label("Rotate", systemImage: "rotate.right")
+                    }
+                    .disabled(
+                        sessionViewModel.document?.selectedPageID == nil
+                        || sessionViewModel.isBatchProcessing
+                    )
+                    .accessibilityLabel("Rotate Page")
+                    .accessibilityIdentifier("rotateDraftPageButton")
+
+                    Button(role: .destructive) {
+                        prepareDeleteConfirmation()
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .disabled(
+                        sessionViewModel.pageIDsForDeletion().isEmpty
+                        || sessionViewModel.isBatchProcessing
+                    )
+                    .accessibilityLabel(deleteButtonAccessibilityLabel)
+                    .accessibilityIdentifier("deleteDraftPageButton")
+
                     Button("Select") {
                         sessionViewModel.enterMultiSelectionMode()
                     }
@@ -85,6 +125,21 @@ struct ScanDraftReviewView: View {
                 _ = sessionViewModel.beginAddPagesPhotosImport()
             }
             Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            deleteConfirmationTitle,
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                sessionViewModel.deletePages(ids: deleteTargetPageIDs)
+                deleteTargetPageIDs = []
+            }
+            Button("Cancel", role: .cancel) {
+                deleteTargetPageIDs = []
+            }
+        } message: {
+            Text(deleteConfirmationMessage)
         }
         .confirmationDialog(
             "Discard Draft?",
@@ -178,6 +233,23 @@ struct ScanDraftReviewView: View {
                                 sessionViewModel.selectPage(id: page.id)
                             }
                         )
+                        .opacity(draggedPageID == page.id ? 0.5 : 1)
+                        .onDrag {
+                            guard !sessionViewModel.isMultiSelectionMode,
+                                  !sessionViewModel.isBatchProcessing else {
+                                return NSItemProvider()
+                            }
+                            draggedPageID = page.id
+                            return NSItemProvider(object: page.id.uuidString as NSString)
+                        }
+                        .onDrop(
+                            of: [UTType.text],
+                            delegate: ScanDraftPageDropDelegate(
+                                destinationIndex: index,
+                                viewModel: sessionViewModel,
+                                draggedPageID: $draggedPageID
+                            )
+                        )
                         .id(page.id)
                     }
                 }
@@ -212,6 +284,22 @@ struct ScanDraftReviewView: View {
             .accessibilityLabel("Adjust Page")
             .accessibilityHint("Opens detailed adjustment for the selected page.")
 
+            if !sessionViewModel.isMultiSelectionMode {
+                Button("Duplicate") {
+                    if let pageID = sessionViewModel.document?.selectedPageID {
+                        sessionViewModel.duplicatePage(id: pageID)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .disabled(
+                    sessionViewModel.document?.selectedPageID == nil
+                    || sessionViewModel.isBatchProcessing
+                )
+                .accessibilityLabel("Duplicate Page")
+                .accessibilityIdentifier("duplicateDraftPageButton")
+            }
+
             Button("Add Pages") {
                 showAddPagesDialog = true
             }
@@ -224,6 +312,31 @@ struct ScanDraftReviewView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(.bar)
+    }
+
+    private var deleteButtonAccessibilityLabel: String {
+        if sessionViewModel.isMultiSelectionMode {
+            return "Delete Selected Pages"
+        }
+        return "Delete Page"
+    }
+
+    private var deleteConfirmationTitle: String {
+        deleteTargetPageIDs.count > 1 ? "Delete Pages?" : "Delete Page?"
+    }
+
+    private var deleteConfirmationMessage: String {
+        let count = deleteTargetPageIDs.count
+        if count > 1 {
+            return "Delete \(count) pages from this draft? This cannot be undone."
+        }
+        return "Delete this page from the draft? This cannot be undone."
+    }
+
+    private func prepareDeleteConfirmation() {
+        deleteTargetPageIDs = sessionViewModel.pageIDsForDeletion()
+        guard !deleteTargetPageIDs.isEmpty else { return }
+        showDeleteConfirmation = true
     }
 
     private var emptyState: some View {

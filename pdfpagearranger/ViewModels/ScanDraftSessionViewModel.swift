@@ -1218,9 +1218,82 @@ final class ScanDraftSessionViewModel {
     }
 
     func removePage(id: UUID) {
-        guard var draft = document else { return }
-        draft.removePage(id: id)
+        deletePages(ids: [id])
+    }
+
+    func pageIDsForDeletion() -> Set<UUID> {
+        guard let draft = document else { return [] }
+        let validIDs = Set(draft.pages.map(\.id))
+
+        if isMultiSelectionMode {
+            return batchSelectionPageIDs.intersection(validIDs)
+        }
+
+        if let selectedPageID = draft.selectedPageID, validIDs.contains(selectedPageID) {
+            return [selectedPageID]
+        }
+
+        return []
+    }
+
+    func deletePages(ids: Set<UUID>) {
+        guard var draft = document, let sessionDirectory = sessionDirectory else { return }
+        guard !ids.isEmpty else { return }
+
+        let pagesToDelete = draft.pages.filter { ids.contains($0.id) }
+        guard !pagesToDelete.isEmpty else { return }
+
+        for page in pagesToDelete {
+            storage.deletePageAssets(for: page, sessionDirectory: sessionDirectory)
+        }
+
+        let removedIDs = draft.removePages(ids: ids)
+        guard !removedIDs.isEmpty else { return }
+
         document = draft
+        repairBatchSelectionIfNeeded()
+
+        if isMultiSelectionMode, batchSelectionPageIDs.isEmpty {
+            exitMultiSelectionMode()
+        }
+    }
+
+    func duplicatePage(id: UUID) {
+        guard var draft = document, let sessionDirectory = sessionDirectory else { return }
+        guard let sourcePage = draft.pages.first(where: { $0.id == id }) else {
+            errorMessage = ScanDraftError.draftModelUpdateFailure.localizedDescription
+            return
+        }
+
+        let newPageID = UUID()
+        do {
+            let duplicatedPage = try storage.duplicatePageAssets(
+                from: sourcePage,
+                newPageID: newPageID,
+                sessionDirectory: sessionDirectory
+            )
+            draft.insertDuplicatedPage(duplicatedPage, after: id)
+            document = draft
+        } catch {
+            storage.deletePageAssets(
+                for: ScanDraftPage(
+                    id: newPageID,
+                    sourceType: sourcePage.sourceType,
+                    originalImage: ScanDraftImageReference(
+                        relativePath: "\(ScanDraftSessionStorage.originalsDirectoryName)/\(newPageID.uuidString).jpg"
+                    ),
+                    originalPixelSize: sourcePage.originalPixelSize
+                ),
+                sessionDirectory: sessionDirectory
+            )
+            errorMessage = (error as? ScanDraftError)?.localizedDescription
+                ?? ScanDraftError.draftModelUpdateFailure.localizedDescription
+        }
+    }
+
+    func rotateSelectedPage() {
+        guard let pageID = document?.selectedPageID else { return }
+        rotatePage(id: pageID)
     }
 
     func reorderPages(from source: Int, to destination: Int) {
