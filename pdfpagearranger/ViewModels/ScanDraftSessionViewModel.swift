@@ -75,12 +75,22 @@ final class ScanDraftSessionViewModel {
     }
 
     func discardDraftSession() {
+        _ = discardDraftSessionWithCleanup()
+    }
+
+    @discardableResult
+    func discardDraftSessionWithCleanup() -> Bool {
         processingTask?.cancel()
         processingTask = nil
         cancelPhotosImport()
 
         if let documentID = document?.id {
-            try? storage.deleteSession(for: documentID)
+            do {
+                try storage.deleteSession(for: documentID)
+            } catch {
+                errorMessage = ScanDraftError.draftCleanupFailure.localizedDescription
+                return false
+            }
         }
 
         document = nil
@@ -98,6 +108,35 @@ final class ScanDraftSessionViewModel {
         cameraScanCompletionHandled = false
         photosImportOperationID = nil
         photosImportCancellationFlag = nil
+        return true
+    }
+
+    func closeDraftIntent() -> ScanDraftCloseIntent {
+        guard let document else { return .dismissImmediately }
+        if document.isEmpty { return .dismissImmediately }
+        if document.hasUnsavedChanges { return .confirmDiscard }
+        return .dismissImmediately
+    }
+
+    func repairSelectionIfNeeded() {
+        guard var draft = document else { return }
+        draft.repairSelectionIfNeeded()
+        document = draft
+    }
+
+    func pageNumber(for pageID: UUID) -> Int? {
+        guard let document else { return nil }
+        guard let index = document.pages.firstIndex(where: { $0.id == pageID }) else { return nil }
+        return index + 1
+    }
+
+    func openAdjustmentForSelectedPage() {
+        repairSelectionIfNeeded()
+        guard let pageID = document?.selectedPageID else {
+            errorMessage = ScanDraftError.emptyDraft.localizedDescription
+            return
+        }
+        navigateToPageAdjustment(pageID: pageID)
     }
 
     func handleAcquisitionCancelled() {
@@ -289,11 +328,8 @@ final class ScanDraftSessionViewModel {
             draft.pages = existingPagesSnapshot
             draft.addPages(importedPages)
 
-            if acquisitionImportContext == .addToExistingDraft,
-               let firstImported = importedPages.first?.id {
-                draft.selectPage(id: firstImported)
-            } else if draft.selectedPageID == nil {
-                draft.selectPage(id: importedPages.first?.id)
+            if draft.selectedPageID == nil {
+                draft.selectPage(id: draft.pages.first?.id)
             }
 
             document = draft
@@ -456,11 +492,8 @@ final class ScanDraftSessionViewModel {
                 draft.pages = existingPagesSnapshot
                 draft.addPages(importedPages)
 
-                if self.acquisitionImportContext == .addToExistingDraft,
-                   let firstImported = importedPages.first?.id {
-                    draft.selectPage(id: firstImported)
-                } else if draft.selectedPageID == nil {
-                    draft.selectPage(id: importedPages.first?.id)
+                if draft.selectedPageID == nil {
+                    draft.selectPage(id: draft.pages.first?.id)
                 }
 
                 self.document = draft

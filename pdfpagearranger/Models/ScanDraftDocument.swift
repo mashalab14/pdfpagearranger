@@ -106,6 +106,21 @@ struct ScanDraftDocument: Identifiable, Equatable, Codable, Sendable {
         }
     }
 
+    mutating func repairSelectionIfNeeded() {
+        guard !pages.isEmpty else {
+            selectedPageID = nil
+            selectedPageIDs.removeAll()
+            return
+        }
+
+        if let selectedPageID,
+           pages.contains(where: { $0.id == selectedPageID }) {
+            return
+        }
+
+        selectPage(id: pages.first?.id)
+    }
+
     mutating func setMultiSelection(_ pageIDs: Set<UUID>) {
         selectedPageIDs = pageIDs
         if pageIDs.count == 1 {

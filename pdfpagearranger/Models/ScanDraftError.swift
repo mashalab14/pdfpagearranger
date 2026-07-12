@@ -21,6 +21,7 @@ enum ScanDraftError: LocalizedError, Equatable {
     case photosAssetLoadFailure
     case corruptedImageData
     case photosImportCancelled
+    case draftCleanupFailure
 
     var errorDescription: String? {
         switch self {
@@ -64,6 +65,8 @@ enum ScanDraftError: LocalizedError, Equatable {
             return "One or more selected images could not be read."
         case .photosImportCancelled:
             return nil
+        case .draftCleanupFailure:
+            return "The draft could not be removed from this device."
         }
     }
 }

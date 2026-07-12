@@ -17,6 +17,7 @@ struct ScanDraftRootView: View {
                 destination(for: route)
             }
         }
+        .interactiveDismissDisabled(sessionViewModel.document?.hasUnsavedChanges == true)
     }
 
     @ViewBuilder
@@ -51,13 +52,14 @@ struct ScanDraftRootView: View {
             ScanDraftPhotosAcquisitionView(sessionViewModel: sessionViewModel)
 
         case .draftReview:
-            ScanDraftReviewPlaceholderView(
+            ScanDraftReviewView(
                 sessionViewModel: sessionViewModel,
-                onClose: cancelFlow
+                onClose: dismissReview
             )
 
         case .pageAdjustment(let pageID):
             ScanDraftPageAdjustmentPlaceholderView(
+                draftID: sessionViewModel.document?.id,
                 pageID: pageID,
                 onClose: { sessionViewModel.navigateToDraftReview() }
             )
@@ -79,8 +81,15 @@ struct ScanDraftRootView: View {
     }
 
     private func cancelFlow() {
-        sessionViewModel.discardDraftSession()
-        dismiss()
+        if sessionViewModel.discardDraftSessionWithCleanup() {
+            dismiss()
+        }
+    }
+
+    private func dismissReview() {
+        if sessionViewModel.discardDraftSessionWithCleanup() {
+            dismiss()
+        }
     }
 }
 
@@ -153,103 +162,25 @@ private struct ScanDraftSourceSelectionView: View {
     }
 }
 
-private struct ScanDraftReviewPlaceholderView: View {
-    @Bindable var sessionViewModel: ScanDraftSessionViewModel
-    let onClose: () -> Void
-
-    private var document: ScanDraftDocument? { sessionViewModel.document }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Draft review placeholder")
-                .font(.headline)
-
-            if let document {
-                Text("Pages: \(document.pages.count)")
-                Text("Selected page: \(document.selectedPageID?.uuidString.prefix(8) ?? "none")")
-                Text("Sources: \(document.pages.map(\.sourceType.rawValue).joined(separator: ", "))")
-                Text(
-                    "Page order preserved: \(document.pages.map { String($0.id.uuidString.prefix(4)) }.joined(separator: ", "))"
-                )
-
-                ForEach(Array(document.pages.enumerated()), id: \.element.id) { index, page in
-                    Text("Page \(index + 1): \(page.originalImage.relativePath)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Button("Scan More Pages") {
-                Task {
-                    _ = await sessionViewModel.beginAddPagesCameraScan()
-                }
-            }
-            .buttonStyle(.bordered)
-            .disabled(sessionViewModel.isImportingPhotos || sessionViewModel.isImportingCameraScan)
-            .accessibilityLabel("Scan More Pages")
-            .accessibilityHint("Adds more scanned pages to this draft.")
-
-            Button("Import More Pages") {
-                _ = sessionViewModel.beginAddPagesPhotosImport()
-            }
-            .buttonStyle(.bordered)
-            .disabled(sessionViewModel.isImportingPhotos || sessionViewModel.isImportingCameraScan)
-            .accessibilityLabel("Import More Pages")
-            .accessibilityHint("Imports more photos into this draft.")
-
-            Button("Close", action: onClose)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .navigationTitle("Review Pages")
-        .navigationBarTitleDisplayMode(.inline)
-        .alert(
-            "Scan Error",
-            isPresented: Binding(
-                get: { sessionViewModel.errorMessage != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        sessionViewModel.errorMessage = nil
-                    }
-                }
-            )
-        ) {
-            Button("OK", role: .cancel) {
-                sessionViewModel.errorMessage = nil
-            }
-        } message: {
-            Text(sessionViewModel.errorMessage ?? "")
-        }
-    }
-}
-
-private struct ScanDraftAcquisitionPlaceholderView: View {
-    let title: String
-    let message: String
-    let onCancel: () -> Void
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Text(message)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Button("Cancel", action: onCancel)
-        }
-        .padding()
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
 private struct ScanDraftPageAdjustmentPlaceholderView: View {
+    let draftID: UUID?
     let pageID: UUID
     let onClose: () -> Void
 
     var body: some View {
         VStack(spacing: 12) {
-            Text("Page adjustment for \(pageID.uuidString.prefix(8))…")
+            Text("Page adjustment placeholder")
+                .font(.headline)
+            if let draftID {
+                Text("Draft: \(draftID.uuidString.prefix(8))…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Text("Page: \(pageID.uuidString.prefix(8))…")
+                .font(.caption)
                 .foregroundStyle(.secondary)
             Button("Back to Review", action: onClose)
+                .accessibilityLabel("Back to Review")
         }
         .padding()
         .navigationTitle("Adjust Page")

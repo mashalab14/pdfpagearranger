@@ -36,9 +36,7 @@ struct ContentView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
-        .fullScreenCover(isPresented: $showScanDraftFlow, onDismiss: {
-            scanSessionViewModel.discardDraftSession()
-        }) {
+        .fullScreenCover(isPresented: $showScanDraftFlow) {
             ScanDraftRootView(
                 sessionViewModel: scanSessionViewModel,
                 editorViewModel: viewModel

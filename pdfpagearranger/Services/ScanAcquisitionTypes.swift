@@ -1,5 +1,10 @@
 import Foundation
 
+enum ScanDraftCloseIntent: Equatable, Sendable {
+    case dismissImmediately
+    case confirmDiscard
+}
+
 enum ScanAcquisitionImportContext: Equatable, Sendable {
     case newDocument
     case addToExistingDraft
