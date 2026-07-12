@@ -5,8 +5,8 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @Bindable var viewModel: PDFEditorViewModel
     @State private var scanSessionViewModel = ScanDraftSessionViewModel()
+    @State private var scanDraftEntryMode: ScanDraftEntryMode?
     @State private var showImporter = false
-    @State private var showScanDraftFlow = false
     @State private var showSettings = false
     @State private var showError = false
     @State private var importErrorMessage: String?
@@ -36,12 +36,13 @@ struct ContentView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
-        .fullScreenCover(isPresented: $showScanDraftFlow) {
+        .fullScreenCover(item: $scanDraftEntryMode) { entryMode in
             ScanDraftRootView(
+                entryMode: entryMode,
                 sessionViewModel: scanSessionViewModel,
                 editorViewModel: viewModel,
                 onEditorHandoffSucceeded: {
-                    showScanDraftFlow = false
+                    scanDraftEntryMode = nil
                 }
             )
         }
@@ -94,19 +95,31 @@ struct ContentView: View {
                     .padding(.horizontal, 32)
             }
 
-            Button("Import PDF") {
-                showImporter = true
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .accessibilityIdentifier("importPDFButton")
+            VStack(spacing: 12) {
+                Button("Open PDF") {
+                    showImporter = true
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .accessibilityLabel("Open PDF")
+                .accessibilityIdentifier("openPDFButton")
 
-            Button("New Document") {
-                showScanDraftFlow = true
+                Button("Scan Document") {
+                    scanDraftEntryMode = .camera
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .accessibilityLabel("Scan Document")
+                .accessibilityIdentifier("scanDocumentButton")
+
+                Button("Import Photos") {
+                    scanDraftEntryMode = .photos
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .accessibilityLabel("Import Photos")
+                .accessibilityIdentifier("importPhotosButton")
             }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            .accessibilityIdentifier("newDocumentButton")
 
             Spacer()
         }

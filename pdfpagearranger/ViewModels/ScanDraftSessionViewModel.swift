@@ -100,11 +100,49 @@ final class ScanDraftSessionViewModel {
     // MARK: - Session lifecycle
 
     func beginNewDocumentFlow() throws {
+        try prepareNewDocumentSession()
+    }
+
+    func prepareNewDocumentSession() throws {
         let draft = ScanDraftDocument()
         try storage.createSessionDirectory(for: draft.id)
         document = draft
-        navigationPath = [.sourceSelection]
+        navigationPath = []
         errorMessage = nil
+    }
+
+    @discardableResult
+    func beginCameraScanFlow() async -> Bool {
+        guard discardDraftSessionWithCleanup() else { return false }
+
+        do {
+            try prepareNewDocumentSession()
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+
+        let ready = await requestCameraScan(context: .newDocument)
+        if ready {
+            navigateToCameraAcquisition()
+        }
+        return ready
+    }
+
+    @discardableResult
+    func beginPhotosImportFlow() -> Bool {
+        guard discardDraftSessionWithCleanup() else { return false }
+
+        do {
+            try prepareNewDocumentSession()
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+
+        guard requestPhotosImport(context: .newDocument) else { return false }
+        navigateToPhotosAcquisition()
+        return true
     }
 
     func discardDraftSession() {
@@ -1141,10 +1179,6 @@ final class ScanDraftSessionViewModel {
     }
 
     // MARK: - Navigation
-
-    func navigateToSourceSelection() {
-        navigationPath = [.sourceSelection]
-    }
 
     func navigateToCameraAcquisition() {
         if navigationPath.last != .cameraAcquisition {

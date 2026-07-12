@@ -41,15 +41,16 @@ final class ScanEditorHandoffRegressionTests: XCTestCase {
                 .appendingPathComponent("pdfpagearranger/Models/ScanDraftRoute.swift")
         )
 
-        XCTAssertTrue(source.contains("case sourceSelection"))
         XCTAssertTrue(source.contains("case cameraAcquisition"))
         XCTAssertTrue(source.contains("case photosAcquisition"))
         XCTAssertTrue(source.contains("case draftReview"))
         XCTAssertTrue(source.contains("case pageAdjustment"))
         XCTAssertTrue(source.contains("case pdfGenerationProgress"))
+        XCTAssertFalse(source.contains("case sourceSelection"))
+        XCTAssertFalse(source.contains("case entry"))
     }
 
-    func testContentViewExposesNewDocumentEntryPoint() throws {
+    func testContentViewExposesDirectScanEntryPoints() throws {
         let source = try String(
             contentsOf: URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent()
@@ -57,7 +58,9 @@ final class ScanEditorHandoffRegressionTests: XCTestCase {
                 .appendingPathComponent("pdfpagearranger/ContentView.swift")
         )
 
-        XCTAssertTrue(source.contains("New Document"))
+        XCTAssertTrue(source.contains("Scan Document"))
+        XCTAssertTrue(source.contains("Import Photos"))
+        XCTAssertTrue(source.contains("Open PDF"))
         XCTAssertTrue(source.contains("ScanDraftRootView"))
         XCTAssertTrue(source.contains("importPDF(from: url)"))
     }
