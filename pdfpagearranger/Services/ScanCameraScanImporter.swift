@@ -1,8 +1,7 @@
 import Foundation
 import UIKit
-import UIKit
 
-/// Persists VisionKit scan pages into the active draft session with transactional rollback.
+/// Persists acquired scan pages into the active draft session with transactional rollback.
 struct ScanCameraScanImporter: Sendable {
     let storage: ScanDraftSessionStorage
 
@@ -15,7 +14,7 @@ struct ScanCameraScanImporter: Sendable {
         sourceType: ScanPageSource,
         sessionDirectory: URL,
         sessionDefaults: ScanVisualAdjustments,
-        pageDataProvider: @Sendable (Int) throws -> Data
+        pageDataProvider: @Sendable (Int) throws -> ScanImportPagePayload
     ) throws -> [ScanDraftPage] {
         guard pageCount > 0 else {
             throw ScanDraftError.emptyDraft
@@ -27,18 +26,65 @@ struct ScanCameraScanImporter: Sendable {
 
         do {
             for index in 0..<pageCount {
-                let data = try pageDataProvider(index)
+                let payload = try pageDataProvider(index)
                 let pageID = UUID()
                 let page = try storage.importOriginalImage(
-                    data: data,
+                    data: payload.data,
                     pageID: pageID,
                     sourceType: sourceType,
-                    sessionDirectory: sessionDirectory
+                    sessionDirectory: sessionDirectory,
+                    fileExtension: payload.fileExtension
                 )
                 stagedReferences.append(page.originalImage)
                 var pageWithDefaults = page
                 pageWithDefaults.visualAdjustments = sessionDefaults.copied()
                 importedPages.append(pageWithDefaults)
+            }
+            return importedPages
+        } catch {
+            storage.deleteOriginalImages(stagedReferences, sessionDirectory: sessionDirectory)
+            throw error
+        }
+    }
+
+    func importPages(
+        pageCount: Int,
+        sourceType: ScanPageSource,
+        sessionDirectory: URL,
+        sessionDefaults: ScanVisualAdjustments,
+        progressHandler: @Sendable (Int, Int) -> Void = { _, _ in },
+        isCancelled: @Sendable () -> Bool = { false },
+        pageDataProvider: @Sendable (Int) async throws -> ScanImportPagePayload
+    ) async throws -> [ScanDraftPage] {
+        guard pageCount > 0 else {
+            throw ScanDraftError.emptyDraft
+        }
+
+        var importedPages: [ScanDraftPage] = []
+        var stagedReferences: [ScanDraftImageReference] = []
+        importedPages.reserveCapacity(pageCount)
+
+        do {
+            for index in 0..<pageCount {
+                if isCancelled() {
+                    throw ScanDraftError.photosImportCancelled
+                }
+
+                progressHandler(index, pageCount)
+                let payload = try await pageDataProvider(index)
+                let pageID = UUID()
+                let page = try storage.importOriginalImage(
+                    data: payload.data,
+                    pageID: pageID,
+                    sourceType: sourceType,
+                    sessionDirectory: sessionDirectory,
+                    fileExtension: payload.fileExtension
+                )
+                stagedReferences.append(page.originalImage)
+                var pageWithDefaults = page
+                pageWithDefaults.visualAdjustments = sessionDefaults.copied()
+                importedPages.append(pageWithDefaults)
+                progressHandler(index + 1, pageCount)
             }
             return importedPages
         } catch {
@@ -62,7 +108,7 @@ struct ScanCameraScanImporter: Sendable {
             guard let image = scan.imageOfPage(at: index) else {
                 throw ScanDraftError.imageExtractionFailure
             }
-            return try ScanWorkingImageEncoder.normalizedJPEGData(from: image)
+            return .jpeg(try ScanWorkingImageEncoder.normalizedJPEGData(from: image))
         }
     }
 }

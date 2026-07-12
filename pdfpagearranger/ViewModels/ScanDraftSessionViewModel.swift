@@ -1,4 +1,5 @@
 import Foundation
+import PhotosUI
 import SwiftUI
 import VisionKit
 
@@ -10,6 +11,9 @@ final class ScanDraftSessionViewModel {
     private(set) var isProcessingPages = false
     private(set) var isGeneratingPDF = false
     private(set) var isImportingCameraScan = false
+    private(set) var isImportingPhotos = false
+    private(set) var photosImportProgress: ScanPhotosImportProgress?
+    private(set) var photosSelectionHandled = false
     var isDocumentScannerPresented = false
     var errorMessage: String?
 
@@ -18,13 +22,17 @@ final class ScanDraftSessionViewModel {
     private let pdfGenerator: any ScanDraftPDFGenerating
     private let editorHandoff: ScanEditorHandoffService
     private let cameraScanImporter: ScanCameraScanImporter
+    private let photosSelectionImporter: ScanPhotosSelectionImporter
     private let permissionChecker: any ScanCameraPermissionChecking
     private let scannerAvailability: any ScanDocumentScannerAvailabilityChecking
     private var processingTask: Task<Void, Never>?
-    private var cameraImportContext: ScanCameraImportContext = .newDocument
+    private var photosImportTask: Task<Void, Never>?
+    private var acquisitionImportContext: ScanAcquisitionImportContext = .newDocument
     private var preImportPageIDs: Set<UUID> = []
-    private var emptySessionCreatedForCamera = false
+    private var emptySessionCreatedForImport = false
     private var cameraScanCompletionHandled = false
+    private var photosImportOperationID: UUID?
+    private var photosImportCancellationFlag: ScanImportCancellationFlag?
 
     init(
         storage: ScanDraftSessionStorage = ScanDraftSessionStorage(),
@@ -32,6 +40,7 @@ final class ScanDraftSessionViewModel {
         pdfGenerator: any ScanDraftPDFGenerating = UnimplementedScanDraftPDFGenerator(),
         editorHandoff: ScanEditorHandoffService? = nil,
         cameraScanImporter: ScanCameraScanImporter? = nil,
+        photosSelectionImporter: ScanPhotosSelectionImporter? = nil,
         permissionChecker: (any ScanCameraPermissionChecking)? = nil,
         scannerAvailability: (any ScanDocumentScannerAvailabilityChecking)? = nil
     ) {
@@ -40,6 +49,7 @@ final class ScanDraftSessionViewModel {
         self.pdfGenerator = pdfGenerator
         self.editorHandoff = editorHandoff ?? ScanEditorHandoffService()
         self.cameraScanImporter = cameraScanImporter ?? ScanCameraScanImporter(storage: storage)
+        self.photosSelectionImporter = photosSelectionImporter ?? ScanPhotosSelectionImporter(storage: storage)
         self.permissionChecker = permissionChecker ?? SystemScanCameraPermissionChecker()
         self.scannerAvailability = scannerAvailability ?? SystemScanDocumentScannerAvailabilityChecker()
     }
@@ -67,6 +77,7 @@ final class ScanDraftSessionViewModel {
     func discardDraftSession() {
         processingTask?.cancel()
         processingTask = nil
+        cancelPhotosImport()
 
         if let documentID = document?.id {
             try? storage.deleteSession(for: documentID)
@@ -77,11 +88,16 @@ final class ScanDraftSessionViewModel {
         isProcessingPages = false
         isGeneratingPDF = false
         isImportingCameraScan = false
+        isImportingPhotos = false
+        photosImportProgress = nil
+        photosSelectionHandled = false
         isDocumentScannerPresented = false
         errorMessage = nil
         preImportPageIDs = []
-        emptySessionCreatedForCamera = false
+        emptySessionCreatedForImport = false
         cameraScanCompletionHandled = false
+        photosImportOperationID = nil
+        photosImportCancellationFlag = nil
     }
 
     func handleAcquisitionCancelled() {
@@ -92,10 +108,42 @@ final class ScanDraftSessionViewModel {
         }
     }
 
+    // MARK: - Shared acquisition session preparation
+
+    func prepareSessionForAcquisition(context: ScanAcquisitionImportContext) throws {
+        acquisitionImportContext = context
+        cameraScanCompletionHandled = false
+        photosSelectionHandled = false
+        photosImportOperationID = UUID()
+        photosImportCancellationFlag = ScanImportCancellationFlag()
+
+        switch context {
+        case .newDocument:
+            if document == nil {
+                let draft = ScanDraftDocument()
+                try storage.createSessionDirectory(for: draft.id)
+                document = draft
+                emptySessionCreatedForImport = true
+            } else if document?.isEmpty == true {
+                emptySessionCreatedForImport = true
+            } else {
+                emptySessionCreatedForImport = false
+            }
+            preImportPageIDs = []
+
+        case .addToExistingDraft:
+            guard let draft = document, !draft.isEmpty else {
+                throw ScanDraftError.sessionNotFound
+            }
+            preImportPageIDs = Set(draft.pages.map(\.id))
+            emptySessionCreatedForImport = false
+        }
+    }
+
     // MARK: - Camera acquisition
 
     @discardableResult
-    func requestCameraScan(context: ScanCameraImportContext) async -> Bool {
+    func requestCameraScan(context: ScanAcquisitionImportContext) async -> Bool {
         errorMessage = nil
         cameraScanCompletionHandled = false
 
@@ -105,7 +153,7 @@ final class ScanDraftSessionViewModel {
         }
 
         do {
-            try prepareSessionForCameraScan(context: context)
+            try prepareSessionForAcquisition(context: context)
         } catch let error as ScanDraftError {
             errorMessage = error.localizedDescription
             return false
@@ -124,11 +172,11 @@ final class ScanDraftSessionViewModel {
             return await handlePermissionStatus(requestedStatus)
         case .denied:
             errorMessage = ScanDraftError.cameraPermissionDenied.localizedDescription
-            rollbackEmptyCameraSessionIfNeeded()
+            rollbackEmptyImportSessionIfNeeded()
             return false
         case .restricted:
             errorMessage = ScanDraftError.cameraPermissionRestricted.localizedDescription
-            rollbackEmptyCameraSessionIfNeeded()
+            rollbackEmptyImportSessionIfNeeded()
             return false
         }
     }
@@ -153,7 +201,7 @@ final class ScanDraftSessionViewModel {
 
         guard scan.pageCount > 0 else {
             errorMessage = ScanDraftError.emptyDraft.localizedDescription
-            rollbackEmptyCameraSessionIfNeeded()
+            rollbackEmptyImportSessionIfNeeded()
             return
         }
 
@@ -166,7 +214,7 @@ final class ScanDraftSessionViewModel {
         isDocumentScannerPresented = false
         errorMessage = nil
 
-        switch cameraImportContext {
+        switch acquisitionImportContext {
         case .newDocument:
             if document?.isEmpty ?? true {
                 discardDraftSession()
@@ -183,11 +231,10 @@ final class ScanDraftSessionViewModel {
         cameraScanCompletionHandled = true
         isDocumentScannerPresented = false
         errorMessage = error.localizedDescription
-        rollbackFailedCameraImport()
+        rollbackFailedImport()
     }
 
     func beginAddPagesCameraScan() async -> Bool {
-        cameraImportContext = .addToExistingDraft
         let ready = await requestCameraScan(context: .addToExistingDraft)
         if ready {
             navigateToCameraAcquisition()
@@ -202,43 +249,16 @@ final class ScanDraftSessionViewModel {
             return true
         case .denied:
             errorMessage = ScanDraftError.cameraPermissionDenied.localizedDescription
-            rollbackEmptyCameraSessionIfNeeded()
+            rollbackEmptyImportSessionIfNeeded()
             return false
         case .restricted:
             errorMessage = ScanDraftError.cameraPermissionRestricted.localizedDescription
-            rollbackEmptyCameraSessionIfNeeded()
+            rollbackEmptyImportSessionIfNeeded()
             return false
         case .notDetermined:
             errorMessage = ScanDraftError.cameraPermissionDenied.localizedDescription
-            rollbackEmptyCameraSessionIfNeeded()
+            rollbackEmptyImportSessionIfNeeded()
             return false
-        }
-    }
-
-    func prepareSessionForCameraScan(context: ScanCameraImportContext) throws {
-        cameraImportContext = context
-        cameraScanCompletionHandled = false
-
-        switch context {
-        case .newDocument:
-            if document == nil {
-                let draft = ScanDraftDocument()
-                try storage.createSessionDirectory(for: draft.id)
-                document = draft
-                emptySessionCreatedForCamera = true
-            } else if document?.isEmpty == true {
-                emptySessionCreatedForCamera = true
-            } else {
-                emptySessionCreatedForCamera = false
-            }
-            preImportPageIDs = []
-
-        case .addToExistingDraft:
-            guard let draft = document, !draft.isEmpty else {
-                throw ScanDraftError.sessionNotFound
-            }
-            preImportPageIDs = Set(draft.pages.map(\.id))
-            emptySessionCreatedForCamera = false
         }
     }
 
@@ -269,7 +289,7 @@ final class ScanDraftSessionViewModel {
             draft.pages = existingPagesSnapshot
             draft.addPages(importedPages)
 
-            if cameraImportContext == .addToExistingDraft,
+            if acquisitionImportContext == .addToExistingDraft,
                let firstImported = importedPages.first?.id {
                 draft.selectPage(id: firstImported)
             } else if draft.selectedPageID == nil {
@@ -277,25 +297,221 @@ final class ScanDraftSessionViewModel {
             }
 
             document = draft
-            emptySessionCreatedForCamera = false
+            emptySessionCreatedForImport = false
             preImportPageIDs = Set(draft.pages.map(\.id))
             navigateToDraftReview()
             scheduleProcessingAllPages()
         } catch let error as ScanDraftError {
             document?.pages = existingPagesSnapshot
             errorMessage = error.localizedDescription
-            rollbackFailedCameraImport()
+            rollbackFailedImport()
         } catch {
             document?.pages = existingPagesSnapshot
             errorMessage = ScanDraftError.draftModelUpdateFailure.localizedDescription
-            rollbackFailedCameraImport()
+            rollbackFailedImport()
         }
     }
 
-    private func rollbackEmptyCameraSessionIfNeeded() {
-        guard cameraImportContext == .newDocument,
+    // MARK: - Photos acquisition
+
+    @discardableResult
+    func requestPhotosImport(context: ScanAcquisitionImportContext) -> Bool {
+        guard !isImportingPhotos else { return false }
+
+        errorMessage = nil
+
+        do {
+            try prepareSessionForAcquisition(context: context)
+            return true
+        } catch let error as ScanDraftError {
+            errorMessage = error.localizedDescription
+            return false
+        } catch {
+            errorMessage = ScanDraftError.draftModelUpdateFailure.localizedDescription
+            return false
+        }
+    }
+
+    func beginAddPagesPhotosImport() -> Bool {
+        let ready = requestPhotosImport(context: .addToExistingDraft)
+        if ready {
+            navigateToPhotosAcquisition()
+        }
+        return ready
+    }
+
+    func handlePhotosPickerCancelled() {
+        guard !photosSelectionHandled else { return }
+        guard !isImportingPhotos else { return }
+
+        photosSelectionHandled = true
+        errorMessage = nil
+
+        switch acquisitionImportContext {
+        case .newDocument:
+            if document?.isEmpty ?? true {
+                discardDraftSession()
+            } else {
+                navigateToDraftReview()
+            }
+        case .addToExistingDraft:
+            navigateToDraftReview()
+        }
+    }
+
+    func handlePhotosSelection(_ pickerItems: [PhotosPickerItem]) async {
+        guard photosImportOperationID != nil else { return }
+        guard !photosSelectionHandled else { return }
+        guard !isImportingPhotos else { return }
+
+        guard !pickerItems.isEmpty else {
+            handlePhotosPickerCancelled()
+            return
+        }
+
+        if pickerItems.count > ScanPhotosImportLimits.maxSelectionCount {
+            errorMessage = "You can import up to \(ScanPhotosImportLimits.maxSelectionCount) photos at once."
+            return
+        }
+
+        photosSelectionHandled = true
+        let orderedItems = ScanPhotosOrderedItemsBuilder.orderedItems(from: pickerItems)
+        let assetLoader = PhotosPickerItemAssetLoader(items: pickerItems)
+        await importPhotos(orderedItems: orderedItems, assetLoader: assetLoader)
+    }
+
+    func handlePhotosSelection(
+        orderedItems: [ScanOrderedPhotoImportItem],
+        assetLoader: any ScanPhotosAssetLoading
+    ) async {
+        guard photosImportOperationID != nil else { return }
+        guard !photosSelectionHandled else { return }
+        guard !isImportingPhotos else { return }
+        guard !orderedItems.isEmpty else {
+            handlePhotosPickerCancelled()
+            return
+        }
+
+        photosSelectionHandled = true
+        await importPhotos(orderedItems: orderedItems, assetLoader: assetLoader)
+    }
+
+    func cancelPhotosImport() {
+        photosImportCancellationFlag?.cancel()
+        photosImportTask?.cancel()
+        photosImportTask = nil
+        isImportingPhotos = false
+        photosImportProgress = nil
+    }
+
+    private func importPhotos(
+        orderedItems: [ScanOrderedPhotoImportItem],
+        assetLoader: any ScanPhotosAssetLoading
+    ) async {
+        guard !isImportingPhotos else { return }
+        guard var draft = document else {
+            errorMessage = ScanDraftError.sessionNotFound.localizedDescription
+            rollbackEmptyImportSessionIfNeeded()
+            return
+        }
+
+        let operationID = photosImportOperationID
+        let cancellationFlag = photosImportCancellationFlag
+        isImportingPhotos = true
+        photosImportProgress = ScanPhotosImportProgress(total: orderedItems.count, completed: 0)
+
+        let sessionDirectory = storage.sessionDirectory(for: draft.id)
+        let sessionDefaults = draft.sessionDefaultVisualAdjustments.copied()
+        let existingPagesSnapshot = draft.pages
+        let importer = photosSelectionImporter
+
+        photosImportTask = Task { [weak self] in
+            guard let self else { return }
+
+            do {
+                let importedPages = try await Task.detached(priority: .userInitiated) {
+                    try await importer.importPhotos(
+                        orderedItems: orderedItems,
+                        assetLoader: assetLoader,
+                        sessionDirectory: sessionDirectory,
+                        sessionDefaults: sessionDefaults,
+                        progressHandler: { progress in
+                            Task { @MainActor in
+                                guard self.photosImportOperationID == operationID else { return }
+                                self.photosImportProgress = progress
+                            }
+                        },
+                        isCancelled: {
+                            cancellationFlag?.isCancelled == true || Task.isCancelled
+                        }
+                    )
+                }.value
+
+                guard self.photosImportOperationID == operationID else { return }
+                guard cancellationFlag?.isCancelled != true else {
+                    self.finalizePhotosImportCancellation(existingPagesSnapshot: existingPagesSnapshot)
+                    return
+                }
+
+                draft.pages = existingPagesSnapshot
+                draft.addPages(importedPages)
+
+                if self.acquisitionImportContext == .addToExistingDraft,
+                   let firstImported = importedPages.first?.id {
+                    draft.selectPage(id: firstImported)
+                } else if draft.selectedPageID == nil {
+                    draft.selectPage(id: importedPages.first?.id)
+                }
+
+                self.document = draft
+                self.emptySessionCreatedForImport = false
+                self.preImportPageIDs = Set(draft.pages.map(\.id))
+                self.isImportingPhotos = false
+                self.photosImportProgress = nil
+                self.photosImportTask = nil
+                self.navigateToDraftReview()
+                self.scheduleProcessingAllPages()
+            } catch let error as ScanDraftError where error == .photosImportCancelled {
+                guard self.photosImportOperationID == operationID else { return }
+                self.finalizePhotosImportCancellation(existingPagesSnapshot: existingPagesSnapshot)
+            } catch let error as ScanDraftError {
+                guard self.photosImportOperationID == operationID else { return }
+                self.document?.pages = existingPagesSnapshot
+                if error.localizedDescription != nil {
+                    self.errorMessage = error.localizedDescription
+                }
+                self.rollbackFailedImport()
+                self.isImportingPhotos = false
+                self.photosImportProgress = nil
+                self.photosImportTask = nil
+            } catch {
+                guard self.photosImportOperationID == operationID else { return }
+                self.document?.pages = existingPagesSnapshot
+                self.errorMessage = ScanDraftError.photosAssetLoadFailure.localizedDescription
+                self.rollbackFailedImport()
+                self.isImportingPhotos = false
+                self.photosImportProgress = nil
+                self.photosImportTask = nil
+            }
+        }
+
+        await photosImportTask?.value
+    }
+
+    private func finalizePhotosImportCancellation(existingPagesSnapshot: [ScanDraftPage]) {
+        document?.pages = existingPagesSnapshot
+        errorMessage = nil
+        rollbackFailedImport()
+        isImportingPhotos = false
+        photosImportProgress = nil
+        photosImportTask = nil
+        photosImportCancellationFlag = nil
+    }
+
+    private func rollbackEmptyImportSessionIfNeeded() {
+        guard acquisitionImportContext == .newDocument,
               document?.isEmpty ?? true,
-              emptySessionCreatedForCamera else {
+              emptySessionCreatedForImport else {
             return
         }
 
@@ -303,18 +519,21 @@ final class ScanDraftSessionViewModel {
             try? storage.deleteSession(for: documentID)
         }
         document = nil
-        emptySessionCreatedForCamera = false
+        emptySessionCreatedForImport = false
         isDocumentScannerPresented = false
         preImportPageIDs = []
+        photosImportOperationID = nil
     }
 
-    private func rollbackFailedCameraImport() {
+    private func rollbackFailedImport() {
         guard var draft = document else { return }
 
-        switch cameraImportContext {
+        switch acquisitionImportContext {
         case .newDocument:
             if preImportPageIDs.isEmpty {
-                discardDraftSession()
+                try? storage.deleteSession(for: draft.id)
+                document = nil
+                emptySessionCreatedForImport = false
             } else {
                 draft.pages = draft.pages.filter { preImportPageIDs.contains($0.id) }
                 document = draft

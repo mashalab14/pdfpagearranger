@@ -56,7 +56,7 @@ final class ScanDraftSessionViewModelCameraRegressionTests: XCTestCase {
         adjustments.mode = .enhanced
         viewModel.applyVisualAdjustments(adjustments, toPageIDs: [existingID])
 
-        try viewModel.prepareSessionForCameraScan(context: .addToExistingDraft)
+        try viewModel.prepareSessionForAcquisition(context: .addToExistingDraft)
         await viewModel.handleVisionKitScanCompleted(ScanCameraScanTestSupport.makeScanBridge(pageCount: 2))
 
         let document = try XCTUnwrap(viewModel.document)
@@ -84,7 +84,7 @@ final class ScanDraftSessionViewModelCameraRegressionTests: XCTestCase {
         await viewModel.handleVisionKitScanCompleted(ScanCameraScanTestSupport.makeScanBridge(pageCount: 1))
         let beforeCount = viewModel.document?.pages.count
 
-        try viewModel.prepareSessionForCameraScan(context: .addToExistingDraft)
+        try viewModel.prepareSessionForAcquisition(context: .addToExistingDraft)
         viewModel.handleVisionKitScanCancelled()
 
         XCTAssertEqual(viewModel.document?.pages.count, beforeCount)

@@ -18,6 +18,9 @@ enum ScanDraftError: LocalizedError, Equatable {
     case imageExtractionFailure
     case imageEncodingFailure
     case draftModelUpdateFailure
+    case photosAssetLoadFailure
+    case corruptedImageData
+    case photosImportCancelled
 
     var errorDescription: String? {
         switch self {
@@ -55,6 +58,12 @@ enum ScanDraftError: LocalizedError, Equatable {
             return "A scanned page could not be saved."
         case .draftModelUpdateFailure:
             return "The scanned pages could not be added to the draft."
+        case .photosAssetLoadFailure:
+            return "One or more selected photos could not be imported. Try again."
+        case .corruptedImageData:
+            return "One or more selected images could not be read."
+        case .photosImportCancelled:
+            return nil
         }
     }
 }

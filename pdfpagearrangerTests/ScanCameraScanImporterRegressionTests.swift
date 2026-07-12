@@ -40,7 +40,7 @@ final class ScanCameraScanImporterRegressionTests: XCTestCase {
                 if index == 1 {
                     throw ScanDraftError.temporaryFileWriteFailure
                 }
-                return ScanDraftTestFactory.makeTestImageData()
+                return .jpeg(ScanDraftTestFactory.makeTestImageData())
             }
         ) { error in
             XCTAssertEqual(error as? ScanDraftError, .temporaryFileWriteFailure)

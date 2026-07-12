@@ -36,7 +36,11 @@ struct ScanDraftRootView: View {
                         }
                     }
                 },
-                onPhotos: { sessionViewModel.navigateToPhotosAcquisition() },
+                onPhotos: {
+                    if sessionViewModel.requestPhotosImport(context: .newDocument) {
+                        sessionViewModel.navigateToPhotosAcquisition()
+                    }
+                },
                 onCancel: cancelFlow
             )
 
@@ -44,11 +48,7 @@ struct ScanDraftRootView: View {
             ScanDraftCameraAcquisitionView(sessionViewModel: sessionViewModel)
 
         case .photosAcquisition:
-            ScanDraftAcquisitionPlaceholderView(
-                title: "Photos",
-                message: "Photos picker import will be implemented in a later milestone.",
-                onCancel: { sessionViewModel.handleAcquisitionCancelled() }
-            )
+            ScanDraftPhotosAcquisitionView(sessionViewModel: sessionViewModel)
 
         case .draftReview:
             ScanDraftReviewPlaceholderView(
@@ -125,6 +125,9 @@ private struct ScanDraftSourceSelectionView: View {
             .accessibilityHint("Opens the document camera to scan one or more pages.")
             Button("Import from Photos", action: onPhotos)
                 .buttonStyle(.bordered)
+                .disabled(sessionViewModel.isImportingPhotos || sessionViewModel.isImportingCameraScan)
+                .accessibilityLabel("Import from Photos")
+                .accessibilityHint("Opens the system photo picker to import one or more images.")
             Button("Cancel", action: onCancel)
         }
         .padding()
@@ -164,7 +167,7 @@ private struct ScanDraftReviewPlaceholderView: View {
             if let document {
                 Text("Pages: \(document.pages.count)")
                 Text("Selected page: \(document.selectedPageID?.uuidString.prefix(8) ?? "none")")
-                Text("All sources camera: \(document.pages.allSatisfy { $0.sourceType == .camera })")
+                Text("Sources: \(document.pages.map(\.sourceType.rawValue).joined(separator: ", "))")
                 Text(
                     "Page order preserved: \(document.pages.map { String($0.id.uuidString.prefix(4)) }.joined(separator: ", "))"
                 )
@@ -182,8 +185,17 @@ private struct ScanDraftReviewPlaceholderView: View {
                 }
             }
             .buttonStyle(.bordered)
+            .disabled(sessionViewModel.isImportingPhotos || sessionViewModel.isImportingCameraScan)
             .accessibilityLabel("Scan More Pages")
             .accessibilityHint("Adds more scanned pages to this draft.")
+
+            Button("Import More Pages") {
+                _ = sessionViewModel.beginAddPagesPhotosImport()
+            }
+            .buttonStyle(.bordered)
+            .disabled(sessionViewModel.isImportingPhotos || sessionViewModel.isImportingCameraScan)
+            .accessibilityLabel("Import More Pages")
+            .accessibilityHint("Imports more photos into this draft.")
 
             Button("Close", action: onClose)
         }

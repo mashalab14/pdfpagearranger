@@ -23,6 +23,47 @@ enum ScanWorkingImageEncoder {
         normalizedImage(from: image)?.size ?? image.size
     }
 
+    /// Prepares app-owned working image bytes while preserving quality where practical.
+    static func preparedImportPayload(from data: Data) throws -> (data: Data, fileExtension: String) {
+        guard !data.isEmpty else {
+            throw ScanDraftError.unsupportedImageData
+        }
+        guard let image = UIImage(data: data) else {
+            throw ScanDraftError.imageCannotBeLoaded
+        }
+
+        if isPNG(data) {
+            if image.imageOrientation == .up {
+                return (data, "png")
+            }
+            guard let pngData = normalizedImage(from: image)?.pngData(), !pngData.isEmpty else {
+                throw ScanDraftError.imageEncodingFailure
+            }
+            return (pngData, "png")
+        }
+
+        if isJPEG(data), image.imageOrientation == .up {
+            return (data, "jpg")
+        }
+
+        return (try normalizedJPEGData(from: image), "jpg")
+    }
+
+    private static func isPNG(_ data: Data) -> Bool {
+        data.count >= 8
+            && data[0] == 0x89
+            && data[1] == 0x50
+            && data[2] == 0x4E
+            && data[3] == 0x47
+    }
+
+    private static func isJPEG(_ data: Data) -> Bool {
+        data.count >= 3
+            && data[0] == 0xFF
+            && data[1] == 0xD8
+            && data[2] == 0xFF
+    }
+
     private static func normalizedImage(from image: UIImage) -> UIImage? {
         guard image.imageOrientation != .up else { return image }
 
