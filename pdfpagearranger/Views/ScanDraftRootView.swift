@@ -58,10 +58,9 @@ struct ScanDraftRootView: View {
             )
 
         case .pageAdjustment(let pageID):
-            ScanDraftPageAdjustmentPlaceholderView(
-                draftID: sessionViewModel.document?.id,
-                pageID: pageID,
-                onClose: { sessionViewModel.navigateToDraftReview() }
+            ScanDraftPageAdjustmentView(
+                sessionViewModel: sessionViewModel,
+                pageID: pageID
             )
 
         case .pdfGenerationProgress:
@@ -159,32 +158,6 @@ private struct ScanDraftSourceSelectionView: View {
         } message: {
             Text(sessionViewModel.errorMessage ?? "")
         }
-    }
-}
-
-private struct ScanDraftPageAdjustmentPlaceholderView: View {
-    let draftID: UUID?
-    let pageID: UUID
-    let onClose: () -> Void
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Text("Page adjustment placeholder")
-                .font(.headline)
-            if let draftID {
-                Text("Draft: \(draftID.uuidString.prefix(8))…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Text("Page: \(pageID.uuidString.prefix(8))…")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Button("Back to Review", action: onClose)
-                .accessibilityLabel("Back to Review")
-        }
-        .padding()
-        .navigationTitle("Adjust Page")
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

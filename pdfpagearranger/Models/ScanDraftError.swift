@@ -22,6 +22,8 @@ enum ScanDraftError: LocalizedError, Equatable {
     case corruptedImageData
     case photosImportCancelled
     case draftCleanupFailure
+    case invalidPageGeometry
+    case perspectiveCorrectionFailure
 
     var errorDescription: String? {
         switch self {
@@ -67,6 +69,10 @@ enum ScanDraftError: LocalizedError, Equatable {
             return nil
         case .draftCleanupFailure:
             return "The draft could not be removed from this device."
+        case .invalidPageGeometry:
+            return "The selected crop area is invalid. Adjust the corners and try again."
+        case .perspectiveCorrectionFailure:
+            return "The page could not be corrected. Try adjusting the corners and apply again."
         }
     }
 }

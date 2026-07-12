@@ -147,13 +147,36 @@ actor ScanPageProcessingOrchestrator {
         for page: inout ScanDraftPage,
         sessionDirectory: URL
     ) async throws {
-        let originalData = try storage.loadImageData(at: page.originalImage, sessionDirectory: sessionDirectory)
-        let processedReference = try storage.writeProcessedImage(
-            data: originalData,
+        let outputData = try await generateGeometryProcessedData(for: page, sessionDirectory: sessionDirectory)
+        let processedReference = try storage.replaceProcessedImage(
+            data: outputData,
             pageID: page.id,
-            sessionDirectory: sessionDirectory
+            sessionDirectory: sessionDirectory,
+            previousReference: page.processedImage
         )
         page.processedImage = processedReference
+    }
+
+    private func generateGeometryProcessedData(
+        for page: ScanDraftPage,
+        sessionDirectory: URL
+    ) async throws -> Data {
+        let originalData = try storage.loadImageData(at: page.originalImage, sessionDirectory: sessionDirectory)
+        let needsProcessing = page.geometry.perspectiveCorrectionEnabled
+            || page.geometry.rotation != 0
+            || page.geometry.effectiveCorners != nil
+
+        guard needsProcessing else {
+            return originalData
+        }
+
+        return try await Task.detached(priority: .userInitiated) {
+            try ScanPerspectiveCorrectionEngine.process(
+                sourceData: originalData,
+                geometry: page.geometry,
+                pixelSize: page.originalPixelSize
+            ).data
+        }.value
     }
 
     private func generateThumbnail(

@@ -97,9 +97,49 @@ final class ScanDraftSessionStorage: Sendable {
         do {
             try data.write(to: destinationURL, options: .atomic)
         } catch {
+            if (error as NSError).domain == NSPOSIXErrorDomain,
+               (error as NSError).code == Int(POSIXErrorCode.ENOSPC.rawValue) {
+                throw ScanDraftError.insufficientStorage
+            }
             throw ScanDraftError.temporaryFileWriteFailure
         }
         return ScanDraftImageReference(relativePath: relativePath)
+    }
+
+    @discardableResult
+    func replaceProcessedImage(
+        data: Data,
+        pageID: UUID,
+        sessionDirectory: URL,
+        previousReference: ScanDraftImageReference?,
+        fileExtension: String = "jpg"
+    ) throws -> ScanDraftImageReference {
+        let stagingRelativePath = "\(Self.processedDirectoryName)/\(pageID.uuidString).staging.\(fileExtension)"
+        let finalRelativePath = "\(Self.processedDirectoryName)/\(pageID.uuidString).\(fileExtension)"
+        let stagingURL = sessionDirectory.appendingPathComponent(stagingRelativePath)
+        let finalURL = sessionDirectory.appendingPathComponent(finalRelativePath)
+
+        do {
+            try data.write(to: stagingURL, options: .atomic)
+            if fileManager.fileExists(atPath: finalURL.path) {
+                try fileManager.removeItem(at: finalURL)
+            }
+            try fileManager.moveItem(at: stagingURL, to: finalURL)
+        } catch {
+            try? fileManager.removeItem(at: stagingURL)
+            if (error as NSError).domain == NSPOSIXErrorDomain,
+               (error as NSError).code == Int(POSIXErrorCode.ENOSPC.rawValue) {
+                throw ScanDraftError.insufficientStorage
+            }
+            throw ScanDraftError.temporaryFileWriteFailure
+        }
+
+        if let previousReference, previousReference.relativePath != finalRelativePath {
+            let previousURL = previousReference.url(in: sessionDirectory)
+            try? fileManager.removeItem(at: previousURL)
+        }
+
+        return ScanDraftImageReference(relativePath: finalRelativePath)
     }
 
     func writeThumbnailImage(

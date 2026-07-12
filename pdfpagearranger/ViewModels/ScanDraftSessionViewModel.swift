@@ -14,6 +14,9 @@ final class ScanDraftSessionViewModel {
     private(set) var isImportingPhotos = false
     private(set) var photosImportProgress: ScanPhotosImportProgress?
     private(set) var photosSelectionHandled = false
+    private(set) var adjustmentSession: ScanPageAdjustmentSession?
+    private(set) var isApplyingGeometry = false
+    private(set) var isDetectingEdges = false
     var isDocumentScannerPresented = false
     var errorMessage: String?
 
@@ -23,6 +26,8 @@ final class ScanDraftSessionViewModel {
     private let editorHandoff: ScanEditorHandoffService
     private let cameraScanImporter: ScanCameraScanImporter
     private let photosSelectionImporter: ScanPhotosSelectionImporter
+    private let geometryProcessor: ScanDraftPageGeometryProcessor
+    private let edgeDetector: any ScanDocumentEdgeDetecting
     private let permissionChecker: any ScanCameraPermissionChecking
     private let scannerAvailability: any ScanDocumentScannerAvailabilityChecking
     private var processingTask: Task<Void, Never>?
@@ -33,6 +38,9 @@ final class ScanDraftSessionViewModel {
     private var cameraScanCompletionHandled = false
     private var photosImportOperationID: UUID?
     private var photosImportCancellationFlag: ScanImportCancellationFlag?
+    private var geometryApplyOperationID: UUID?
+    private var edgeDetectionOperationID: UUID?
+    private var geometryApplyTask: Task<Void, Never>?
 
     init(
         storage: ScanDraftSessionStorage = ScanDraftSessionStorage(),
@@ -41,6 +49,8 @@ final class ScanDraftSessionViewModel {
         editorHandoff: ScanEditorHandoffService? = nil,
         cameraScanImporter: ScanCameraScanImporter? = nil,
         photosSelectionImporter: ScanPhotosSelectionImporter? = nil,
+        geometryProcessor: ScanDraftPageGeometryProcessor? = nil,
+        edgeDetector: (any ScanDocumentEdgeDetecting)? = nil,
         permissionChecker: (any ScanCameraPermissionChecking)? = nil,
         scannerAvailability: (any ScanDocumentScannerAvailabilityChecking)? = nil
     ) {
@@ -50,6 +60,8 @@ final class ScanDraftSessionViewModel {
         self.editorHandoff = editorHandoff ?? ScanEditorHandoffService()
         self.cameraScanImporter = cameraScanImporter ?? ScanCameraScanImporter(storage: storage)
         self.photosSelectionImporter = photosSelectionImporter ?? ScanPhotosSelectionImporter(storage: storage)
+        self.geometryProcessor = geometryProcessor ?? ScanDraftPageGeometryProcessor(storage: storage)
+        self.edgeDetector = edgeDetector ?? VisionScanDocumentEdgeDetector()
         self.permissionChecker = permissionChecker ?? SystemScanCameraPermissionChecker()
         self.scannerAvailability = scannerAvailability ?? SystemScanDocumentScannerAvailabilityChecker()
     }
@@ -108,6 +120,13 @@ final class ScanDraftSessionViewModel {
         cameraScanCompletionHandled = false
         photosImportOperationID = nil
         photosImportCancellationFlag = nil
+        adjustmentSession = nil
+        isApplyingGeometry = false
+        isDetectingEdges = false
+        geometryApplyOperationID = nil
+        edgeDetectionOperationID = nil
+        geometryApplyTask?.cancel()
+        geometryApplyTask = nil
         return true
     }
 
@@ -136,7 +155,174 @@ final class ScanDraftSessionViewModel {
             errorMessage = ScanDraftError.emptyDraft.localizedDescription
             return
         }
-        navigateToPageAdjustment(pageID: pageID)
+        Task {
+            await preparePageAdjustment(pageID: pageID)
+            navigateToPageAdjustment(pageID: pageID)
+        }
+    }
+
+    func preparePageAdjustment(pageID: UUID) async {
+        guard let draft = document, let sessionDirectory = sessionDirectory else { return }
+        guard let page = draft.pages.first(where: { $0.id == pageID }) else { return }
+
+        let pageNumber = pageNumber(for: pageID) ?? 1
+        var workingGeometry = page.geometry
+
+        if page.sourceType == .camera, workingGeometry.effectiveCorners == nil {
+            workingGeometry.detectedCorners = ScanPageGeometryEngine.fullBoundsCorners()
+            workingGeometry.perspectiveCorrectionEnabled = false
+        }
+
+        adjustmentSession = ScanPageAdjustmentSession(
+            draftID: draft.id,
+            pageID: page.id,
+            pageNumber: pageNumber,
+            totalPages: draft.pages.count,
+            sourceType: page.sourceType,
+            workingGeometry: workingGeometry,
+            committedGeometry: page.geometry
+        )
+
+        if page.sourceType == .photos,
+           page.geometry.userAdjustedCorners == nil,
+           page.geometry.detectedCorners == nil {
+            await redetectDocumentEdges()
+        } else if adjustmentSession?.workingGeometry.effectiveCorners == nil {
+            guard var session = adjustmentSession else { return }
+            session.workingGeometry.detectedCorners = ScanPageGeometryEngine.fullBoundsCorners()
+            session.workingGeometry.perspectiveCorrectionEnabled = page.sourceType == .photos
+            adjustmentSession = session
+        }
+    }
+
+    func updateAdjustmentWorkingGeometry(_ geometry: ScanPageGeometry) {
+        guard var session = adjustmentSession else { return }
+        session.workingGeometry = geometry
+        adjustmentSession = session
+    }
+
+    func rotateAdjustmentGeometryClockwise() {
+        guard var session = adjustmentSession else { return }
+        session.workingGeometry = session.workingGeometry.rotated()
+        adjustmentSession = session
+    }
+
+    func resetAdjustmentGeometry() {
+        guard var session = adjustmentSession else { return }
+        var geometry = session.committedGeometry
+        if geometry.effectiveCorners == nil {
+            geometry.detectedCorners = ScanPageGeometryEngine.fullBoundsCorners()
+            geometry.perspectiveCorrectionEnabled = session.sourceType == .photos
+        }
+        session.workingGeometry = geometry
+        adjustmentSession = session
+    }
+
+    func redetectDocumentEdges() async {
+        guard var session = adjustmentSession else { return }
+        guard let sessionDirectory = sessionDirectory else { return }
+        guard let page = document?.pages.first(where: { $0.id == session.pageID }) else { return }
+
+        let operationID = UUID()
+        edgeDetectionOperationID = operationID
+        isDetectingEdges = true
+        defer {
+            if edgeDetectionOperationID == operationID {
+                isDetectingEdges = false
+            }
+        }
+
+        do {
+            let imageData = try storage.loadImageData(at: page.originalImage, sessionDirectory: sessionDirectory)
+            guard let detection = try await edgeDetector.detectDocument(in: imageData) else {
+                session.workingGeometry.detectedCorners = ScanPageGeometryEngine.fullBoundsCorners()
+                session.workingGeometry.userAdjustedCorners = ScanPageGeometryEngine.fullBoundsCorners()
+                session.workingGeometry.perspectiveCorrectionEnabled = session.sourceType == .photos
+                adjustmentSession = session
+                return
+            }
+
+            guard edgeDetectionOperationID == operationID else { return }
+            session.workingGeometry.detectedCorners = detection.corners
+            session.workingGeometry.userAdjustedCorners = detection.corners
+            session.workingGeometry.perspectiveCorrectionEnabled = true
+            adjustmentSession = session
+        } catch {
+            guard edgeDetectionOperationID == operationID else { return }
+            session.workingGeometry.detectedCorners = ScanPageGeometryEngine.fullBoundsCorners()
+            session.workingGeometry.userAdjustedCorners = ScanPageGeometryEngine.fullBoundsCorners()
+            session.workingGeometry.perspectiveCorrectionEnabled = session.sourceType == .photos
+            adjustmentSession = session
+        }
+    }
+
+    func cancelPageAdjustment() {
+        geometryApplyTask?.cancel()
+        geometryApplyOperationID = nil
+        edgeDetectionOperationID = nil
+        adjustmentSession = nil
+        isApplyingGeometry = false
+        isDetectingEdges = false
+        navigateToDraftReview()
+    }
+
+    func applyPageAdjustment() async -> Bool {
+        guard !isApplyingGeometry else { return false }
+        guard let session = adjustmentSession else { return false }
+        guard var draft = document, let sessionDirectory = sessionDirectory else { return false }
+        guard let pageIndex = draft.pages.firstIndex(where: { $0.id == session.pageID }) else { return false }
+
+        let operationID = UUID()
+        geometryApplyOperationID = operationID
+        isApplyingGeometry = true
+        errorMessage = nil
+
+        let page = draft.pages[pageIndex]
+        let geometry = session.workingGeometry
+        let processor = geometryProcessor
+
+        do {
+            let updatedPage = try await Task.detached(priority: .userInitiated) {
+                try await processor.applyGeometry(
+                    to: page,
+                    geometry: geometry,
+                    sessionDirectory: sessionDirectory
+                )
+            }.value
+
+            guard geometryApplyOperationID == operationID, document?.id == session.draftID else {
+                return false
+            }
+
+            draft.updatePage(id: session.pageID) { existing in
+                existing.geometry = updatedPage.geometry
+                existing.processedImage = updatedPage.processedImage
+                existing.thumbnailImage = updatedPage.thumbnailImage
+                existing.thumbnailState = updatedPage.thumbnailState
+                existing.processingState = updatedPage.processingState
+                existing.processingError = updatedPage.processingError
+                existing.processingFingerprint = updatedPage.processingFingerprint
+            }
+            draft.selectPage(id: session.pageID)
+            document = draft
+            adjustmentSession = nil
+            isApplyingGeometry = false
+            geometryApplyOperationID = nil
+            navigateToDraftReview()
+            return true
+        } catch let error as ScanDraftError {
+            guard geometryApplyOperationID == operationID else { return false }
+            errorMessage = error.localizedDescription
+            isApplyingGeometry = false
+            geometryApplyOperationID = nil
+            return false
+        } catch {
+            guard geometryApplyOperationID == operationID else { return false }
+            errorMessage = ScanDraftError.perspectiveCorrectionFailure.localizedDescription
+            isApplyingGeometry = false
+            geometryApplyOperationID = nil
+            return false
+        }
     }
 
     func handleAcquisitionCancelled() {

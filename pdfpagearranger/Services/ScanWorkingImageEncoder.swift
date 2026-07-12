@@ -23,6 +23,10 @@ enum ScanWorkingImageEncoder {
         normalizedImage(from: image)?.size ?? image.size
     }
 
+    static func orientationNormalizedImage(from image: UIImage) -> UIImage? {
+        normalizedImage(from: image)
+    }
+
     /// Prepares app-owned working image bytes while preserving quality where practical.
     static func preparedImportPayload(from data: Data) throws -> (data: Data, fileExtension: String) {
         guard !data.isEmpty else {

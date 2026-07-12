@@ -130,7 +130,10 @@ final class ScanDraftSessionViewModelReviewRegressionTests: XCTestCase {
 
         viewModel.openAdjustmentForSelectedPage()
 
+        try await waitForAdjustmentNavigation(pageID: pageID)
+
         XCTAssertEqual(viewModel.navigationPath.last, .pageAdjustment(pageID: pageID))
+        XCTAssertEqual(viewModel.adjustmentSession?.pageID, pageID)
     }
 
     func testCloseIntentRequiresDiscardConfirmationAfterImport() async throws {
@@ -181,5 +184,17 @@ final class ScanDraftSessionViewModelReviewRegressionTests: XCTestCase {
             orderedItems: ScanPhotosImportTestSupport.makeOrderedItems(count: count),
             assetLoader: ScanPhotosImportTestSupport.makeLoader(count: count)
         )
+    }
+
+    private func waitForAdjustmentNavigation(pageID: UUID, timeoutNanoseconds: UInt64 = 2_000_000_000) async throws {
+        let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNanoseconds
+        while DispatchTime.now().uptimeNanoseconds < deadline {
+            if viewModel.navigationPath.last == .pageAdjustment(pageID: pageID),
+               viewModel.adjustmentSession?.pageID == pageID {
+                return
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTFail("Timed out waiting for page adjustment navigation")
     }
 }
