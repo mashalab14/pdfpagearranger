@@ -9,6 +9,8 @@ struct PageOverlayCanvasView: View {
     let pageLoadKey: String
     let objects: [PageObject]
     let annotations: [PageAnnotation]
+    let searchMatchesOnPage: [DocumentSearchMatch]
+    let activeSearchMatchID: UUID?
     let placementAnimatingOverlayIDs: Set<UUID>
     let onPlacementAnimationFinished: (UUID) -> Void
     let signaturePlacementActive: Bool
@@ -282,6 +284,18 @@ struct PageOverlayCanvasView: View {
                     .scaledToFit()
                     .frame(width: fitSize.width, height: fitSize.height)
                     .allowsHitTesting(false)
+
+                if !searchMatchesOnPage.isEmpty {
+                    SearchHighlightCanvasLayer(
+                        matches: searchMatchesOnPage,
+                        activeMatchID: activeSearchMatchID,
+                        pageRotation: pageRotation,
+                        pageSize: fitSize
+                    )
+                    .frame(width: fitSize.width, height: fitSize.height)
+                    .allowsHitTesting(false)
+                    .accessibilityIdentifier("searchHighlightLayer")
+                }
 
                 if let stickyNote = selectedStickyNote,
                    annotationInteractionEnabled,

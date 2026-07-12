@@ -20,6 +20,9 @@ final class PDFEditorViewModel {
     private var overlayRevisions: [UUID: Int] = [:]
     private(set) var pageNumberSettings: PageNumberSettings = .default
     private(set) var watermarkSettings: WatermarkSettings = .default
+    private(set) var documentSearch = DocumentSearchState()
+    private var searchResultsCacheKey: String?
+    private var searchResultsCache: DocumentSearchResults?
     private let pdfService = PDFService()
     private let compressionService = CompressionService()
     let proGate = ProGate()
@@ -41,6 +44,101 @@ final class PDFEditorViewModel {
         pages.firstIndex(where: { $0.id == id })
     }
 
+    // MARK: - Document search
+
+    func openDocumentSearch() {
+        documentSearch.isActive = true
+    }
+
+    func closeDocumentSearch() {
+        documentSearch = DocumentSearchState()
+        searchResultsCacheKey = nil
+        searchResultsCache = nil
+    }
+
+    func updateDocumentSearchQuery(_ query: String) {
+        documentSearch.results.query = query
+
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            documentSearch.results.matches = []
+            documentSearch.currentMatchIndex = nil
+            searchResultsCacheKey = nil
+            searchResultsCache = nil
+            return
+        }
+
+        guard let document = sourceDocument else {
+            documentSearch.results.matches = []
+            documentSearch.currentMatchIndex = nil
+            return
+        }
+
+        let cacheKey = DocumentSearchEngine.cacheKey(query: query, document: document, pages: pages)
+        let results: DocumentSearchResults
+        if cacheKey == searchResultsCacheKey, let searchResultsCache {
+            results = DocumentSearchResults(query: query, matches: searchResultsCache.matches)
+        } else {
+            results = DocumentSearchEngine.search(query: query, in: document, pages: pages)
+            searchResultsCacheKey = cacheKey
+            searchResultsCache = results
+        }
+
+        documentSearch.results = results
+        reconcileCurrentSearchMatchIndex()
+    }
+
+    func selectDocumentSearchMatch(at globalIndex: Int) {
+        guard documentSearch.results.matches.indices.contains(globalIndex) else { return }
+        documentSearch.currentMatchIndex = globalIndex
+    }
+
+    @discardableResult
+    func moveToNextDocumentSearchMatch() -> DocumentSearchMatch? {
+        guard documentSearch.results.hasMatches else { return nil }
+        let nextIndex = (documentSearch.currentMatchIndex ?? -1) + 1
+        documentSearch.currentMatchIndex = nextIndex >= documentSearch.results.matchCount ? 0 : nextIndex
+        return documentSearch.currentMatch
+    }
+
+    @discardableResult
+    func moveToPreviousDocumentSearchMatch() -> DocumentSearchMatch? {
+        guard documentSearch.results.hasMatches else { return nil }
+        let count = documentSearch.results.matchCount
+        let previousIndex = (documentSearch.currentMatchIndex ?? count) - 1
+        documentSearch.currentMatchIndex = previousIndex < 0 ? count - 1 : previousIndex
+        return documentSearch.currentMatch
+    }
+
+    func refreshDocumentSearchIfNeeded() {
+        guard documentSearch.isActive,
+              !documentSearch.results.isEmptyQuery else {
+            return
+        }
+        let query = documentSearch.results.query
+        searchResultsCacheKey = nil
+        searchResultsCache = nil
+        updateDocumentSearchQuery(query)
+    }
+
+    private func reconcileCurrentSearchMatchIndex() {
+        guard documentSearch.results.hasMatches else {
+            documentSearch.currentMatchIndex = nil
+            return
+        }
+
+        if let currentMatchIndex = documentSearch.currentMatchIndex,
+           documentSearch.results.matches.indices.contains(currentMatchIndex) {
+            return
+        }
+
+        documentSearch.currentMatchIndex = 0
+    }
+
+    private func clearDocumentSearch() {
+        closeDocumentSearch()
+    }
+
     func importPDF(from url: URL) async {
         isLoading = true
         errorMessage = nil
@@ -56,6 +154,7 @@ final class PDFEditorViewModel {
             pageNumberSettings = .default
             watermarkSettings = .default
             clearOverlays()
+            clearDocumentSearch()
             await ThumbnailService.shared.clear()
         } catch {
             resetDocument()
@@ -91,6 +190,7 @@ final class PDFEditorViewModel {
         watermarkSettings = .default
         errorMessage = nil
         clearOverlays()
+        clearDocumentSearch()
     }
 
     /// Clears the current session and returns the app to the import empty state.
@@ -115,6 +215,7 @@ final class PDFEditorViewModel {
 
         let item = pages.remove(at: sourceIndex)
         pages.insert(item, at: destinationIndex)
+        refreshDocumentSearchIfNeeded()
     }
 
     func deletePage(id: UUID) {
@@ -123,6 +224,7 @@ final class PDFEditorViewModel {
         pages.remove(at: index)
         removeOverlays(forPageItemID: id)
         removeAnnotations(forPageItemID: id)
+        refreshDocumentSearchIfNeeded()
     }
 
     func rotatePage(id: UUID) {
@@ -139,6 +241,7 @@ final class PDFEditorViewModel {
         pages.insert(duplicate, at: index + 1)
         copyOverlays(fromPageItemID: id, toPageItemID: duplicate.id)
         copyAnnotations(fromPageItemID: id, toPageItemID: duplicate.id)
+        refreshDocumentSearchIfNeeded()
     }
 
     func undo() {
@@ -150,6 +253,7 @@ final class PDFEditorViewModel {
         imageAssets = snapshot.imageAssets
         pageNumberSettings = snapshot.pageNumberSettings
         watermarkSettings = snapshot.watermarkSettings
+        refreshDocumentSearchIfNeeded()
         Task {
             await ThumbnailService.shared.clear()
         }

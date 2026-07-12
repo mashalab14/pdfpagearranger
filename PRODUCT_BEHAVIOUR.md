@@ -336,6 +336,7 @@ Draft files live under temporary app storage. Discarding or successful handoff r
   - **New PDF** — starts a new session
   - **Undo** — undoes last action (disabled when nothing to undo)
 - **Toolbar (trailing):**
+  - **Search** (magnifying glass) — opens document search (disabled if all pages deleted)
   - **⋯ (ellipsis.circle)** — Document Actions menu (disabled if all pages deleted)
 - **Main content:** scrollable grid of page thumbnails (see [Page thumbnails](#7-page-thumbnails-document-mode))
 
@@ -357,7 +358,7 @@ Tapping **New PDF**:
 1. Any temporary export file from a previous share is deleted
 2. Paywall and share sheets are dismissed if open
 3. The working PDF copy in temp storage is deleted
-4. All session state is cleared (pages, overlays, undo, page numbers)
+4. All session state is cleared (pages, overlays, annotations, undo, page numbers, **search**)
 5. Thumbnail cache is cleared
 6. User returns to **home / empty state**
 
@@ -405,6 +406,89 @@ Tapping **New PDF**:
 ### Visual feedback during page drag-reorder
 
 - While dragging a page in the grid, that thumbnail's opacity becomes **50%**
+
+---
+
+## 7.5 Document search
+
+### Overview
+
+Find text anywhere in the current PDF from **Document Mode** or **Page Mode** using one shared search engine. Search reads the PDF text layer (native vector text or OCR-embedded invisible text from scan-to-PDF). The user does not choose a search source.
+
+Search highlights are **temporary UI only**. They do not create annotations, affect export, appear in thumbnails, or create undo entries.
+
+### Entry points
+
+| Mode | Control | Behaviour |
+|------|---------|-----------|
+| **Document Mode** | Toolbar **Search** button | Opens search sheet with field and grouped results |
+| **Page Mode** | Toolbar **Search** button | Shows inline search bar above the page canvas |
+
+Both entry points search the **entire document**, not only the visible page.
+
+### Search behaviour
+
+- **Incremental:** results update as the user types
+- **Case insensitive** and **diacritic insensitive**
+- Leading/trailing whitespace in the query is ignored
+- Empty query clears results
+- Results cache avoids rescanning unchanged documents for the same query
+
+### Document Mode UI
+
+Search sheet contains:
+
+- Search field
+- Grouped results by page number, e.g. **Page 2** with bullet rows showing context snippets
+- Matched text emphasized in orange within the snippet
+- **No results** empty state: *No matches found for “query”.*
+- **Close** dismisses search and clears all search highlights
+
+Tapping a result:
+
+1. Closes the search sheet
+2. Keeps search active with that match selected
+3. Opens Page Mode on the correct page
+4. Highlights all matches on the page; active match uses stronger orange emphasis
+
+### Page Mode UI
+
+When search is active, a bar above the canvas shows:
+
+- Search field (same query as Document Mode)
+- **Previous match** / **Next match** buttons
+- Position label, e.g. **3 of 17**, or **No results**
+- **Close** clears search
+
+Previous/Next moves through matches **document-wide**. Crossing a page boundary automatically navigates to the next/previous page and updates the navigation title (**Page N**).
+
+### Highlight appearance
+
+- Inactive matches: light orange fill (~35% opacity)
+- Active match: stronger orange fill (~55%) with orange stroke
+- Visually distinct from permanent yellow **highlight annotations**
+
+### Interaction with other features
+
+Search coexists with overlays, annotations, PDF text selection, zoom, and page swipe. Opening search clears overlay/annotation selection on the current page. Search survives page navigation and zoom while active.
+
+### Lifecycle
+
+Search state **resets** when:
+
+- User closes search (Close button)
+- **New PDF** / session close
+- Importing another PDF
+- App restart
+
+Search state is **not** stored in undo snapshots.
+
+### Known limitations (V1)
+
+- No search result preview thumbnails
+- No regex or whole-word-only options
+- Image-only pages without a text layer return no matches
+- Search does not run OCR on imported image PDFs at find time (only existing embedded text is searched)
 
 ---
 
@@ -1592,6 +1676,7 @@ Single snapshot of:
 - Compression (unless **Continue Editing** replaces document — that is a new import with cleared undo)
 - Changing appearance settings
 - Selecting/deselecting overlay without moving it
+- Searching or navigating search matches
 - Zooming/panning page in Page Mode
 
 ### Undo limit

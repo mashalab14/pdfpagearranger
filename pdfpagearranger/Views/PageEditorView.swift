@@ -110,6 +110,16 @@ struct PageEditorView: View {
             .onChange(of: showAddSheet, handleAddSheetChange)
             .onChange(of: pageRoute.pageItemID, handlePageRouteChange)
             .onChange(of: pageSelection, handlePageSelectionChange)
+            .onChange(of: viewModel.documentSearch.currentMatchIndex) { _, _ in
+                syncPageToCurrentSearchMatch(animated: true)
+            }
+            .onChange(of: viewModel.documentSearch.isActive) { _, isActive in
+                if isActive {
+                    clearPDFTextSelection()
+                    pageSelection = .none
+                    signatureEditOverlayID = nil
+                }
+            }
             .task(id: renderTaskKey) { await loadPageImage() }
             .alert("Could Not Save Signature", isPresented: signatureSaveErrorBinding) {
                 Button("OK", role: .cancel) {}
@@ -151,7 +161,11 @@ struct PageEditorView: View {
 
     @ViewBuilder
     private var pageModeGuidanceBar: some View {
-        if textPlacementActive {
+        if viewModel.documentSearch.isActive {
+            PageModeSearchBar(viewModel: viewModel) {
+                viewModel.closeDocumentSearch()
+            }
+        } else if textPlacementActive {
             Text("Tap the page to place text")
                 .font(.subheadline.weight(.semibold))
                 .frame(maxWidth: .infinity)
@@ -181,6 +195,15 @@ struct PageEditorView: View {
 
     @ToolbarContentBuilder
     private var pageToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button {
+                togglePageModeSearch()
+            } label: {
+                Image(systemName: viewModel.documentSearch.isActive ? "magnifyingglass.circle.fill" : "magnifyingglass")
+            }
+            .accessibilityLabel("Search")
+            .accessibilityIdentifier("pageModeSearchButton")
+        }
         ToolbarItem(placement: .topBarTrailing) {
             Button("Done") { dismiss() }
         }
@@ -366,6 +389,12 @@ struct PageEditorView: View {
             pageLoadKey: "\(pageItem.id.uuidString)-\(pageItem.rotation)",
             objects: viewModel.overlayObjects(for: pageItem.id),
             annotations: viewModel.annotations(for: pageItem.id),
+            searchMatchesOnPage: viewModel.documentSearch.isActive
+                ? viewModel.documentSearch.results.matches(on: pageItem.id)
+                : [],
+            activeSearchMatchID: viewModel.documentSearch.currentMatch?.pageItemID == pageItem.id
+                ? viewModel.documentSearch.currentMatch?.id
+                : nil,
             placementAnimatingOverlayIDs: placementAnimatingOverlayIDs,
             onPlacementAnimationFinished: { overlayID in
                 placementAnimatingOverlayIDs.remove(overlayID)
@@ -619,6 +648,39 @@ struct PageEditorView: View {
 
     private func bumpPDFSelectionClearToken() {
         pdfSelectionClearToken = UUID()
+    }
+
+    private func togglePageModeSearch() {
+        if viewModel.documentSearch.isActive {
+            viewModel.closeDocumentSearch()
+            return
+        }
+
+        cancelSignaturePlacement()
+        cancelTextPlacement()
+        cancelStickyNotePlacement()
+        exitDrawingMode(save: false)
+        clearPDFTextSelection()
+        pageSelection = .none
+        signatureEditOverlayID = nil
+        viewModel.openDocumentSearch()
+    }
+
+    private func syncPageToCurrentSearchMatch(animated: Bool) {
+        guard viewModel.documentSearch.isActive,
+              let match = viewModel.documentSearch.currentMatch,
+              match.pageItemID != pageRoute.pageItemID else {
+            return
+        }
+
+        pageTransitionEdge = .trailing
+        if animated {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                pageRoute = PageEditorRoute(pageItemID: match.pageItemID)
+            }
+        } else {
+            pageRoute = PageEditorRoute(pageItemID: match.pageItemID)
+        }
     }
 
     private func registerNewOverlayPlacement(overlayID: UUID) {

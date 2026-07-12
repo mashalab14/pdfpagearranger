@@ -10,6 +10,7 @@ struct EditorView: View {
     @State private var showCompression = false
     @State private var showPageNumbers = false
     @State private var showWatermark = false
+    @State private var showDocumentSearch = false
     @State private var exportURL: URL?
     @State private var exportError: String?
     @State private var draggedPageID: UUID?
@@ -59,6 +60,16 @@ struct EditorView: View {
                 .accessibilityIdentifier("undoButton")
             }
             ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showDocumentSearch = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+                .disabled(viewModel.pages.isEmpty)
+                .accessibilityLabel("Search")
+                .accessibilityIdentifier("documentModeSearchButton")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 DocumentActionsMenu(isEnabled: !viewModel.pages.isEmpty) { action in
                     switch action {
                     case .compress:
@@ -81,6 +92,12 @@ struct EditorView: View {
         }
         .sheet(isPresented: $showWatermark) {
             WatermarkView(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showDocumentSearch) {
+            DocumentSearchSheet(viewModel: viewModel) { match in
+                showDocumentSearch = false
+                selectedPageRoute = PageEditorRoute(pageItemID: match.pageItemID)
+            }
         }
         .sheet(isPresented: $showPaywall) {
             PaywallView(pageCount: viewModel.pageCount) {

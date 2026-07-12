@@ -9,6 +9,7 @@
 - Image overlays
 - **Text overlays (V1)** — tap-to-place editable text with formatting, Recent Texts, vector export
 - **Page annotations (V1)** — PDF text highlights, freehand drawing mode, tap-to-place sticky notes, text comments from PDF selection; composited in Page Mode, thumbnails, and export
+- **Document search** — incremental find across native PDF text and OCR-embedded text; Document Mode results list and Page Mode prev/next navigation with temporary highlights
 - Signature library, Quick Signature, default signature, stroke thickness
 - Page numbers (document-level)
 - **Text and image watermark (document-level)** — including above/behind content layer placement; image stored in session `imageAssets` via `imageAssetID`

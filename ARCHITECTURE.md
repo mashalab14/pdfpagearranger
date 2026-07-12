@@ -10,7 +10,7 @@ PDF Pages is a **local-first PDF transformation workspace**.
 
 - The app **transforms existing PDFs** — it rearranges, edits, annotates, and exports them.
 - The app can **create PDFs from camera scans or photos** via the scan-to-PDF workflow (draft review → generate → open in editor). There is no blank-document authoring flow.
-- The app runs **on-device OCR only during scan-to-PDF generation** to embed an invisible searchable text layer. It does **not** extract structured data from imported PDFs (no field extraction, no document intelligence on existing files).
+- The app runs **on-device OCR only during scan-to-PDF generation** to embed an invisible searchable text layer. In-editor **document search** reads the PDF text layer (native or OCR-embedded) via PDFKit; it does not run OCR on imported PDFs or extract structured fields.
 - **Original imported PDFs must remain untouched.** All editing happens in app state; output is a new file at export time.
 
 Everything runs on-device. There is no cloud account, sync layer, or server-side processing in the current product.
@@ -50,6 +50,7 @@ Examples (implemented):
 - Duplicate pages
 - Undo page-level operations
 - View Document Mode thumbnail grid
+- Search document text from Document Mode or Page Mode
 
 **Current code:** a session in `PDFEditorViewModel` with `pages: [PageItem]`, `sourceDocument`, and overlay state keyed by page.
 
@@ -109,7 +110,10 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`pageObjectsByPage`** | `[UUID: [PageObject]]` in `PDFEditorViewModel` — overlays keyed by `PageItem.id`. |
 | **`annotationsByPage`** | `[UUID: [PageAnnotation]]` in `PDFEditorViewModel` — annotations keyed by `PageItem.id`. |
 | **`EditorSnapshot`** | Undo entry: pages, overlays, annotations, overlay revisions, and image asset references. |
-| **`PDFEditorViewModel`** | Session state, page ops, overlay ops, undo stack, export entry point. |
+| **`PDFEditorViewModel`** | Session state, page ops, overlay ops, undo stack, export entry point, document search state. |
+| **`DocumentSearchEngine`** | Shared document-wide text search over PDFKit page text (native + OCR-embedded). Case/diacritic insensitive; returns normalized match geometry via `PDFTextSelectionEngine`. |
+| **`DocumentSearchState`** | Ephemeral search UI state in `PDFEditorViewModel` (query, matches, current index). Not part of undo snapshots or export. |
+| **`SearchHighlightRenderer`** | Temporary orange search highlights in Page Mode only (distinct from permanent highlight annotations). |
 | **`PDFService`** | Import (copy to temp), export (assemble new PDF), initial `PageItem` list. |
 | **`PDFPreviewRenderer`** | On-screen PDF page rasterization via `PDFPage.thumbnail` (correct orientation). |
 | **`PageRenderService`** | High-resolution page image for Page Mode. |
@@ -288,4 +292,4 @@ When in doubt: if it **transforms an imported PDF locally** and **exports a new 
 
 ---
 
-*Last updated to reflect V1 page annotations (highlights, drawing, sticky notes, text comments), scan-to-PDF with searchable OCR, V1 text overlays, and the Project → Document → Page → Export hierarchy.*
+*Last updated to reflect document search, V1 page annotations (highlights, drawing, sticky notes, text comments), scan-to-PDF with searchable OCR, V1 text overlays, and the Project → Document → Page → Export hierarchy.*
