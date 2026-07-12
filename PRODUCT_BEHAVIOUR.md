@@ -2,7 +2,7 @@
 
 This document describes **exactly how the app behaves today** from the user's perspective. It is intended for designers, product managers, QA engineers, and other agents who need to understand the product without reading source code.
 
-**Last verified against:** the codebase as of the current release (includes Document Mode, Page Mode, overlays, signatures with Quick Signature and default/favorite, signature stroke thickness, page numbers, text and image watermark, compression, export, appearance settings, and horizontal Page Mode navigation).
+**Last verified against:** the codebase as of the current release (includes scan-to-PDF workflow with searchable OCR, Document Mode, Page Mode, image/text/signature overlays, Quick Signature and default/favorite, signature stroke thickness, page numbers, text and image watermark, compression, export, appearance settings, and horizontal Page Mode navigation).
 
 ---
 
@@ -11,7 +11,8 @@ This document describes **exactly how the app behaves today** from the user's pe
 1. [Product overview](#1-product-overview)
 2. [App launch and global behaviour](#2-app-launch-and-global-behaviour)
 3. [Home / empty state (no document open)](#3-home--empty-state-no-document-open)
-4. [Import](#4-import)
+4. [Import (Open PDF)](#4-import-open-pdf)
+4.5. [Scan-to-PDF workflow](#45-scan-to-pdf-workflow)
 5. [Settings](#5-settings)
 6. [Document Mode](#6-document-mode)
 7. [Page thumbnails (Document Mode)](#7-page-thumbnails-document-mode)
@@ -28,6 +29,7 @@ This document describes **exactly how the app behaves today** from the user's pe
 17. [Page Mode zoom and pan](#17-page-mode-zoom-and-pan)
 18. [Adding content in Page Mode](#18-adding-content-in-page-mode)
 19. [Image overlays](#19-image-overlays)
+19.5. [Text overlays](#195-text-overlays)
 20. [Signatures — library, drawing, placement](#20-signatures--library-drawing-placement)
 21. [Overlay selection and manipulation](#21-overlay-selection-and-manipulation)
 22. [Gesture reference (complete)](#22-gesture-reference-complete)
@@ -46,11 +48,12 @@ This document describes **exactly how the app behaves today** from the user's pe
 
 **PDF Pages** is an iOS app for working with PDF documents. The user can:
 
-- Import a PDF
+- Open an existing PDF (**Open PDF**)
+- Create a PDF from a **camera scan** or **imported photos** (scan-to-PDF workflow)
 - View all pages in a scrollable grid (**Document Mode**)
 - Reorder, rotate, duplicate, and delete pages
 - Open a single page for detailed editing (**Page Mode**)
-- Add image overlays and signatures on individual pages (including **Quick Signature** with tap-to-place when a default is set)
+- Add **text**, image, and signature overlays on individual pages (including **Quick Signature** with tap-to-place when a default is set)
 - Apply document-wide page numbers
 - Apply document-wide text or image watermarks
 - Compress the document
@@ -58,7 +61,7 @@ This document describes **exactly how the app behaves today** from the user's pe
 - Change app appearance (light / dark / device)
 - Undo many editing operations
 
-The app does **not** modify the user's original imported file. All edits are held in memory (and temporary app storage for the working copy) until export.
+The app does **not** modify the user's original imported file. All edits are held in memory (and temporary app storage for the working copy) until export. Scan-to-PDF drafts are stored in temporary on-device storage until discarded or converted to a PDF.
 
 There is **no** recent-documents list, **no** project saving, **no** multi-document library, and **no** account system.
 
@@ -84,8 +87,10 @@ There is **no** recent-documents list, **no** project saving, **no** multi-docum
 App
 ├── Home (empty) OR Document Mode
 │   ├── Settings (sheet)
+│   ├── Scan-to-PDF (full-screen cover: camera / photos → review → Create PDF → editor)
 │   └── Page Mode (pushed navigation)
-│       ├── Add options (sheet: Image, Quick Signature, Signature Library)
+│       ├── Add options (sheet: Text, Image, Quick Signature, Signature Library)
+│       ├── Text editor (sheet)
 │       ├── Photos picker (system)
 │       ├── Signature Library (sheet)
 │       └── Signature Capture (sheet, from library)
@@ -105,7 +110,10 @@ App
 - Large document icon (`doc.on.doc`)
 - Title: **"PDF Pages"**
 - Subtitle: **"Rearrange, delete, rotate, and export PDF pages."**
-- Prominent button: **"Import PDF"**
+- Three prominent buttons (stacked):
+  - **Open PDF**
+  - **Scan Document**
+  - **Import Photos**
 - Background: grouped system background (light grey in light mode)
 - Settings gear in top-right
 
@@ -113,10 +121,14 @@ App
 
 | Action | Result |
 |--------|--------|
-| Tap **Import PDF** | Opens the system file picker limited to **PDF files**, **single selection only** |
+| Tap **Open PDF** | Opens the system file picker limited to **PDF files**, **single selection only** |
+| Tap **Scan Document** | Opens the **scan-to-PDF** full-screen flow starting with the system document scanner |
+| Tap **Import Photos** | Opens the **scan-to-PDF** full-screen flow starting with the system photo picker |
 | Tap **Settings** | Opens Settings sheet |
 
-### If the user cancels import
+Starting **Scan Document** or **Import Photos** from home **discards any in-progress scan draft** (temp files removed).
+
+### If the user cancels Open PDF import
 
 - File picker closes
 - User remains on home screen
@@ -124,11 +136,11 @@ App
 
 ---
 
-## 4. Import
+## 4. Import (Open PDF)
 
 ### Entry point
 
-- **Import PDF** button on home screen
+- **Open PDF** button on home screen
 
 ### File picker behaviour
 
@@ -172,7 +184,107 @@ After dismissing **OK**, user returns to **home screen** (empty state). No parti
 
 ### After app restart
 
-- Import state is **not** restored. User sees home screen and must import again.
+- Import state is **not** restored. User sees home screen and must open or create a PDF again.
+
+---
+
+## 4.5 Scan-to-PDF workflow
+
+Creates a new PDF from camera scans or imported photos, then opens it in the main editor. The workflow runs as a **full-screen cover** from home (**Scan Document** or **Import Photos**). Swipe-to-dismiss is **blocked** while the draft has unsaved changes or PDF generation is in progress.
+
+### Entry points
+
+| Entry | First screen |
+|-------|----------------|
+| Home → **Scan Document** | System VisionKit document scanner (presented automatically) |
+| Home → **Import Photos** | System photo picker (presented automatically) |
+| Review → **Add Pages** → **Scan Document** / **Import Photos** | Same acquisition UIs; returns to review |
+
+Starting a new scan/import from home **replaces any existing draft** silently.
+
+### Scan Document (camera acquisition)
+
+- Navigation title: **Scan Document**
+- System document scanner opens immediately
+- While pages import: overlay **Importing scanned pages…**
+- **Cancel with no pages** on a new draft → flow exits (draft discarded, cover dismisses)
+- **Cancel with existing pages** (add-pages) → returns to **Review Pages**
+- Unsupported device, denied camera, or scan failure → **Scan Error** alert
+
+### Import Photos (photos acquisition)
+
+- Navigation title: **Import Photos**
+- System photo picker opens on appear; user can also tap **Import Photos**
+- Idle copy: *"Choose one or more photos to import."*
+- During import: **Importing photos…** or **Importing X of Y**; **Cancel Import** available
+- Dismissed picker with no selection on a new draft → flow exits; on add-pages → returns to review
+- **Import Error** alert on failure
+- Over-limit message: *"You can import up to 50 photos at once."*
+
+### Review Pages
+
+- Navigation title: **Review Pages**
+- Large page preview, horizontal thumbnail strip (tap to select; drag to reorder when not in selection mode)
+- Empty state: **No Pages Yet** — *"Scan a document or import photos to begin."* with **Scan Document**, **Import Photos**, **Cancel Draft**
+
+**Toolbar (normal):** **Close** · **Rotate** · **Delete** · **Select** · **Create PDF**  
+**Toolbar (selection mode):** **Close** · **Delete** · **Select All** · **Done**
+
+**Bottom bar:** **Adjust Page** · **Duplicate** (hidden in selection mode) · **Add Pages**  
+**Toggle:** **Make PDF Searchable** (default **on**; persisted across app launches)
+
+| Control | Behaviour |
+|---------|-----------|
+| **Close** | Empty draft closes immediately; draft with pages → **Discard Draft?** confirmation |
+| **Rotate** | Rotates selected page 90° clockwise |
+| **Delete** | Deletes selected page(s); confirmation dialog |
+| **Select** / **Done** | Enters/exits multi-page selection mode |
+| **Create PDF** | Generates PDF and opens main editor (disabled during import, batch processing, or PDF generation) |
+| **Adjust Page** | Opens per-page crop/appearance editor |
+| **Duplicate** | Duplicates selected page |
+| **Add Pages** | Dialog: **Scan Document** · **Import Photos** · **Cancel** |
+
+**Discard Draft?** — *"This draft has unsaved changes. Discarding removes imported pages from this device."* — **Discard Draft** / **Keep Editing**
+
+### Adjust Page
+
+- Title: **Adjust Page N**
+- Segmented control: **Crop** | **Appearance**
+- **Crop:** draggable corner handles; **Rotate**; **Redetect** (photo imports) or **Reset** (camera scans)
+- **Appearance:** **Mode** (Original / Enhanced / Grayscale / Black & White), **Brightness**, **Contrast**, optional **Saturation**, optional **Threshold** (B&W)
+- Bottom bar: **Cancel** · **Apply**
+- **Apply** → **Apply Settings To:** **This Page** · **Selected Pages** · **All Pages** · **Cancel**
+- Batch apply confirmation: *"Apply [mode] and current adjustments to N pages? Page crops and rotations will remain unchanged."*
+
+### Create PDF and editor handoff
+
+1. User taps **Create PDF** on review
+2. Progress screen titled **Create PDF** with phased labels:
+   - **Preparing pages: page X of Y**
+   - **Recognizing text: page X of Y** (when **Make PDF Searchable** is on)
+   - **Creating PDF: page X of Y**
+   - **Opening editor…**
+3. **Cancel** available during generation (returns to review)
+4. On success: scan cover **closes**; main editor opens with PDF named **Scanned Document**
+5. If some pages could not be OCR'd: **PDF Created** alert — *"PDF created, but N page(s) may not be searchable."*
+6. Failures: **Review Error** alert; user remains on review
+
+### Searchable PDF (OCR)
+
+- When **Make PDF Searchable** is enabled, the app runs **on-device Vision OCR** during PDF generation
+- Recognized text is embedded as an **invisible text layer** over the rasterized page image (searchable/selectable in PDF readers)
+- OCR results are **cached per draft page**; changing page crop/appearance invalidates cache for that page
+- OCR applies only to **scan-generated PDFs**, not to imported existing PDFs in the editor
+- Toggle preference persists in app settings (default **on**)
+
+### Persistence
+
+| Data | Persists across restart? |
+|------|--------------------------|
+| **Make PDF Searchable** toggle preference | **Yes** |
+| Scan draft pages / session | **No** (temp storage only; no resume) |
+
+Draft files live under temporary app storage. Discarding or successful handoff removes them. Original photos in the user's library are **never modified**.
 
 ---
 
@@ -384,7 +496,7 @@ A **new PDF file** built from:
 
 - Current page list and order
 - Per-page rotation
-- Image and signature overlays
+- Image, text, and signature overlays
 - Applied page numbers (if enabled)
 - Applied watermark (text or image, if enabled)
 - Original PDF page content preserved as vector where possible (searchable text on supported paths)
@@ -708,7 +820,7 @@ Page Mode uses native **PDFKit** text selection on the underlying vector page (n
 | State | Meaning |
 |-------|---------|
 | `none` | Nothing selected |
-| `overlay` | A user overlay (image/signature) is selected |
+| `overlay` | A user overlay (image, text, or signature) is selected |
 | `pdfText` | Native PDF text is selected |
 
 **When text is selected:**
@@ -841,10 +953,14 @@ Page Mode uses native **PDFKit** text selection on the underlying vector page (n
 
 | Option | Subtitle | Enabled? | Action |
 |--------|----------|----------|--------|
-| **Text** | Coming soon | **No** | — |
+| **Text** | Add editable text | **Yes** | Dismisses sheet → opens **Add Text** editor (see [Text overlays](#195-text-overlays)) |
 | **Image** | Import from Photos or Files | **Yes** | Dismisses sheet → opens **Photos picker** |
 | **Quick Signature** | Place your default signature | **Yes** | Dismisses sheet → silently arms tap-to-place (see below), or opens **Signature Library** if none is available |
 | **Signature Library** | Choose, create, or manage signatures | **Yes** | Dismisses sheet → opens **Signature Library** |
+
+### Text import
+
+See [Text overlays](#195-text-overlays).
 
 ### Quick Signature
 
@@ -894,6 +1010,74 @@ See [Signatures](#20-signatures--library-drawing-placement).
 ### In export
 
 - Drawn as image on top of vector PDF page content
+
+---
+
+## 19.5 Text overlays
+
+Editable text boxes placed on individual pages in Page Mode. Text is stored as overlay data and exported as **vector text** drawn above page content.
+
+### Creation flow
+
+1. **Add → Text**
+2. **Add Text** sheet opens (medium/large detent)
+3. User enters text and optional formatting (see below)
+4. Tap **Add** (disabled until text is non-empty)
+5. Sheet dismisses; banner appears: **"Tap the page to place text"**
+6. User taps **inside the displayed PDF page** → text overlay placed at tap (clamped to page bounds), auto-selected with placement haptic + animation
+7. Tapping outside the page does not place text
+
+While placement is armed: PDF text selection and overlay selection are **disabled**; opening **Add** cancels placement.
+
+### Add Text / Edit Text sheet
+
+**Titles:** **Add Text** (new) or **Edit Text** (existing)  
+**Confirm:** **Add** or **Update** (disabled if text is empty)  
+**Cancel** dismisses without saving
+
+| Control | Behaviour |
+|---------|-----------|
+| **Text editor** | Multiline; keyboard focused on open |
+| **Recent Texts** | Up to **10** previously committed texts (most recent first); tap to fill editor; swipe to remove entry |
+| **Insert Today** | Inserts localized today's date string |
+| **Font Size** | Stepper **8–72 pt** (default **14 pt**) |
+| **Text Color** | Color picker (no opacity) |
+| **Bold** | Toggle |
+| **Bulleted List** | Prefixes each line with **•** |
+| **Numbered List** | Prefixes lines **1.** **2.** … (mutually exclusive with bulleted) |
+
+Committed text (on successful place or update) is added to **Recent Texts** (UserDefaults; survives app restart).
+
+### Editing existing text
+
+| Entry | Result |
+|-------|--------|
+| **Double-tap** text overlay | Opens **Edit Text** sheet |
+| Context menu **Edit** | Same |
+| **Update** in sheet | Saves changes; **undo** supported |
+
+### Text overlay on page
+
+- Blue selection border when selected
+- **Resize handle** (bottom-right) — non-uniform resize (width and height adjust independently)
+- **Rotate handle** (top-left, orange) — drag to rotate overlay
+- **Floating contextual menu:** **Edit** · **Duplicate** · **Delete**
+- Text always renders **above** page content (including in export)
+- **Undo:** add, edit, move, resize, rotate, duplicate, delete
+
+### In Document Mode
+
+- Shown composited on thumbnail
+
+### In export
+
+- Drawn as vector text via `TextOverlayRenderer` on top of page content
+
+### Not supported (V1)
+
+- Custom fonts (system font only)
+- Text opacity control
+- Reflow editing inside the PDF's native text layer (overlays only)
 
 ---
 
@@ -1021,13 +1205,14 @@ See [Adding content in Page Mode — Quick Signature](#quick-signature). Uses th
 
 ## 21. Overlay selection and manipulation
 
-Applies to **image overlays** and **signature overlays**. Image overlays use inline chrome; **selected signature overlays** use a floating contextual menu instead of the inline delete (×) control.
+Applies to **image overlays**, **text overlays**, and **signature overlays**. Image overlays use inline chrome; **selected text and signature overlays** use a floating contextual menu instead of the inline delete (×) control.
 
 ### Selection
 
 | Action | Result |
 |--------|--------|
 | **Tap image overlay** (not selected) | Selects overlay; shows blue border, delete (×) top-right, resize handle bottom-right; brings overlay to **front** if it was behind another |
+| **Tap text overlay** (not selected) | Selects overlay; shows blue border, resize handle bottom-right, rotate handle top-left, floating contextual menu (Edit, Duplicate, Delete); brings overlay to **front** if it was behind another |
 | **Tap signature overlay** (not selected) | Selects overlay; shows blue border, resize handle bottom-right, and floating contextual menu (Edit, Delete, More); brings overlay to **front** if it was behind another |
 | **Tap empty canvas** | Deselects |
 | **Select another overlay** | Switches selection |
@@ -1072,9 +1257,21 @@ Changes apply **immediately** — no Apply or Done button. Tap outside, select a
 
 Image overlays are unchanged: inline × delete and toolbar **Delete** remain available.
 
+### Text contextual menu
+
+When a **text overlay** is selected (and the user is not dragging/resizing/rotating it, and text placement mode is off):
+
+| Control | Behaviour |
+|---------|-----------|
+| **Edit** (pencil icon) | Opens **Edit Text** sheet |
+| **Duplicate** (plus.square.on.square icon) | Creates a copy offset from the original (**undo** supported) |
+| **Delete** (trash icon) | Deletes the selected text overlay (**undo** supported) |
+
+The menu is positioned above the text overlay, clamped within the visible page area. It **hides** while the overlay is being manipulated, while the edit sheet is open, when selection is cleared, when PDF text is selected, when the Add sheet opens, or when text/signature placement mode starts.
+
 ### Overlay placement feedback
 
-When the user **newly places** an image or signature overlay in Page Mode (image import, Quick Signature, Signature Library, or Save & Use):
+When the user **newly places** an image, text, or signature overlay in Page Mode (image import, text placement, Quick Signature, Signature Library, or Save & Use):
 
 | Feedback | Behaviour |
 |----------|-----------|
@@ -1102,26 +1299,28 @@ Haptics do **not** fire for those cases either.
 ### Resize — drag handle
 
 - Blue circle handle at bottom-right (only when selected)
-- **Drag handle** to resize uniformly (aspect ratio preserved)
-- Size clamped between **8%** and **95%** of page dimension
+- **Image and signature overlays:** drag handle to resize **uniformly** (aspect ratio preserved); size clamped between **8%** and **95%** of page dimension
+- **Text overlays:** drag handle to resize **width and height independently** (non-uniform); clamped to layout min/max fractions
 - **Undo:** one entry per completed resize
 - Uses **high-priority gesture** so page navigation does not interfere
 - **Blocks page swipe** while resizing
 
 ### Resize — pinch
 
-- **Pinch** on selected overlay to scale
-- Same size limits as handle resize
+- **Pinch** on selected **image or signature** overlay to scale uniformly
+- Same size limits as handle resize for image/signature
+- Text overlays do **not** support pinch resize in V1
 - **Undo:** one entry per completed pinch
 - **Blocks page swipe** while pinching
 
 ### Delete
 
-Three ways:
+Four ways:
 
 1. Red **×** button on **image** overlays (top-right when selected)
 2. **Delete** in Page Mode toolbar (when any overlay selected)
 3. **Delete** (trash icon) in the **signature contextual menu** (signature overlays only)
+4. **Delete** (trash icon) in the **text contextual menu** (text overlays only)
 
 All create **undo** entries.
 
@@ -1132,7 +1331,11 @@ All create **undo** entries.
 
 ### Overlay rotation (object rotation)
 
-- Data model supports overlay rotation; **no user gesture** to rotate overlays in the current UI
+| Overlay type | User rotation |
+|--------------|---------------|
+| **Text** | **Yes** — orange rotate handle (top-left when selected) |
+| **Image** | **No** user gesture (data model supports rotation) |
+| **Signature** | **No** user gesture (data model supports rotation) |
 
 ### Opacity
 
@@ -1146,7 +1349,9 @@ All create **undo** entries.
 
 | Gesture | Target | Effect |
 |---------|--------|--------|
-| Tap | Import PDF | Open file picker |
+| Tap | Open PDF | Open file picker |
+| Tap | Scan Document | Open scan-to-PDF flow (camera) |
+| Tap | Import Photos | Open scan-to-PDF flow (photos) |
 | Tap | Settings | Open settings |
 
 ### Document Mode
@@ -1270,9 +1475,12 @@ Single snapshot of:
 - Page rotate
 - Page duplicate
 - Page reorder (entire drag operation)
-- Add overlay (image or signature)
+- Add overlay (image, text, or signature)
+- Edit text overlay (Update in editor)
+- Duplicate text overlay
 - Move overlay (on release)
 - Resize overlay (handle or pinch, on release)
+- Rotate text overlay (on release)
 - Delete overlay
 - Bring overlay to front (only if z-order actually changes)
 - Apply page numbers
@@ -1307,7 +1515,7 @@ Single snapshot of:
 
 | Context | State | What user sees |
 |---------|-------|----------------|
-| No document | Empty home | PDF Pages title, Import button |
+| No document | Empty home | PDF Pages title, Open PDF / Scan Document / Import Photos buttons |
 | All pages deleted | Empty document | "No Pages" + hint to import |
 | Importing | Loading overlay | Dimmed screen + "Importing PDF…" |
 | Import failed | Alert | "Import Failed" + message |
@@ -1353,16 +1561,19 @@ Single snapshot of:
 | Data | Persists across restart? |
 |------|--------------------------|
 | Appearance setting (Device/Light/Dark) | **Yes** |
+| **Make PDF Searchable** (scan-to-PDF) | **Yes** |
+| **Recent Texts** (text overlay editor) | **Yes** |
 | Signature library (saved signatures) | **Yes** |
 | Default / favorite signature | **Yes** |
 | Last signature ink thickness (capture UI) | **Yes** |
 | Open document / pages / overlays | **No** |
+| Scan draft session | **No** |
 | Undo history | **No** |
 | Page number settings | **No** |
 | Pro unlock | **No** |
 | Import temp files | **No** (cleaned on New PDF / close) |
 
-After restart: user sees **home screen** and must **Import PDF** again. Saved signatures, default signature, and last ink thickness remain available next time they add or draw a signature.
+After restart: user sees **home screen** and must **Open PDF**, **Scan Document**, or **Import Photos** again. Saved signatures, default signature, last ink thickness, Recent Texts, and Make PDF Searchable preference remain available.
 
 ---
 
@@ -1388,8 +1599,11 @@ After restart: user sees **home screen** and must **Import PDF** again. Saved si
 | Overlay placement animation duration | **~150 ms** |
 | Overlay placement animation scale | **0.95 → 1.0** |
 | PDF import | **Single file**, PDF only |
-| Multi-page selection | **Not supported** |
-| Text overlays | **Not implemented** (shown as "Coming soon") |
+| Photos import (scan-to-PDF) | **Up to 50** images per pick |
+| Text overlay font size | **8–72 pt** (default **14 pt**) |
+| Recent Texts storage | **10** entries max |
+| Make PDF Searchable (scan-to-PDF) | **On** by default |
+| Multi-page selection | **Not supported** (editor; scan review supports batch selection for delete/apply) |
 
 ---
 
@@ -1399,20 +1613,22 @@ After restart: user sees **home screen** and must **Import PDF** again. Saved si
 2. **No recent documents** — user must re-import every session.
 3. **Paywall is a placeholder** — "Continue for now" unlocks Pro for the session only; no real purchase.
 4. **Paywall lists "coming soon" features** (merge & split, batch tools) that are not in the app.
-5. **Text overlays** — shown in Add menu but disabled ("Coming soon").
-6. **No OCR, split, merge, password protect** in Document Actions (future only). Watermark is implemented.
-7. **Page number font size and opacity** — not user-configurable in UI.
-8. **Overlay opacity and rotation** — not user-configurable in UI.
-9. **No multi-select** for pages or overlays.
-10. **No redo** — only undo.
-11. **Deleting a page** — no confirmation dialog.
-12. **New PDF** — no confirmation; immediate session loss.
-13. **Image import failure** — silent (no error if photo data invalid).
-14. **Signature rename failure** — silent (no error alert).
-15. **Compression "Continue Editing"** replaces the entire session and clears undo (by design of re-import).
-16. **Document name** in title comes from imported file name; user cannot rename in app.
-17. **Thumbnail position badge** (1, 2, 3…) is always list position; it is independent of page-number feature formatting unless values coincide.
-18. **Page Numbers preview** in setup sheet always reflects the **last page** in the document, not the page currently being edited in Page Mode.
+5. **No split, merge, password protect** in Document Actions (future only). Watermark is implemented.
+6. **OCR is scan-to-PDF only** — imported PDFs are not re-OCR'd in the editor.
+7. **Text overlays (V1)** — system font only; no custom fonts or opacity; not native PDF text reflow.
+8. **Page number font size and opacity** — not user-configurable in UI.
+9. **Image/signature overlay rotation** — not user-configurable in UI (text overlays support rotate).
+10. **No multi-select** for pages or overlays in the editor (scan review supports batch page selection).
+11. **No redo** — only undo.
+12. **Deleting a page** — no confirmation dialog.
+13. **New PDF** — no confirmation; immediate session loss.
+14. **Image import failure** — silent (no error if photo data invalid).
+15. **Signature rename failure** — silent (no error alert).
+16. **Compression "Continue Editing"** replaces the entire session and clears undo (by design of re-import).
+17. **Document name** in title comes from imported file name (or **Scanned Document** for scan handoff); user cannot rename in app.
+18. **Thumbnail position badge** (1, 2, 3…) is always list position; it is independent of page-number feature formatting unless values coincide.
+19. **Page Numbers preview** in setup sheet always reflects the **last page** in the document, not the page currently being edited in Page Mode.
+20. **Scan draft sessions** do not resume after app restart.
 
 ---
 
@@ -1423,8 +1639,7 @@ The following are **not** available in the current product (do not test for them
 - Recent documents list
 - Save project / reopen project
 - Multiple open documents
-- Text overlay editing
-- OCR
+- OCR on imported PDFs (scan-to-PDF OCR is implemented)
 - Split / merge PDFs
 - Password protect PDF
 - Document rename

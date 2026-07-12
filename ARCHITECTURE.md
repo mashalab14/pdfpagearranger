@@ -9,8 +9,8 @@ This document describes the product and technical architecture of **PDF Pages** 
 PDF Pages is a **local-first PDF transformation workspace**.
 
 - The app **transforms existing PDFs** — it rearranges, edits, annotates, and exports them.
-- The app **does not create PDFs from scratch** (no blank-document authoring flow).
-- The app **does not extract structured data** from PDFs (no OCR pipeline, no field extraction, no document intelligence).
+- The app can **create PDFs from camera scans or photos** via the scan-to-PDF workflow (draft review → generate → open in editor). There is no blank-document authoring flow.
+- The app runs **on-device OCR only during scan-to-PDF generation** to embed an invisible searchable text layer. It does **not** extract structured data from imported PDFs (no field extraction, no document intelligence on existing files).
 - **Original imported PDFs must remain untouched.** All editing happens in app state; output is a new file at export time.
 
 Everything runs on-device. There is no cloud account, sync layer, or server-side processing in the current product.
@@ -59,14 +59,11 @@ One page within a document. **Page overlays live here.**
 
 Examples (implemented):
 
-- Image/logo overlays (add, move, resize, delete)
+- Image/logo overlays (add, move, resize, rotate, delete)
+- Text overlays (add, edit, move, resize, rotate, duplicate, delete)
+- Signature overlays (add, move, resize, delete; edit appearance per placement)
 - Undo overlay operations
-
-Examples (planned, not built):
-
-- Text overlays
-- Signature overlays
-- Page numbers, watermarks *(text and image watermark implemented)*
+- Page numbers, watermarks *(document-level; text and image watermark implemented)*
 
 **Current code:** Page Mode (`PageEditorView`) edits overlays for one `PageItem`. Overlays are stored in `pageObjectsByPage[pageItemID]`.
 
@@ -78,8 +75,8 @@ Examples (implemented):
 
 - Export rearranged page order
 - Export page rotation
-- Export with image overlays composited on top
-- Preserve selectable/searchable text where possible (vector page draw, not full-page rasterization)
+- Export with image, text, and signature overlays composited on top
+- Preserve selectable/searchable text where possible (vector page draw, not full-page rasterization; scan-generated PDFs may include invisible OCR text layer)
 
 **Current code:** `PDFEditorViewModel.exportPDF()` → `PDFService.exportPDF()`.
 
@@ -105,7 +102,7 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | Concept | Role |
 |--------|------|
 | **`PageItem`** | One page in the document list. Stable `id`, `originalPageIndex` into the source PDF, `rotation`, optional `duplicateSourceID`. |
-| **`PageObject`** | One overlay on a page (image/signature). Normalized `position` / `size`, `rotation`, `zIndex`, `imageAssetID`. Signatures may also store `signatureSourceImageAssetID`, library baseline appearance, and per-placement ink color/thickness overrides. |
+| **`PageObject`** | One overlay on a page (image, text, or signature). Normalized `position` / `size`, `rotation`, `zIndex`, `imageAssetID`. Text overlays store `textContent`, `textFontSizePoints`, `textColorRGBA`, `textBold`, `textListMode`. Signatures may also store `signatureSourceImageAssetID`, library baseline appearance, and per-placement ink color/thickness overrides. |
 | **`pageObjectsByPage`** | `[UUID: [PageObject]]` in `PDFEditorViewModel` — overlays keyed by `PageItem.id`. |
 | **`EditorSnapshot`** | Undo entry: pages, overlays, overlay revisions, and image asset references. |
 | **`PDFEditorViewModel`** | Session state, page ops, overlay ops, undo stack, export entry point. |
@@ -121,7 +118,16 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`PDFPageTextSelectionView`** | Lazy-mounted `PDFView` for native text selection; disables internal scrolling; forwards page swipes when active. |
 | **`ThumbnailService`** | Cached document thumbnails; composited with overlays when present. |
 | **`OverlayCompositor`** | Draws image overlays onto a thumbnail/page bitmap using `OverlayGeometryEngine`. |
-| **`OverlayPDFExporter`** | Draws image overlays into a PDF `CGContext` using `OverlayGeometryEngine`. |
+| **`OverlayPDFExporter`** | Draws image and text overlays into a PDF `CGContext` using `OverlayGeometryEngine` and `TextOverlayRenderer`. |
+| **`TextOverlayRenderer`** | Vector text drawing for Page Mode compositing, thumbnails, and PDF export. |
+| **`TextOverlayLayoutEngine`** | Font sizing, measured bounds, attributed string layout for text overlays. |
+| **`TextOverlayFormattingEngine`** | List prefixes (bulleted/numbered), Insert Today, list-mode switching. |
+| **`RecentTextsSettings`** | UserDefaults-backed Recent Texts list (max 10 entries). |
+| **`ScanDraftSessionViewModel`** | Scan-to-PDF draft session: acquisition, review, adjustment, PDF generation, editor handoff. |
+| **`ScanDraftPDFGenerator`** | Raster page assembly + optional OCR text layer embedding. |
+| **`ScanOCRService`** | On-device Vision OCR with fingerprinted cache per draft page. |
+| **`ScanOCRPDFTextRenderer`** | Invisible text layer drawing in generated scan PDFs. |
+| **`ScanOCRSettings`** | Persisted **Make PDF Searchable** preference (default on). |
 | **`OverlayPlacementSizing`** | Initial normalized overlay size for signatures (PNG aspect–matched frame) and images (legacy formula). |
 | **`OverlayGeometryEngine`** | Shared normalized → concrete rect mapping for Page Mode, thumbnails, and PDF export (including page rotation). |
 | **`SignatureAppearanceEngine`** | Recolors and thickens/thins placed signature rasters from an immutable source image. |
@@ -139,7 +145,8 @@ Never edit the imported source bytes in place. Never assume export output overwr
 
 | Mode | View | Purpose |
 |------|------|---------|
-| **Empty / Import** | `ContentView` | Choose a PDF |
+| **Empty / Import** | `ContentView` | Open PDF, Scan Document, or Import Photos |
+| **Scan-to-PDF** | `ScanDraftRootView` | Camera/photos acquisition, draft review, adjustment, PDF generation |
 | **Document Mode** | `EditorView` | Page grid, page ops, export |
 | **Page Mode** | `PageEditorView` | Overlay editing on one page |
 
@@ -150,7 +157,7 @@ Never edit the imported source bytes in place. Never assume export output overwr
    - **Behind content** watermark (if enabled): rendered by `watermarkType` (text vector or image raster)
    - Source page vector content via `PDFPage.draw` (preserves selectable text)
    - **Above content** watermark (if enabled): rendered by `watermarkType`
-   - Overlay images via `OverlayPDFExporter`
+   - Overlay images and vector text via `OverlayPDFExporter` / `TextOverlayRenderer`
    - Page numbers
 3. **Do not** use `PDFPage(image:)` for export — that rasterizes the page and destroys selectable text.
 
@@ -226,7 +233,9 @@ Test helpers live under `pdfpagearrangerTests/Helpers/` (`PDFTestFactory`, `Over
 ### Belongs in PDF Pages
 
 - Organize existing PDFs (reorder, delete, rotate, duplicate, merge/split later)
+- Create PDFs from camera scans or photos (scan-to-PDF workflow)
 - Add overlays: images, logos, text, signatures
+- On-device OCR text layer for scan-generated PDFs (searchable output)
 - Page numbers and watermarks
 - Compress / optimize export
 - Merge and split workflows (document/project level)
@@ -235,7 +244,7 @@ Test helpers live under `pdfpagearrangerTests/Helpers/` (`PDFTestFactory`, `Over
 
 ### Does not belong in PDF Pages
 
-- OCR / document intelligence
+- OCR / document intelligence on **imported** PDFs (scan-to-PDF OCR is in scope)
 - Bank statement extraction
 - Salary slip / payslip extraction
 - JSON-to-PDF or template document generation from scratch
@@ -259,4 +268,4 @@ When in doubt: if it **transforms an imported PDF locally** and **exports a new 
 
 ---
 
-*Last updated to reflect OverlayGeometryEngine, overlay undo snapshots, and the Project → Document → Page → Export hierarchy.*
+*Last updated to reflect scan-to-PDF with searchable OCR, V1 text overlays, and the Project → Document → Page → Export hierarchy.*

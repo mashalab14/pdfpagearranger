@@ -4,7 +4,10 @@
 
 - Document Mode (import, reorder, delete, duplicate, rotate)
 - Page Mode (overlays, zoom, swipe navigation)
+- **Scan-to-PDF workflow** — home entry via Scan Document or Import Photos; draft review, page adjustment, PDF generation, handoff to editor
+- **Searchable PDF OCR (scan-to-PDF)** — on-device Vision text recognition; invisible text layer in generated PDFs; Make PDF Searchable toggle (default on, persisted)
 - Image overlays
+- **Text overlays (V1)** — tap-to-place editable text with formatting, Recent Texts, vector export
 - Signature library, Quick Signature, default signature, stroke thickness
 - Page numbers (document-level)
 - **Text and image watermark (document-level)** — including above/behind content layer placement; image stored in session `imageAssets` via `imageAssetID`
@@ -14,8 +17,6 @@
 
 ## Planned / not implemented
 
-- Text overlays (on-page editable text)
-- OCR
 - Split / merge PDFs
 - Password protect
 - Document rename and information panel
