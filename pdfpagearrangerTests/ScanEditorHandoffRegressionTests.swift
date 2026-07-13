@@ -43,7 +43,7 @@ final class ScanEditorHandoffRegressionTests: XCTestCase {
 
         XCTAssertTrue(source.contains("case cameraAcquisition"))
         XCTAssertTrue(source.contains("case photosAcquisition"))
-        XCTAssertTrue(source.contains("case draftReview"))
+        XCTAssertFalse(source.contains("case draftReview"))
         XCTAssertTrue(source.contains("case pageAdjustment"))
         XCTAssertTrue(source.contains("case pdfGenerationProgress"))
         XCTAssertFalse(source.contains("case sourceSelection"))

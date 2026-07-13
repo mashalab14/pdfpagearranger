@@ -95,7 +95,7 @@ final class ScanDraftSessionViewModelVisualAdjustmentRegressionTests: XCTestCase
 
         XCTAssertTrue(applied)
         XCTAssertEqual(viewModel.document?.pages.first?.visualAdjustments.mode, .enhanced)
-        XCTAssertEqual(viewModel.navigationPath, [.draftReview])
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
         XCTAssertEqual(viewModel.document?.selectedPageID, pageID)
     }
 

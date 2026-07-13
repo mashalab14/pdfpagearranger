@@ -119,7 +119,7 @@ final class ScanDraftSessionViewModelReviewRegressionTests: XCTestCase {
 
         XCTAssertEqual(viewModel.document?.pages.count, 3)
         XCTAssertEqual(viewModel.document?.selectedPageID, existingID)
-        XCTAssertEqual(viewModel.navigationPath.last, .draftReview)
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
     }
 
     func testOpenAdjustmentNavigatesWithSelectedPageIdentity() async throws {
@@ -175,7 +175,7 @@ final class ScanDraftSessionViewModelReviewRegressionTests: XCTestCase {
 
         XCTAssertEqual(viewModel.document?.id, draftID)
         XCTAssertEqual(viewModel.document?.selectedPageID, selectedID)
-        XCTAssertEqual(viewModel.navigationPath, [.draftReview])
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
     }
 
     private func importPhotos(count: Int) async {

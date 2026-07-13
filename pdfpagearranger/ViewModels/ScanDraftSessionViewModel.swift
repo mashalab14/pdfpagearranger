@@ -127,7 +127,9 @@ final class ScanDraftSessionViewModel {
 
         let ready = await requestCameraScan(context: .newDocument)
         if !ready, document?.isEmpty ?? true {
+            let preservedError = errorMessage
             _ = discardDraftSessionWithCleanup()
+            errorMessage = preservedError
         }
         return ready
     }
@@ -145,7 +147,9 @@ final class ScanDraftSessionViewModel {
 
         guard requestPhotosImport(context: .newDocument) else {
             if document?.isEmpty ?? true {
+                let preservedError = errorMessage
                 _ = discardDraftSessionWithCleanup()
+                errorMessage = preservedError
             }
             return false
         }
@@ -1216,7 +1220,7 @@ final class ScanDraftSessionViewModel {
     }
 
     func navigateToDraftReview() {
-        navigationPath = [.draftReview]
+        navigationPath = []
     }
 
     func navigateToPageAdjustment(pageID: UUID) {

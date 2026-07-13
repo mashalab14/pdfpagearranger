@@ -76,7 +76,7 @@ final class ScanDraftWorkflowIntegrationRegressionTests: XCTestCase {
 
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertEqual(viewModel.document?.selectedPageID, selectedID)
-        XCTAssertEqual(viewModel.navigationPath.last, .draftReview)
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
     }
 
     func testReturningFromAdjustmentPreservesSelectionAndDraft() async throws {
@@ -94,7 +94,7 @@ final class ScanDraftWorkflowIntegrationRegressionTests: XCTestCase {
 
         XCTAssertEqual(viewModel.document?.id, draftID)
         XCTAssertEqual(viewModel.document?.selectedPageID, secondID)
-        XCTAssertEqual(viewModel.navigationPath, [.draftReview])
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
     }
 
     func testHandoffUsesSingleEditorImportPath() async throws {

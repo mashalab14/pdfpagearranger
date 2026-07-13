@@ -86,7 +86,7 @@ final class ScanDraftEntryNavigationRegressionTests: XCTestCase {
             ScanCameraScanTestSupport.makeScanBridge(pageCount: 1)
         )
 
-        XCTAssertEqual(viewModel.navigationPath.last, .draftReview)
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
         XCTAssertEqual(viewModel.document?.pages.count, 1)
     }
 
@@ -98,7 +98,7 @@ final class ScanDraftEntryNavigationRegressionTests: XCTestCase {
             assetLoader: ScanPhotosImportTestSupport.makeLoader(count: 1)
         )
 
-        XCTAssertEqual(viewModel.navigationPath.last, .draftReview)
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
         XCTAssertEqual(viewModel.document?.pages.count, 1)
     }
 
@@ -112,9 +112,9 @@ final class ScanDraftEntryNavigationRegressionTests: XCTestCase {
 
         XCTAssertFalse(source.contains("case entry"))
         XCTAssertFalse(source.contains("case sourceSelection"))
+        XCTAssertFalse(source.contains("case draftReview"))
         XCTAssertTrue(source.contains("case cameraAcquisition"))
         XCTAssertTrue(source.contains("case photosAcquisition"))
-        XCTAssertTrue(source.contains("case draftReview"))
     }
 
     func testContentViewExposesDirectHomeEntryPoints() throws {
@@ -132,7 +132,12 @@ final class ScanDraftEntryNavigationRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("openPDFButton"))
         XCTAssertTrue(source.contains("scanDocumentButton"))
         XCTAssertTrue(source.contains("importPhotosButton"))
-        XCTAssertTrue(source.contains("ScanDraftEntryMode"))
+        XCTAssertTrue(source.contains("beginPhotosImportFlow()"))
+        XCTAssertTrue(source.contains("beginCameraScanFlow()"))
+        XCTAssertTrue(source.contains("isScanDraftReviewPresented"))
+        XCTAssertTrue(source.contains("ScanDocumentCameraScannerPresenter"))
+        XCTAssertTrue(source.contains(".photosPicker"))
+        XCTAssertFalse(source.contains("ScanDraftEntryMode"))
         XCTAssertFalse(source.contains("New Document"))
         XCTAssertFalse(source.contains("Choose Source"))
     }
@@ -148,12 +153,13 @@ final class ScanDraftEntryNavigationRegressionTests: XCTestCase {
         XCTAssertFalse(source.contains("ScanDraftEntryView"))
         XCTAssertFalse(source.contains("ScanDraftSourceSelectionView"))
         XCTAssertFalse(source.contains("ScanDraftFlowRootPlaceholder"))
+        XCTAssertFalse(source.contains("ScanDraftFlowEntryHost"))
+        XCTAssertFalse(source.contains("ScanDraftEntryMode"))
         XCTAssertFalse(source.contains("Choose Source"))
         XCTAssertFalse(source.contains("Create PDF"))
-        XCTAssertTrue(source.contains("ScanDraftFlowEntryHost"))
-        XCTAssertTrue(source.contains("ScanDocumentCameraScannerPresenter"))
-        XCTAssertTrue(source.contains("isPhotosPickerPresented"))
-        XCTAssertTrue(source.contains(".photosPicker"))
+        XCTAssertFalse(source.contains("ScanDocumentCameraScannerPresenter"))
+        XCTAssertFalse(source.contains(".photosPicker"))
+        XCTAssertTrue(source.contains("ScanDraftReviewView"))
     }
 }
 

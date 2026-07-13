@@ -18,19 +18,18 @@ final class ScanDraftImmediateScannerRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("Color.clear"))
     }
 
-    func testRootViewPresentsScannerImmediately() throws {
+    func testContentViewPresentsScannerFromHome() throws {
         let source = try String(
             contentsOf: URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
-                .appendingPathComponent("pdfpagearranger/Views/ScanDraftRootView.swift"),
+                .appendingPathComponent("pdfpagearranger/ContentView.swift"),
             encoding: .utf8
         )
 
         XCTAssertTrue(source.contains("isDocumentScannerPresented"))
         XCTAssertTrue(source.contains("ScanDocumentCameraScannerPresenter"))
-        XCTAssertTrue(source.contains("ScanDraftFlowEntryHost"))
-        XCTAssertTrue(source.contains("Color.clear"))
+        XCTAssertTrue(source.contains("beginCameraScanFlow()"))
     }
 
     func testBeginCameraScanFlowDoesNotPushAcquisitionRoute() async {

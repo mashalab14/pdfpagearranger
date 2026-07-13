@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Host for add-pages photo imports and post-selection import progress. The Photos picker is presented from `ScanDraftRootView`.
+/// Host for add-pages photo imports and post-selection import progress. The Photos picker is presented from `ContentView`.
 struct ScanDraftPhotosAcquisitionView: View {
     @Bindable var sessionViewModel: ScanDraftSessionViewModel
 

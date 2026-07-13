@@ -190,15 +190,16 @@ After dismissing **OK**, user returns to **home screen** (empty state). No parti
 
 ## 4.5 Scan-to-PDF workflow
 
-Creates a new PDF from camera scans or imported photos, then opens it in the main editor. The workflow runs as a **full-screen cover** from home (**Scan to PDF** or **Photo to PDF**). Swipe-to-dismiss is **blocked** while the draft has unsaved changes or PDF generation is in progress.
+Creates a new PDF from camera scans or imported photos, then opens it in the main editor. **Home** presents acquisition directly (VisionKit or the system Photos picker). **Draft Review** opens as a full-screen cover only after a successful import creates a non-empty draft. Swipe-to-dismiss is **blocked** while the draft has unsaved changes or PDF generation is in progress.
 
 ### Entry points
 
 | Entry | First screen |
 |-------|----------------|
-| Home → **Scan to PDF** | Apple VisionKit document scanner (presented immediately; only interruption is iOS camera permission on first use) |
-| Home → **Photo to PDF** | System photo picker (presented immediately; only interruption is iOS Photos permission on first use) |
-| Review → **Add Pages** → **Scan Document** / **Import Photos** | Same acquisition paths; returns to review |
+| Home → **Scan to PDF** | Apple VisionKit document scanner (presented immediately from Home; only interruption is iOS camera permission on first use) |
+| Home → **Photo to PDF** | System Photos picker (presented immediately from Home; only interruption is iOS Photos permission on first use) |
+| After successful import | **Draft Review** full-screen cover |
+| Review → **Add Pages** → **Scan Document** / **Import Photos** | Same acquisition UI from Home; returns to review |
 
 Starting a new scan/import from home **replaces any existing draft** silently.
 
@@ -208,11 +209,11 @@ User journey:
 
 **Home → Scan to PDF → Apple Document Scanner → Draft Review**
 
-- VisionKit opens immediately after tap (no visible placeholder or acquisition screen)
-- While pages import after scanning: imperceptible host with **Importing scanned pages…** overlay only
-- **Cancel with no pages** on a new draft → flow exits (draft discarded, cover dismisses, returns to Home)
+- VisionKit opens immediately after tap from Home (no intermediate acquisition shell)
+- While pages import after scanning: **Importing scanned pages…** overlay on Home before Draft Review opens
+- **Cancel with no pages** on a new draft → returns to Home (draft discarded)
 - **Cancel with existing pages** (add-pages) → returns to **Review Pages**
-- Unsupported device, denied camera, or scan failure → **Scan Error** alert, then returns to Home when applicable
+- Unsupported device, denied camera, or scan failure → **Scan Error** alert on Home, then stays on Home when applicable
 - First launch may show the **iOS camera permission** dialog before VisionKit
 
 ### Photo to PDF (photos import)
@@ -221,15 +222,15 @@ User journey:
 
 **Home → Photo to PDF → System Photos Picker → Draft Review**
 
-- System Photos picker opens immediately after tap (no visible placeholder or acquisition screen)
-- While photos import after selection: imperceptible host with **Importing photos…** or **Importing X of Y** overlay only
-- **Cancel with no selection** on a new draft → flow exits (draft discarded, cover dismisses, returns to Home)
+- System Photos picker opens immediately after tap from Home (no intermediate acquisition shell)
+- While photos import after selection: **Importing photos…** or **Importing X of Y** overlay on Home before Draft Review opens
+- **Cancel with no selection** on a new draft → returns to Home (draft discarded)
 - **Cancel with existing pages** (add-pages) → returns to **Review Pages**
-- Import failure → **Scan Error** alert, then returns to Home when applicable
+- Import failure → **Scan Error** alert on Home when applicable
 - First launch may show the **iOS Photos permission** dialog before the picker
 - Over-limit message: *"You can import up to 50 photos at once."*
 
-Review → **Add Pages** → **Import Photos** uses the same picker from `ScanDraftRootView`; an imperceptible acquisition host shows import progress only when returning to review with pages already present.
+Review → **Add Pages** → **Import Photos** or **Scan Document** reuses the same Home-owned acquisition presenters; acquisition routes inside Draft Review show import progress only.
 
 ### Review Pages
 

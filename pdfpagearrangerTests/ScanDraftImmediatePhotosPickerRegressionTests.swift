@@ -19,19 +19,19 @@ final class ScanDraftImmediatePhotosPickerRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("Color.clear"))
     }
 
-    func testRootViewPresentsPhotosPickerImmediately() throws {
+    func testContentViewPresentsPhotosPickerFromHome() throws {
         let source = try String(
             contentsOf: URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
-                .appendingPathComponent("pdfpagearranger/Views/ScanDraftRootView.swift"),
+                .appendingPathComponent("pdfpagearranger/ContentView.swift"),
             encoding: .utf8
         )
 
         XCTAssertTrue(source.contains("isPhotosPickerPresented"))
         XCTAssertTrue(source.contains(".photosPicker"))
-        XCTAssertTrue(source.contains("ScanDraftFlowEntryHost"))
-        XCTAssertTrue(source.contains("Color.clear"))
+        XCTAssertTrue(source.contains("beginPhotosImportFlow()"))
+        XCTAssertTrue(source.contains("isScanDraftReviewPresented"))
     }
 
     func testBeginPhotosImportFlowPresentsPickerWithoutNavigation() {
@@ -67,22 +67,5 @@ final class ScanDraftImmediatePhotosPickerRegressionTests: XCTestCase {
         XCTAssertNil(viewModel.document)
         XCTAssertTrue(viewModel.navigationPath.isEmpty)
         XCTAssertFalse(viewModel.isPhotosPickerPresented)
-    }
-
-    func testBeginAddPagesPhotosImportNavigatesForImportProgressOnly() async throws {
-        let storage = ScanDraftTestFactory.makeIsolatedStorage()
-        let viewModel = ScanDraftSessionViewModel(storage: storage)
-        try viewModel.beginNewDocumentFlow()
-        XCTAssertTrue(viewModel.requestPhotosImport(context: .newDocument))
-        await viewModel.handlePhotosSelection(
-            orderedItems: ScanPhotosImportTestSupport.makeOrderedItems(count: 1),
-            assetLoader: ScanPhotosImportTestSupport.makeLoader(count: 1)
-        )
-        XCTAssertEqual(viewModel.navigationPath.last, .draftReview)
-
-        XCTAssertTrue(viewModel.beginAddPagesPhotosImport())
-
-        XCTAssertEqual(viewModel.navigationPath.last, .photosAcquisition)
-        XCTAssertTrue(viewModel.isPhotosPickerPresented)
     }
 }

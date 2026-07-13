@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Host for add-pages camera scans and post-scan import progress. VisionKit is presented from `ScanDraftRootView`.
+/// Host for add-pages camera scans and post-scan import progress. VisionKit is presented from `ContentView`.
 struct ScanDraftCameraAcquisitionView: View {
     @Bindable var sessionViewModel: ScanDraftSessionViewModel
 

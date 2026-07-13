@@ -26,7 +26,7 @@ final class ScanDraftSessionViewModelPhotosRegressionTests: XCTestCase {
         XCTAssertEqual(document.pages.count, 2)
         XCTAssertTrue(document.pages.allSatisfy { $0.sourceType == .photos })
         XCTAssertNotNil(document.selectedPageID)
-        XCTAssertEqual(viewModel.navigationPath.last, .draftReview)
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
         for page in document.pages {
             XCTAssertTrue(
                 FileManager.default.fileExists(
@@ -63,7 +63,7 @@ final class ScanDraftSessionViewModelPhotosRegressionTests: XCTestCase {
         XCTAssertEqual(document.pages.first?.id, existingID)
         XCTAssertEqual(document.pages.first?.geometry.rotation, 90)
         XCTAssertTrue(document.pages.dropFirst().allSatisfy { $0.sourceType == .photos })
-        XCTAssertEqual(viewModel.navigationPath.last, .draftReview)
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
     }
 
     func testPickerCancellationCreatesNoPagesOrErrorForNewDraft() throws {
@@ -92,7 +92,7 @@ final class ScanDraftSessionViewModelPhotosRegressionTests: XCTestCase {
 
         XCTAssertEqual(viewModel.document?.pages.count, beforeCount)
         XCTAssertNil(viewModel.errorMessage)
-        XCTAssertEqual(viewModel.navigationPath.last, .draftReview)
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
     }
 
     func testImportFailureRollsBackBatchWithoutNavigatingAsSuccess() async throws {
@@ -106,7 +106,7 @@ final class ScanDraftSessionViewModelPhotosRegressionTests: XCTestCase {
 
         XCTAssertNil(viewModel.document)
         XCTAssertEqual(viewModel.errorMessage, ScanDraftError.photosAssetLoadFailure.localizedDescription)
-        XCTAssertNotEqual(viewModel.navigationPath.last, .draftReview)
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
     }
 
     func testImportFailurePreservesExistingDraftPages() async throws {

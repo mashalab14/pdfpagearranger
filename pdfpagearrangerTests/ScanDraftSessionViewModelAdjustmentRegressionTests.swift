@@ -61,7 +61,7 @@ final class ScanDraftSessionViewModelAdjustmentRegressionTests: XCTestCase {
         XCTAssertNil(viewModel.adjustmentSession)
         XCTAssertEqual(viewModel.document?.pages.first?.geometry, beforeGeometry)
         XCTAssertEqual(viewModel.document?.pages.first?.visualAdjustments, beforeVisualAdjustments)
-        XCTAssertEqual(viewModel.navigationPath, [.draftReview])
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
     }
 
     func testApplyAdjustmentCommitsGeometryAndReturnsToReview() async throws {
@@ -79,7 +79,7 @@ final class ScanDraftSessionViewModelAdjustmentRegressionTests: XCTestCase {
 
         XCTAssertTrue(applied)
         XCTAssertNil(viewModel.adjustmentSession)
-        XCTAssertEqual(viewModel.navigationPath, [.draftReview])
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
         XCTAssertEqual(viewModel.document?.selectedPageID, pageID)
         XCTAssertNotNil(viewModel.document?.pages.first?.processedImage)
         XCTAssertTrue(viewModel.document?.pages.first?.geometry.perspectiveCorrectionEnabled == true)
@@ -129,7 +129,7 @@ final class ScanDraftSessionViewModelAdjustmentRegressionTests: XCTestCase {
         await redetectTask.value
 
         XCTAssertNil(viewModel.adjustmentSession)
-        XCTAssertEqual(viewModel.navigationPath, [.draftReview])
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
     }
 
     func testApplyMarksDraftAsModified() async throws {

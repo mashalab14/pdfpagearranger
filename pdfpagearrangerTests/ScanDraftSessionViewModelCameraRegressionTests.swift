@@ -33,7 +33,7 @@ final class ScanDraftSessionViewModelCameraRegressionTests: XCTestCase {
         XCTAssertTrue(document.pages.allSatisfy { $0.sourceType == .camera })
         XCTAssertEqual(Set(document.pages.map(\.id)).count, 2)
         XCTAssertNotNil(document.selectedPageID)
-        XCTAssertEqual(viewModel.navigationPath.last, .draftReview)
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
         for page in document.pages {
             XCTAssertTrue(
                 FileManager.default.fileExists(
@@ -65,7 +65,7 @@ final class ScanDraftSessionViewModelCameraRegressionTests: XCTestCase {
         XCTAssertEqual(document.pages.first?.geometry.rotation, 90)
         XCTAssertEqual(document.pages.first?.visualAdjustments.mode, .enhanced)
         XCTAssertTrue(document.pages.dropFirst().allSatisfy { $0.sourceType == .camera })
-        XCTAssertEqual(viewModel.navigationPath.last, .draftReview)
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
     }
 
     func testCancellationDoesNotCreatePagesOrErrorForNewDraft() async throws {
@@ -89,7 +89,7 @@ final class ScanDraftSessionViewModelCameraRegressionTests: XCTestCase {
 
         XCTAssertEqual(viewModel.document?.pages.count, beforeCount)
         XCTAssertNil(viewModel.errorMessage)
-        XCTAssertEqual(viewModel.navigationPath.last, .draftReview)
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
     }
 
     func testUnsupportedScannerProducesFeatureError() async {
