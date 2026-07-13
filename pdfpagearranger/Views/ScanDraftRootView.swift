@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 /// Root navigation shell for the unified scan-to-PDF workflow.
 struct ScanDraftRootView: View {
@@ -7,14 +8,11 @@ struct ScanDraftRootView: View {
     @Bindable var editorViewModel: PDFEditorViewModel
     let onEditorHandoffSucceeded: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
 
     var body: some View {
         NavigationStack(path: $sessionViewModel.navigationPath) {
-            ScanDraftFlowEntryHost(
-                entryMode: entryMode,
-                sessionViewModel: sessionViewModel,
-                onCancel: cancelFlow
-            )
+            ScanDraftFlowEntryHost(sessionViewModel: sessionViewModel)
             .navigationDestination(for: ScanDraftRoute.self) { route in
                 destination(for: route)
             }
@@ -37,6 +35,27 @@ struct ScanDraftRootView: View {
                 }
             )
             .ignoresSafeArea()
+        }
+        .photosPicker(
+            isPresented: $sessionViewModel.isPhotosPickerPresented,
+            selection: $selectedPhotoItems,
+            maxSelectionCount: ScanPhotosImportLimits.maxSelectionCount,
+            matching: .images
+        )
+        .onChange(of: sessionViewModel.isPhotosPickerPresented) { _, isPresented in
+            guard !isPresented else { return }
+            guard selectedPhotoItems.isEmpty else { return }
+            guard !sessionViewModel.isImportingPhotos else { return }
+            sessionViewModel.handlePhotosPickerCancelled()
+        }
+        .onChange(of: selectedPhotoItems) { _, newItems in
+            guard !newItems.isEmpty else { return }
+            let items = newItems
+            selectedPhotoItems = []
+            sessionViewModel.isPhotosPickerPresented = false
+            Task {
+                await sessionViewModel.handlePhotosSelection(items)
+            }
         }
         .interactiveDismissDisabled(
             sessionViewModel.document?.hasUnsavedChanges == true
@@ -127,12 +146,6 @@ struct ScanDraftRootView: View {
         onEditorHandoffSucceeded()
     }
 
-    private func cancelFlow() {
-        if sessionViewModel.discardDraftSessionWithCleanup() {
-            dismiss()
-        }
-    }
-
     private func dismissReview() {
         if sessionViewModel.discardDraftSessionWithCleanup() {
             dismiss()
@@ -140,11 +153,9 @@ struct ScanDraftRootView: View {
     }
 }
 
-/// Imperceptible host for scan entry while VisionKit or import overlays are active.
+/// Imperceptible host for scan entry while VisionKit, Photos picker, or import overlays are active.
 private struct ScanDraftFlowEntryHost: View {
-    let entryMode: ScanDraftEntryMode
     @Bindable var sessionViewModel: ScanDraftSessionViewModel
-    let onCancel: () -> Void
 
     var body: some View {
         ZStack {
@@ -157,21 +168,20 @@ private struct ScanDraftFlowEntryHost: View {
                     .padding(24)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                     .accessibilityIdentifier("scanImportProgress")
-            }
-        }
-        .toolbar {
-            if showsCancelButton {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onCancel)
+            } else if sessionViewModel.isImportingPhotos {
+                if let progress = sessionViewModel.photosImportProgress {
+                    ProgressView(progress.label)
+                        .padding(24)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        .accessibilityIdentifier("photosImportProgress")
+                } else {
+                    ProgressView("Importing photos…")
+                        .padding(24)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        .accessibilityIdentifier("photosImportProgress")
                 }
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var showsCancelButton: Bool {
-        entryMode == .photos
-            && sessionViewModel.navigationPath.isEmpty
-            && !sessionViewModel.isImportingCameraScan
+        .navigationBarHidden(true)
     }
 }

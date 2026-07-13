@@ -59,11 +59,22 @@ final class ScanDraftEntryNavigationRegressionTests: XCTestCase {
         XCTAssertFalse(viewModel.isDocumentScannerPresented)
     }
 
-    func testBeginPhotosImportFlowNavigatesDirectlyToPhotosAcquisition() {
+    func testBeginPhotosImportFlowPresentsPickerWithoutNavigation() {
         XCTAssertTrue(viewModel.beginPhotosImportFlow())
 
-        XCTAssertEqual(viewModel.navigationPath, [.photosAcquisition])
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
+        XCTAssertTrue(viewModel.isPhotosPickerPresented)
         XCTAssertNotNil(viewModel.document)
+    }
+
+    func testBeginPhotosImportFlowCancellationReturnsToEmptySession() {
+        XCTAssertTrue(viewModel.beginPhotosImportFlow())
+
+        viewModel.handlePhotosPickerCancelled()
+
+        XCTAssertNil(viewModel.document)
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
+        XCTAssertFalse(viewModel.isPhotosPickerPresented)
     }
 
     func testCameraImportStillReachesDraftReview() async throws {
@@ -141,6 +152,8 @@ final class ScanDraftEntryNavigationRegressionTests: XCTestCase {
         XCTAssertFalse(source.contains("Create PDF"))
         XCTAssertTrue(source.contains("ScanDraftFlowEntryHost"))
         XCTAssertTrue(source.contains("ScanDocumentCameraScannerPresenter"))
+        XCTAssertTrue(source.contains("isPhotosPickerPresented"))
+        XCTAssertTrue(source.contains(".photosPicker"))
     }
 }
 

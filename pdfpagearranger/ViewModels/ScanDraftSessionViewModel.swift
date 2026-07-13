@@ -28,6 +28,7 @@ final class ScanDraftSessionViewModel {
     var makePDFSearchable: Bool = ScanOCRSettings.isSearchablePDFEnabled()
     var adjustmentSection: ScanPageAdjustmentSection = .appearance
     var isDocumentScannerPresented = false
+    var isPhotosPickerPresented = false
     var errorMessage: String?
 
     private let storage: ScanDraftSessionStorage
@@ -142,8 +143,13 @@ final class ScanDraftSessionViewModel {
             return false
         }
 
-        guard requestPhotosImport(context: .newDocument) else { return false }
-        navigateToPhotosAcquisition()
+        guard requestPhotosImport(context: .newDocument) else {
+            if document?.isEmpty ?? true {
+                _ = discardDraftSessionWithCleanup()
+            }
+            return false
+        }
+        presentPhotosPickerIfNeeded()
         return true
     }
 
@@ -175,6 +181,7 @@ final class ScanDraftSessionViewModel {
         photosImportProgress = nil
         photosSelectionHandled = false
         isDocumentScannerPresented = false
+        isPhotosPickerPresented = false
         errorMessage = nil
         preImportPageIDs = []
         emptySessionCreatedForImport = false
@@ -975,8 +982,17 @@ final class ScanDraftSessionViewModel {
         let ready = requestPhotosImport(context: .addToExistingDraft)
         if ready {
             navigateToPhotosAcquisition()
+            presentPhotosPickerIfNeeded()
         }
         return ready
+    }
+
+    func presentPhotosPickerIfNeeded() {
+        guard photosImportOperationID != nil else { return }
+        guard !photosSelectionHandled else { return }
+        guard !isImportingPhotos else { return }
+        guard !isPhotosPickerPresented else { return }
+        isPhotosPickerPresented = true
     }
 
     func handlePhotosPickerCancelled() {
@@ -984,6 +1000,7 @@ final class ScanDraftSessionViewModel {
         guard !isImportingPhotos else { return }
 
         photosSelectionHandled = true
+        isPhotosPickerPresented = false
         errorMessage = nil
 
         switch acquisitionImportContext {
@@ -1157,6 +1174,7 @@ final class ScanDraftSessionViewModel {
         document = nil
         emptySessionCreatedForImport = false
         isDocumentScannerPresented = false
+        isPhotosPickerPresented = false
         preImportPageIDs = []
         photosImportOperationID = nil
     }

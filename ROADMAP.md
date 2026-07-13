@@ -4,7 +4,7 @@
 
 - Document Mode (import, reorder, delete, duplicate, rotate)
 - Page Mode (overlays, zoom, swipe navigation)
-- **Scan-to-PDF workflow** — home entry via Scan to PDF or Photo to PDF; VisionKit presented immediately from home; draft review, page adjustment, PDF generation, handoff to editor
+- **Scan-to-PDF workflow** — home entry via Scan to PDF or Photo to PDF; VisionKit and system Photos picker presented immediately from home; draft review, page adjustment, PDF generation, handoff to editor
 - **Searchable PDF OCR (scan-to-PDF)** — on-device Vision text recognition; invisible text layer in generated PDFs; Make PDF Searchable toggle (default on, persisted)
 - Image overlays
 - **Text overlays (V1)** — tap-to-place editable text with formatting, Recent Texts, vector export

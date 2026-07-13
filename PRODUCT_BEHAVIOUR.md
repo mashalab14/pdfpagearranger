@@ -123,7 +123,7 @@ App
 |--------|--------|
 | Tap **Open PDF** | Opens the system file picker limited to **PDF files**, **single selection only** |
 | Tap **Scan to PDF** | Opens Apple VisionKit document scanner immediately (camera permission dialog on first use only) |
-| Tap **Import Photos** | Opens the **scan-to-PDF** full-screen flow starting with the system photo picker |
+| Tap **Photo to PDF** | Opens the system Photos picker immediately (Photos permission dialog on first use only) |
 | Tap **Settings** | Opens Settings sheet |
 
 Starting **Scan Document** or **Import Photos** from home **discards any in-progress scan draft** (temp files removed).
@@ -197,7 +197,7 @@ Creates a new PDF from camera scans or imported photos, then opens it in the mai
 | Entry | First screen |
 |-------|----------------|
 | Home → **Scan to PDF** | Apple VisionKit document scanner (presented immediately; only interruption is iOS camera permission on first use) |
-| Home → **Photo to PDF** | System photo picker (presented automatically) |
+| Home → **Photo to PDF** | System photo picker (presented immediately; only interruption is iOS Photos permission on first use) |
 | Review → **Add Pages** → **Scan Document** / **Import Photos** | Same acquisition paths; returns to review |
 
 Starting a new scan/import from home **replaces any existing draft** silently.
@@ -215,15 +215,21 @@ User journey:
 - Unsupported device, denied camera, or scan failure → **Scan Error** alert, then returns to Home when applicable
 - First launch may show the **iOS camera permission** dialog before VisionKit
 
-### Import Photos (photos acquisition)
+### Photo to PDF (photos import)
 
-- Navigation title: **Import Photos**
-- System photo picker opens on appear; user can also tap **Import Photos**
-- Idle copy: *"Choose one or more photos to import."*
-- During import: **Importing photos…** or **Importing X of Y**; **Cancel Import** available
-- Dismissed picker with no selection on a new draft → flow exits; on add-pages → returns to review
-- **Import Error** alert on failure
+User journey:
+
+**Home → Photo to PDF → System Photos Picker → Draft Review**
+
+- System Photos picker opens immediately after tap (no visible placeholder or acquisition screen)
+- While photos import after selection: imperceptible host with **Importing photos…** or **Importing X of Y** overlay only
+- **Cancel with no selection** on a new draft → flow exits (draft discarded, cover dismisses, returns to Home)
+- **Cancel with existing pages** (add-pages) → returns to **Review Pages**
+- Import failure → **Scan Error** alert, then returns to Home when applicable
+- First launch may show the **iOS Photos permission** dialog before the picker
 - Over-limit message: *"You can import up to 50 photos at once."*
+
+Review → **Add Pages** → **Import Photos** uses the same picker from `ScanDraftRootView`; an imperceptible acquisition host shows import progress only when returning to review with pages already present.
 
 ### Review Pages
 
