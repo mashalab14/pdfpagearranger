@@ -92,9 +92,10 @@ final class ScanDraftEntryNavigationRegressionTests: XCTestCase {
                 .appendingPathComponent("pdfpagearranger/ContentView.swift")
         )
 
-        XCTAssertTrue(source.contains("Open PDF"))
-        XCTAssertTrue(source.contains("Scan Document"))
-        XCTAssertTrue(source.contains("Import Photos"))
+        XCTAssertTrue(source.contains("HomeScreenCopy"))
+        XCTAssertTrue(source.contains("HomeScreenCopy.openPDF"))
+        XCTAssertTrue(source.contains("HomeScreenCopy.scanToPDF"))
+        XCTAssertTrue(source.contains("HomeScreenCopy.photoToPDF"))
         XCTAssertTrue(source.contains("openPDFButton"))
         XCTAssertTrue(source.contains("scanDocumentButton"))
         XCTAssertTrue(source.contains("importPhotosButton"))

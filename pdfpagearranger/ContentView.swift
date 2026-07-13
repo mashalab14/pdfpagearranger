@@ -85,10 +85,10 @@ struct ContentView: View {
                 .accessibilityHidden(true)
 
             VStack(spacing: 8) {
-                Text("PDF Pages")
+                Text(HomeScreenCopy.appTitle)
                     .font(.largeTitle.bold())
 
-                Text("Rearrange, delete, rotate, and export PDF pages.")
+                Text(HomeScreenCopy.subtitle)
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -96,28 +96,31 @@ struct ContentView: View {
             }
 
             VStack(spacing: 12) {
-                Button("Open PDF") {
+                Button(HomeScreenCopy.openPDF) {
                     showImporter = true
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .accessibilityLabel("Open PDF")
+                .accessibilityLabel(HomeScreenCopy.openPDF)
+                .accessibilityHint(HomeScreenCopy.openPDFAccessibilityHint)
                 .accessibilityIdentifier("openPDFButton")
 
-                Button("Scan Document") {
+                Button(HomeScreenCopy.scanToPDF) {
                     scanDraftEntryMode = .camera
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .accessibilityLabel("Scan Document")
+                .accessibilityLabel(HomeScreenCopy.scanToPDF)
+                .accessibilityHint(HomeScreenCopy.scanToPDFAccessibilityHint)
                 .accessibilityIdentifier("scanDocumentButton")
 
-                Button("Import Photos") {
+                Button(HomeScreenCopy.photoToPDF) {
                     scanDraftEntryMode = .photos
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .accessibilityLabel("Import Photos")
+                .accessibilityLabel(HomeScreenCopy.photoToPDF)
+                .accessibilityHint(HomeScreenCopy.photoToPDFAccessibilityHint)
                 .accessibilityIdentifier("importPhotosButton")
             }
 
