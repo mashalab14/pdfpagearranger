@@ -27,14 +27,36 @@ final class ScanDraftEntryNavigationRegressionTests: XCTestCase {
         XCTAssertTrue(viewModel.navigationPath.isEmpty)
     }
 
-    func testBeginCameraScanFlowNavigatesDirectlyToCameraAcquisition() async {
+    func testBeginCameraScanFlowPresentsScannerWithoutNavigation() async {
         permissionChecker.status = .authorized
 
         let ready = await viewModel.beginCameraScanFlow()
 
         XCTAssertTrue(ready)
-        XCTAssertEqual(viewModel.navigationPath, [.cameraAcquisition])
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
         XCTAssertTrue(viewModel.isDocumentScannerPresented)
+    }
+
+    func testBeginCameraScanFlowFailureCleansUpEmptySession() async {
+        permissionChecker.status = .denied
+
+        let ready = await viewModel.beginCameraScanFlow()
+
+        XCTAssertFalse(ready)
+        XCTAssertNil(viewModel.document)
+        XCTAssertFalse(viewModel.isDocumentScannerPresented)
+    }
+
+    func testBeginCameraScanFlowCancellationReturnsToEmptySession() async {
+        permissionChecker.status = .authorized
+        let ready = await viewModel.beginCameraScanFlow()
+        XCTAssertTrue(ready)
+
+        viewModel.handleVisionKitScanCancelled()
+
+        XCTAssertNil(viewModel.document)
+        XCTAssertTrue(viewModel.navigationPath.isEmpty)
+        XCTAssertFalse(viewModel.isDocumentScannerPresented)
     }
 
     func testBeginPhotosImportFlowNavigatesDirectlyToPhotosAcquisition() {
@@ -114,9 +136,11 @@ final class ScanDraftEntryNavigationRegressionTests: XCTestCase {
 
         XCTAssertFalse(source.contains("ScanDraftEntryView"))
         XCTAssertFalse(source.contains("ScanDraftSourceSelectionView"))
+        XCTAssertFalse(source.contains("ScanDraftFlowRootPlaceholder"))
         XCTAssertFalse(source.contains("Choose Source"))
         XCTAssertFalse(source.contains("Create PDF"))
-        XCTAssertTrue(source.contains("ScanDraftEntryMode"))
+        XCTAssertTrue(source.contains("ScanDraftFlowEntryHost"))
+        XCTAssertTrue(source.contains("ScanDocumentCameraScannerPresenter"))
     }
 }
 

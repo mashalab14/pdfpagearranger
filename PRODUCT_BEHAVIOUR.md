@@ -122,7 +122,7 @@ App
 | Action | Result |
 |--------|--------|
 | Tap **Open PDF** | Opens the system file picker limited to **PDF files**, **single selection only** |
-| Tap **Scan Document** | Opens the **scan-to-PDF** full-screen flow starting with the system document scanner |
+| Tap **Scan to PDF** | Opens Apple VisionKit document scanner immediately (camera permission dialog on first use only) |
 | Tap **Import Photos** | Opens the **scan-to-PDF** full-screen flow starting with the system photo picker |
 | Tap **Settings** | Opens Settings sheet |
 
@@ -190,26 +190,30 @@ After dismissing **OK**, user returns to **home screen** (empty state). No parti
 
 ## 4.5 Scan-to-PDF workflow
 
-Creates a new PDF from camera scans or imported photos, then opens it in the main editor. The workflow runs as a **full-screen cover** from home (**Scan Document** or **Import Photos**). Swipe-to-dismiss is **blocked** while the draft has unsaved changes or PDF generation is in progress.
+Creates a new PDF from camera scans or imported photos, then opens it in the main editor. The workflow runs as a **full-screen cover** from home (**Scan to PDF** or **Photo to PDF**). Swipe-to-dismiss is **blocked** while the draft has unsaved changes or PDF generation is in progress.
 
 ### Entry points
 
 | Entry | First screen |
 |-------|----------------|
-| Home → **Scan Document** | System VisionKit document scanner (presented automatically) |
-| Home → **Import Photos** | System photo picker (presented automatically) |
-| Review → **Add Pages** → **Scan Document** / **Import Photos** | Same acquisition UIs; returns to review |
+| Home → **Scan to PDF** | Apple VisionKit document scanner (presented immediately; only interruption is iOS camera permission on first use) |
+| Home → **Photo to PDF** | System photo picker (presented automatically) |
+| Review → **Add Pages** → **Scan Document** / **Import Photos** | Same acquisition paths; returns to review |
 
 Starting a new scan/import from home **replaces any existing draft** silently.
 
-### Scan Document (camera acquisition)
+### Scan to PDF (camera)
 
-- Navigation title: **Scan Document**
-- System document scanner opens immediately
-- While pages import: overlay **Importing scanned pages…**
-- **Cancel with no pages** on a new draft → flow exits (draft discarded, cover dismisses)
+User journey:
+
+**Home → Scan to PDF → Apple Document Scanner → Draft Review**
+
+- VisionKit opens immediately after tap (no visible placeholder or acquisition screen)
+- While pages import after scanning: imperceptible host with **Importing scanned pages…** overlay only
+- **Cancel with no pages** on a new draft → flow exits (draft discarded, cover dismisses, returns to Home)
 - **Cancel with existing pages** (add-pages) → returns to **Review Pages**
-- Unsupported device, denied camera, or scan failure → **Scan Error** alert
+- Unsupported device, denied camera, or scan failure → **Scan Error** alert, then returns to Home when applicable
+- First launch may show the **iOS camera permission** dialog before VisionKit
 
 ### Import Photos (photos acquisition)
 

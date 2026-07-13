@@ -158,8 +158,8 @@ Never edit the imported source bytes in place. Never assume export output overwr
 
 | Mode | View | Purpose |
 |------|------|---------|
-| **Empty / Import** | `ContentView` | Open PDF, Scan Document, or Import Photos |
-| **Scan-to-PDF** | `ScanDraftRootView` | Camera/photos acquisition, draft review, adjustment, PDF generation |
+| **Empty / Import** | `ContentView` | Open PDF, Scan to PDF, or Photo to PDF |
+| **Scan-to-PDF** | `ScanDraftRootView` | VisionKit scanner presented immediately from home; draft review, adjustment, PDF generation |
 | **Document Mode** | `EditorView` | Page grid, page ops, export |
 | **Page Mode** | `PageEditorView` | Overlay editing on one page |
 

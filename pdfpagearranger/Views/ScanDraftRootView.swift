@@ -10,13 +10,33 @@ struct ScanDraftRootView: View {
 
     var body: some View {
         NavigationStack(path: $sessionViewModel.navigationPath) {
-            ScanDraftFlowRootPlaceholder(onCancel: cancelFlow)
-                .navigationDestination(for: ScanDraftRoute.self) { route in
-                    destination(for: route)
-                }
+            ScanDraftFlowEntryHost(
+                entryMode: entryMode,
+                sessionViewModel: sessionViewModel,
+                onCancel: cancelFlow
+            )
+            .navigationDestination(for: ScanDraftRoute.self) { route in
+                destination(for: route)
+            }
         }
         .task(id: entryMode) {
             await startEntryFlow()
+        }
+        .fullScreenCover(isPresented: $sessionViewModel.isDocumentScannerPresented) {
+            ScanDocumentCameraScannerPresenter(
+                onFinish: { scan in
+                    Task {
+                        await sessionViewModel.handleVisionKitScanCompleted(scan)
+                    }
+                },
+                onCancel: {
+                    sessionViewModel.handleVisionKitScanCancelled()
+                },
+                onFailure: { error in
+                    sessionViewModel.handleVisionKitScanFailed(error)
+                }
+            )
+            .ignoresSafeArea()
         }
         .interactiveDismissDisabled(
             sessionViewModel.document?.hasUnsavedChanges == true
@@ -39,6 +59,9 @@ struct ScanDraftRootView: View {
         ) {
             Button("OK", role: .cancel) {
                 sessionViewModel.errorMessage = nil
+                if sessionViewModel.document == nil {
+                    dismiss()
+                }
             }
         } message: {
             Text(sessionViewModel.errorMessage ?? "")
@@ -117,17 +140,38 @@ struct ScanDraftRootView: View {
     }
 }
 
-private struct ScanDraftFlowRootPlaceholder: View {
+/// Imperceptible host for scan entry while VisionKit or import overlays are active.
+private struct ScanDraftFlowEntryHost: View {
+    let entryMode: ScanDraftEntryMode
+    @Bindable var sessionViewModel: ScanDraftSessionViewModel
     let onCancel: () -> Void
 
     var body: some View {
-        Color(.systemGroupedBackground)
-            .ignoresSafeArea()
-            .toolbar {
+        ZStack {
+            Color.clear
+                .ignoresSafeArea()
+                .accessibilityHidden(true)
+
+            if sessionViewModel.isImportingCameraScan {
+                ProgressView("Importing scanned pages…")
+                    .padding(24)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    .accessibilityIdentifier("scanImportProgress")
+            }
+        }
+        .toolbar {
+            if showsCancelButton {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onCancel)
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
+        }
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var showsCancelButton: Bool {
+        entryMode == .photos
+            && sessionViewModel.navigationPath.isEmpty
+            && !sessionViewModel.isImportingCameraScan
     }
 }

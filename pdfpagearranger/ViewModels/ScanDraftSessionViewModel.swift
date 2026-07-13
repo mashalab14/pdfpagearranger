@@ -125,8 +125,8 @@ final class ScanDraftSessionViewModel {
         }
 
         let ready = await requestCameraScan(context: .newDocument)
-        if ready {
-            navigateToCameraAcquisition()
+        if !ready, document?.isEmpty ?? true {
+            _ = discardDraftSessionWithCleanup()
         }
         return ready
     }
@@ -801,6 +801,8 @@ final class ScanDraftSessionViewModel {
             return false
         }
 
+        guard !isDocumentScannerPresented else { return true }
+
         let permissionStatus = permissionChecker.authorizationStatus()
         switch permissionStatus {
         case .authorized:
@@ -822,6 +824,7 @@ final class ScanDraftSessionViewModel {
 
     func presentDocumentScannerIfNeeded() {
         guard scannerAvailability.isDocumentScannerSupported,
+              !isDocumentScannerPresented,
               !isImportingCameraScan,
               !cameraScanCompletionHandled else {
             return
