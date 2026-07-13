@@ -190,7 +190,7 @@ After dismissing **OK**, user returns to **home screen** (empty state). No parti
 
 ## 4.5 Scan-to-PDF workflow
 
-Creates a new PDF from camera scans or imported photos, then opens it in the main editor. **Home** presents acquisition directly (VisionKit or the system Photos picker). **Draft Review** opens as a full-screen cover only after a successful import creates a non-empty draft. Swipe-to-dismiss is **blocked** while the draft has unsaved changes or PDF generation is in progress.
+Creates a new PDF from camera scans or imported photos, then opens it in the main editor. **Home** presents acquisition directly (VisionKit or the system Photos picker). **Draft Review** opens as a full-screen cover only after a successful import creates a non-empty draft. For **Scan to PDF**, the on-disk draft session directory is created only after a successful scan returns pages (no empty draft/session is created if the user cancels). Swipe-to-dismiss is **blocked** while the draft has unsaved changes or PDF generation is in progress.
 
 ### Entry points
 

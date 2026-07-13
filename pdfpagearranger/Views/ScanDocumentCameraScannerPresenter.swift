@@ -7,14 +7,14 @@ struct ScanDocumentCameraScannerPresenter: UIViewControllerRepresentable {
     let onCancel: () -> Void
     let onFailure: (ScanDraftError) -> Void
 
-    func makeUIViewController(context: Context) -> ScanDocumentCameraScannerHostViewController {
-        let host = ScanDocumentCameraScannerHostViewController()
-        host.delegate = context.coordinator
-        return host
+    func makeUIViewController(context: Context) -> VNDocumentCameraViewController {
+        let scanner = VNDocumentCameraViewController()
+        scanner.delegate = context.coordinator
+        return scanner
     }
 
     func updateUIViewController(
-        _ uiViewController: ScanDocumentCameraScannerHostViewController,
+        _ uiViewController: VNDocumentCameraViewController,
         context: Context
     ) {}
 
@@ -43,17 +43,13 @@ struct ScanDocumentCameraScannerPresenter: UIViewControllerRepresentable {
             didFinishWith scan: VNDocumentCameraScan
         ) {
             finishOnce {
-                controller.dismiss(animated: true) {
-                    self.onFinish(scan)
-                }
+                self.onFinish(scan)
             }
         }
 
         func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
             finishOnce {
-                controller.dismiss(animated: true) {
-                    self.onCancel()
-                }
+                self.onCancel()
             }
         }
 
@@ -62,9 +58,7 @@ struct ScanDocumentCameraScannerPresenter: UIViewControllerRepresentable {
             didFailWithError error: Error
         ) {
             finishOnce {
-                controller.dismiss(animated: true) {
-                    self.onFailure(.visionKitScannerFailure)
-                }
+                self.onFailure(.visionKitScannerFailure)
             }
         }
 
@@ -73,20 +67,5 @@ struct ScanDocumentCameraScannerPresenter: UIViewControllerRepresentable {
             didComplete = true
             action()
         }
-    }
-}
-
-final class ScanDocumentCameraScannerHostViewController: UIViewController {
-    weak var delegate: ScanDocumentCameraScannerPresenter.Coordinator?
-    private var didPresentScanner = false
-
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        guard !didPresentScanner else { return }
-        didPresentScanner = true
-
-        let scanner = VNDocumentCameraViewController()
-        scanner.delegate = delegate
-        present(scanner, animated: true)
     }
 }

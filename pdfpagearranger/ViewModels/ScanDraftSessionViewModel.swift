@@ -118,13 +118,6 @@ final class ScanDraftSessionViewModel {
     func beginCameraScanFlow() async -> Bool {
         guard discardDraftSessionWithCleanup() else { return false }
 
-        do {
-            try prepareNewDocumentSession()
-        } catch {
-            errorMessage = error.localizedDescription
-            return false
-        }
-
         let ready = await requestCameraScan(context: .newDocument)
         if !ready, document?.isEmpty ?? true {
             let preservedError = errorMessage
@@ -802,14 +795,24 @@ final class ScanDraftSessionViewModel {
             return false
         }
 
-        do {
-            try prepareSessionForAcquisition(context: context)
-        } catch let error as ScanDraftError {
-            errorMessage = error.localizedDescription
-            return false
-        } catch {
-            errorMessage = ScanDraftError.draftModelUpdateFailure.localizedDescription
-            return false
+        acquisitionImportContext = context
+        preImportPageIDs = []
+        emptySessionCreatedForImport = false
+        // Note: for home entry (`.newDocument`), we defer draft directory creation until a successful scan returns.
+        // Add-pages (`.addToExistingDraft`) still requires an existing non-empty draft session.
+        if context == .addToExistingDraft {
+            do {
+                try prepareSessionForAcquisition(context: context)
+            } catch let error as ScanDraftError {
+                errorMessage = error.localizedDescription
+                return false
+            } catch {
+                errorMessage = ScanDraftError.draftModelUpdateFailure.localizedDescription
+                return false
+            }
+        } else {
+            // Ensure we don't create or retain an empty draft session before the camera UI is shown.
+            document = nil
         }
 
         guard !isDocumentScannerPresented else { return true }
@@ -917,9 +920,20 @@ final class ScanDraftSessionViewModel {
 
     private func importVisionKitScan(_ scan: any VNDocumentCameraScanBridge) async {
         guard !isImportingCameraScan else { return }
-        guard var draft = document else {
-            errorMessage = ScanDraftError.sessionNotFound.localizedDescription
-            return
+        var draft: ScanDraftDocument
+        if let existing = document {
+            draft = existing
+        } else {
+            // Home entry: create the session directory only once a successful scan is available.
+            let created = ScanDraftDocument()
+            do {
+                try storage.createSessionDirectory(for: created.id)
+            } catch {
+                errorMessage = ScanDraftError.temporaryFileWriteFailure.localizedDescription
+                return
+            }
+            draft = created
+            document = created
         }
 
         isImportingCameraScan = true

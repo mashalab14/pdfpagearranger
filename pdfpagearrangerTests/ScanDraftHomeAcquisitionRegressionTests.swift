@@ -54,7 +54,22 @@ final class ScanDraftHomeAcquisitionRegressionTests: XCTestCase {
         XCTAssertTrue(ready)
         XCTAssertTrue(viewModel.navigationPath.isEmpty)
         XCTAssertTrue(viewModel.isDocumentScannerPresented)
-        XCTAssertTrue(viewModel.document?.isEmpty == true)
+        XCTAssertNil(viewModel.document)
+    }
+
+    func testBeginCameraScanFlowDoesNotCreateSessionDirectoryBeforeScanner() async {
+        let storage = ScanDraftTestFactory.makeIsolatedStorage()
+        let permissionChecker = MockScanCameraPermissionChecker()
+        permissionChecker.status = .authorized
+        let viewModel = ScanDraftSessionViewModel(
+            storage: storage,
+            permissionChecker: permissionChecker,
+            scannerAvailability: MockScanDocumentScannerAvailabilityChecker(isDocumentScannerSupported: true)
+        )
+
+        _ = await viewModel.beginCameraScanFlow()
+
+        XCTAssertNil(viewModel.document)
     }
 
     func testBeginPhotosImportFlowDoesNotNavigateBeforeSelection() {

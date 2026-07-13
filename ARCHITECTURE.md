@@ -136,7 +136,7 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`TextOverlayLayoutEngine`** | Font sizing, measured bounds, attributed string layout for text overlays. |
 | **`TextOverlayFormattingEngine`** | List prefixes (bulleted/numbered), Insert Today, list-mode switching. |
 | **`RecentTextsSettings`** | UserDefaults-backed Recent Texts list (max 10 entries). |
-| **`ScanDraftSessionViewModel`** | Scan-to-PDF draft session: acquisition, review, adjustment, PDF generation, editor handoff. |
+| **`ScanDraftSessionViewModel`** | Scan-to-PDF draft session: acquisition, review, adjustment, PDF generation, editor handoff. For **Scan to PDF**, draft disk storage is created only after a successful VisionKit scan returns pages. |
 | **`ScanDraftPDFGenerator`** | Raster page assembly + optional OCR text layer embedding. |
 | **`ScanOCRService`** | On-device Vision OCR with fingerprinted cache per draft page. |
 | **`ScanOCRPDFTextRenderer`** | Invisible text layer drawing in generated scan PDFs. |

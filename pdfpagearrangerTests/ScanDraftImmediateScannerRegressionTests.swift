@@ -32,6 +32,21 @@ final class ScanDraftImmediateScannerRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("beginCameraScanFlow()"))
     }
 
+    func testScannerPresenterDoesNotUseIntermediateHostController() throws {
+        let source = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("pdfpagearranger/Views/ScanDocumentCameraScannerPresenter.swift"),
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(source.contains("VNDocumentCameraViewController"))
+        XCTAssertFalse(source.contains("ScanDocumentCameraScannerHostViewController"))
+        XCTAssertFalse(source.contains("present(scanner"))
+        XCTAssertFalse(source.contains("controller.dismiss"))
+    }
+
     func testBeginCameraScanFlowDoesNotPushAcquisitionRoute() async {
         let storage = ScanDraftTestFactory.makeIsolatedStorage()
         let permissionChecker = MockScanCameraPermissionChecker()
@@ -47,6 +62,7 @@ final class ScanDraftImmediateScannerRegressionTests: XCTestCase {
         XCTAssertTrue(ready)
         XCTAssertTrue(viewModel.navigationPath.isEmpty)
         XCTAssertTrue(viewModel.isDocumentScannerPresented)
+        XCTAssertNil(viewModel.document)
     }
 
     func testRequestCameraScanDoesNotPresentScannerTwice() async {
