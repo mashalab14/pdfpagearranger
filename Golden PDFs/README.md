@@ -6,12 +6,17 @@ This folder holds **manual and regression test fixtures** for PDF Pages. These f
 
 Use PDFs here to exercise:
 
-- Import and Document Mode
+- Import / Open Document and Document Mode
+- Recent Documents reopen (external Files-backed documents)
 - Thumbnail rendering
 - Page operations (reorder, rotate, delete, duplicate, undo)
-- Image overlays (add, move, resize, delete, persistence)
-- Export (page order, overlays, selectable/searchable text)
+- Image / text / signature overlays and page annotations
+- Document search (native and OCR-embedded text layers)
+- Export (page order, overlays, selectable/searchable text; external originals unchanged by Export)
+- Scan-to-PDF handoff validation against representative office scans
 - Performance with large or complex documents
+
+Most automated unit tests generate temp PDFs via `PDFTestFactory` and related helpers rather than reading this folder. Golden PDFs remain the preferred set for **manual** QA and future fixture-backed tests.
 
 ## Structure
 
@@ -26,5 +31,5 @@ Use PDFs here to exercise:
 
 - Add representative PDFs to the appropriate subfolder as the test suite grows.
 - Prefer descriptive filenames (e.g. `MultiPage-Letter-12p.pdf`, `Scanned-Invoice-Password.pdf`).
-- Future unit, integration, and UI tests may reference paths under this directory.
+- Future unit, integration, and UI tests may reference paths under this directory when fixture identity matters.
 - Do not commit secrets or personal data; use synthetic or redacted samples when possible.

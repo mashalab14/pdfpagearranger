@@ -14,7 +14,7 @@ PDF Pages is a **local-first PDF transformation workspace**.
 - Home is an **acquisition funnel** (Recent Documents + open/create/scan/photo), not a feature toolbox.
 - **Files-first:** externally owned PDFs remain owned by the user; Recent Documents indexes them via bookmarks and must never become a second evolving copy (“hostage library”).
 - The app runs **on-device OCR only during scan-to-PDF generation** to embed an invisible searchable text layer. In-editor **document search** reads the PDF text layer (native or OCR-embedded) via PDFKit; it does not run OCR on imported PDFs or extract structured fields.
-- **Original imported PDFs must remain untouched.** All editing happens in app state; output is a new file at export time (app-owned Create Document / scan outputs may write back to their app-owned authoritative file on export).
+- **Editing never mutates mid-session source bytes.** Import always copies into a temp working file. **Export** builds a new PDF for sharing. **External** Files originals are **not** written by Export. **App-owned** authoritative files **are** overwritten on Export (and when Compress preparation runs the same export pipeline).
 
 Everything runs on-device. There is no cloud account, sync layer, or server-side processing in the current product.
 
@@ -74,7 +74,7 @@ Examples (implemented):
 
 ### Export *(final output step)*
 
-Export applies all stored operations and overlays and **writes a new PDF**. The source file on disk is never modified.
+Export applies all stored operations and overlays, **writes a new PDF** to a temporary share URL, and — when `activeDocumentOrigin` is **`.appOwned`** — **also overwrites** the authoritative `appOwned/{id}.pdf` via `RecentDocumentsStore.replaceAppOwnedFile`. **External** Files originals are **not** modified.
 
 Examples (implemented):
 
@@ -83,23 +83,24 @@ Examples (implemented):
 - Export with image, text, and signature overlays composited on top
 - Export with page annotations (highlights, drawings, sticky-note markers, text-comment anchors) composited above vector page content
 - Preserve selectable/searchable text where possible (vector page draw, not full-page rasterization; scan-generated PDFs may include invisible OCR text layer)
+- App-owned write-back on Export / Compress prep; share sheet still uses the temp file
 
-**Current code:** `PDFEditorViewModel.exportPDF()` → `PDFService.exportPDF()`.
+**Current code:** `PDFEditorViewModel.exportPDF()` → `PDFService.exportPDF()` → optional `replaceAppOwnedFile`.
 
 ---
 
 ## 3. Non-destructive editing rule
 
-**Rule:** Store operations and overlays in app state. Do not mutate the source PDF. Rebuild a new PDF only when the user taps Export.
+**Rule:** Do not mutate PDF bytes **during editing**. Rebuild a new PDF when the user exports (or when Compress preparation runs the export pipeline). Then apply ownership-specific write-back.
 
 How this works today:
 
-1. **Import** copies the PDF to a temporary local path (`PDFService.importPDF`). The user’s original file is never written to.
+1. **Import** copies the PDF to a temporary local path (`PDFService.importPDF` → `PDFImports/{uuid}.pdf`). External Files originals and app-owned authoritative files are not edited in place mid-session.
 2. **Editing** updates in-memory (and undo-snapshot) state: `PageItem` list, rotations, `PageObject` overlays, and `PageAnnotation` annotations.
-3. **Preview** (thumbnails, Page Mode) renders from the source `PDFDocument` plus app state.
-4. **Export** builds a new `PDFDocument`, inserts transformed pages, and writes to a new temp output URL for sharing.
+3. **Preview** (thumbnails, Page Mode) renders from the session `PDFDocument` plus app state.
+4. **Export** builds a new `PDFDocument` and writes a temp share URL. If `activeDocumentOrigin == .appOwned`, those bytes are also copied to `appOwned/{id}.pdf` (`try?` — failures are silent). External origins have **no** write-back.
 
-Never edit the imported source bytes in place. Never assume export output overwrites the import copy used for editing.
+Never edit the temp working copy’s “source” semantics by assuming Export updates external Files. Never keep a second evolving library copy of an external PDF in Recent storage.
 
 ---
 
@@ -116,15 +117,26 @@ Reopen Recent → resolve bookmark / app file → importPDF (working temp) → b
 
 | Ownership | Examples | Authoritative bytes | Recent persistence |
 |-----------|----------|---------------------|--------------------|
-| **External** | Open Document, Open In…, future Share Extension | User's file | Bookmark + path + metadata + optional thumbnail |
+| **External** | Open Document, Open In… (future Share Extension → same path) | User's file | Bookmark + path + metadata + optional thumbnail |
 | **App-owned** | Create Document, Scan/Photo after Create PDF | `Application Support/RecentDocuments/appOwned/` | Relative path + metadata + optional thumbnail |
 | **Draft** *(future)* | Home Drafts | App-owned draft files | Same store; `RecentDocumentKind.draft` |
 
 **Identity:** `identityKey` is `external:<standardizedPath>` or `appOwned:<uuid>`. Identical content at different paths yields different entries. Content hashing is intentionally **not** used.
 
-**Save / reopen trust:** Opening a Recent external entry always resolves the live file. Export does **not** write back to external originals. Export (and compression adopt) **does** replace the app-owned authoritative file when `activeDocumentOrigin` is `.appOwned`.
+**Save / reopen trust:**
+
+- Opening a Recent entry always resolves the live authoritative file (bookmark or `appOwned` path), then copies into a new temp working file.
+- **Export** does **not** write back to **external** originals.
+- **Export** (and **Compress preparation**, which calls `exportPDF()`) **does** replace the app-owned authoritative file when `activeDocumentOrigin` is `.appOwned`.
+- **Compression Continue Editing** (`adoptCompressedPDF`):
+  - `.appOwned` → replace same id, re-import from `appOwned/`
+  - `.external` / `.none` → import compressed PDF as a **new** `.appOwned` Recent entry (original external Recent row and Files file unchanged)
+
+**Migration (schema v2):** On store init, legacy `files/` directory (v1 durable PDF library) is deleted if present. `loadIndexLocked` returns an empty list when `index.json` is missing, undecodable, or `schemaVersion != 2` (a leftover v1 index file may remain on disk unread until overwritten by a new save).
 
 **Minimal integration for new acquisition:** call `importPDF(from:ownership:)` or `handleIncomingDocumentURL(_:)` so recording stays centralized.
+
+**Create Document:** `RecentDocumentsStore.createAppOwnedBlankDocument` writes the blank PDF under `appOwned/` first; `PDFService.createBlankPDF` exists but is unused by the product path.
 
 ---
 
@@ -142,7 +154,7 @@ Reopen Recent → resolve bookmark / app file → importPDF (working temp) → b
 | **`DocumentSearchEngine`** | Shared document-wide text search over PDFKit page text (native + OCR-embedded). Case/diacritic insensitive; returns normalized match geometry via `PDFTextSelectionEngine`. |
 | **`DocumentSearchState`** | Ephemeral search UI state in `PDFEditorViewModel` (query, matches, current index). Not part of undo snapshots or export. |
 | **`SearchHighlightRenderer`** | Temporary orange search highlights in Page Mode only (distinct from permanent highlight annotations). |
-| **`PDFService`** | Import (copy to temp), export (assemble new PDF), initial `PageItem` list. |
+| **`PDFService`** | Import (copy to temp `PDFImports/`), export (assemble new PDF to temp share URL), initial `PageItem` list. `createBlankPDF` exists but Create Document uses `RecentDocumentsStore.createAppOwnedBlankDocument` instead. |
 | **`PDFPreviewRenderer`** | On-screen PDF page rasterization via `PDFPage.thumbnail` (correct orientation). |
 | **`PageRenderService`** | High-resolution page image for Page Mode. |
 | **`WatermarkType`** | Extensible watermark payload kind (V1: text, image; future: QR code, PDF page, stamp). |
@@ -163,9 +175,9 @@ Reopen Recent → resolve bookmark / app file → importPDF (working temp) → b
 | **`TextOverlayRenderer`** | Vector text drawing for Page Mode compositing, thumbnails, and PDF export. |
 | **`TextOverlayLayoutEngine`** | Font sizing, measured bounds, attributed string layout for text overlays. |
 | **`TextOverlayFormattingEngine`** | List prefixes (bulleted/numbered), Insert Today, list-mode switching. |
-| **`RecentDocumentsStore`** | Files-first recent **index** under Application Support (`RecentDocuments/`). Externally owned: security-scoped bookmark + metadata + optional thumbnail (no PDF library copy). App-owned (`appOwned/`): Create Document and Scan/Photo outputs. Identity by stable path / app id — **not** content hash. Schema v2; legacy fingerprint library discarded on migrate. Drafts can share the index via `kind: draft` later. |
-| **`ActiveDocumentOrigin`** | Session tag on `PDFEditorViewModel`: `.external` vs `.appOwned` for write-back and trust boundaries. |
-| **`handleIncomingDocumentURL`** | Shared Open In… / future Share Extension entry → `importPDF(..., ownership: .external)`. |
+| **`RecentDocumentsStore`** | Files-first recent **index** under Application Support (`RecentDocuments/`). Externally owned: security-scoped bookmark + metadata + optional thumbnail (no PDF library copy). App-owned (`appOwned/`): Create Document and Scan/Photo outputs. Identity by stable path / app id — **not** content hash. Schema v2; legacy `files/` removed on migrate; non-v2 index ignored. Drafts can share the index via `kind: draft` later. Max 50 entries (eviction deletes app-owned PDFs + thumbnails). |
+| **`ActiveDocumentOrigin`** | Session tag on `PDFEditorViewModel`: `.external` vs `.appOwned` for export write-back and compression adopt. |
+| **`handleIncomingDocumentURL`** | Open In… / future Share Extension entry → `importPDF(..., ownership: .external)`. |
 | **`RecentTextsSettings`** | UserDefaults-backed Recent Texts list (max 10 entries). |
 | **`ScanDraftSessionViewModel`** | Scan-to-PDF draft session: acquisition, review, adjustment, PDF generation, editor handoff. For **Scan to PDF**, draft disk storage is created only after a successful VisionKit scan returns pages. |
 | **`ScanDraftPDFGenerator`** | Raster page assembly + optional OCR text layer embedding. |
@@ -323,7 +335,7 @@ Quality is guarded by an automated regression suite (`PDFPagesTests`, `PDFPagesU
 
 The pre-commit hook (`scripts/pre-commit`, symlinked from `.git/hooks/pre-commit`) must **not** run the full simulator regression suite by default.
 
-Test helpers live under `pdfpagearrangerTests/Helpers/` (`PDFTestFactory`, `OverlayTestFactory`, `ExportAssertions`). Prefer extending these over one-off test setup.
+Test helpers live under `pdfpagearrangerTests/Helpers/` (e.g. `PDFTestFactory`, `OverlayTestFactory`, `ExportAssertions`, `CompressionAssertions`, `ScanDraftTestFactory`, `ScanOCRTestDoubles`, `SignatureAssetTestFactory`). Prefer extending these over one-off test setup.
 
 ---
 
@@ -349,9 +361,10 @@ Test helpers live under `pdfpagearrangerTests/Helpers/` (`PDFTestFactory`, `Over
 - JSON-to-PDF or template document generation from scratch
 - Cloud collaboration, shared workspaces, accounts
 - Full Word-style reflow text editing inside PDFs
-- Any feature that mutates or uploads the user’s original source file without explicit user action
+- Any feature that uploads the user’s Files original without explicit user action
+- Silently mutating **external** Files PDFs on Export (today Export does not write back to external originals; app-owned write-back on Export is intentional and user-initiated via Export / Compress prep)
 
-When in doubt: if it **transforms an imported PDF locally** and **exports a new file**, it likely belongs. If it **creates**, **extracts structured data**, or **requires cloud identity**, it does not.
+When in doubt: if it **transforms a PDF locally** and **exports a new file** (with Files-first ownership rules), it likely belongs. If it **extracts structured data** or **requires cloud identity**, it does not.
 
 ---
 
@@ -367,4 +380,4 @@ When in doubt: if it **transforms an imported PDF locally** and **exports a new 
 
 ---
 
-*Last updated to reflect Files-first Recent Documents, document search, V1 page annotations, scan-to-PDF with searchable OCR, V1 text overlays, and the Project → Document → Page → Export hierarchy.*
+*Last updated to reflect Files-first Recent Documents (external bookmarks vs app-owned write-back), Open In…, document search, V1 page annotations, scan-to-PDF with searchable OCR, V1 text overlays, and the Project → Document → Page → Export hierarchy.*

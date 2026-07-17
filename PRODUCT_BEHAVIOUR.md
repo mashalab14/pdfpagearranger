@@ -2,7 +2,7 @@
 
 This document describes **exactly how the app behaves today** from the user's perspective. It is intended for designers, product managers, QA engineers, and other agents who need to understand the product without reading source code.
 
-**Last verified against:** the codebase as of the current release (includes scan-to-PDF workflow with searchable OCR, Document Mode, Page Mode, image/text/signature overlays, Quick Signature and default/favorite, signature stroke thickness, page numbers, text and image watermark, compression, export, appearance settings, and horizontal Page Mode navigation).
+**Last verified against:** the codebase as of the current release (includes Files-first Recent Documents, Open In…, Create Document, scan-to-PDF with searchable OCR, Document Mode, Page Mode, image/text/signature overlays, Quick Signature and default/favorite, signature stroke thickness, page annotations, document search, page numbers, text and image watermark, compression, export, appearance settings, and horizontal Page Mode navigation).
 
 ---
 
@@ -13,9 +13,11 @@ This document describes **exactly how the app behaves today** from the user's pe
 3. [Home / empty state (no document open)](#3-home--empty-state-no-document-open)
 4. [Import (Open Document)](#4-import-open-document)
 4.5. [Scan-to-PDF workflow](#45-scan-to-pdf-workflow)
+4.6. [Open In…](#46-open-in)
 5. [Settings](#5-settings)
 6. [Document Mode](#6-document-mode)
 7. [Page thumbnails (Document Mode)](#7-page-thumbnails-document-mode)
+7.5. [Document search](#75-document-search)
 8. [Page reordering](#8-page-reordering)
 9. [Page rotate, duplicate, delete](#9-page-rotate-duplicate-delete)
 10. [Document Actions menu](#10-document-actions-menu)
@@ -28,6 +30,7 @@ This document describes **exactly how the app behaves today** from the user's pe
 16. [Page Mode navigation (swipe between pages)](#16-page-mode-navigation-swipe-between-pages)
 17. [Page Mode zoom and pan](#17-page-mode-zoom-and-pan)
 18. [Adding content in Page Mode](#18-adding-content-in-page-mode)
+19.4. [Page annotations (V1)](#194-page-annotations-v1)
 19. [Image overlays](#19-image-overlays)
 19.5. [Text overlays](#195-text-overlays)
 20. [Signatures — library, drawing, placement](#20-signatures--library-drawing-placement)
@@ -48,7 +51,7 @@ This document describes **exactly how the app behaves today** from the user's pe
 
 **PDF Pages** is an iOS app for working with PDF documents. The user can:
 
-- Open an existing PDF (**Open Document**)
+- Open an existing PDF (**Open Document** or **Open In…** from another app)
 - Create a blank PDF (**Create Document**)
 - Reopen from **Recent Documents**
 - Create a PDF from a **camera scan** or **imported photos** (scan-to-PDF workflow)
@@ -63,7 +66,16 @@ This document describes **exactly how the app behaves today** from the user's pe
 - Change app appearance (light / dark / device)
 - Undo and redo many editing operations
 
-The app does **not** modify the user's original imported file. All edits are held in memory (and temporary app storage for the working copy) until export. Scan-to-PDF drafts are stored in temporary on-device storage until discarded or converted to a PDF.
+**Editing is non-destructive to the session working copy:** every open copies the PDF into temporary app storage (`PDFImports/`). In-memory edits (pages, overlays, annotations, page numbers, watermarks) are applied at **Export** / compression prep time.
+
+**Authoritative storage depends on ownership:**
+
+| Ownership | Authoritative file | What Export does |
+|-----------|--------------------|------------------|
+| **External** (Open Document, Open In…) | User’s file in Files / another app | Builds a temp share file only — **does not** write back to the Files original |
+| **App-owned** (Create Document; Scan/Photo after Create PDF) | `Application Support/RecentDocuments/appOwned/{id}.pdf` | Builds a temp share file **and** overwrites that app-owned file immediately (even if the user dismisses the share sheet) |
+
+Scan-to-PDF drafts are stored in temporary on-device storage until discarded or converted to a PDF.
 
 **Recent Documents** is a Files-first **index** into documents (bookmarks/metadata for externally owned PDFs; app-owned storage only for Create Document and other app-created PDFs). It is **not** an application-managed library of duplicated external files. There is still **no** full project saving, **no** multi-document simultaneous editing, and **no** account system.
 
@@ -146,15 +158,19 @@ The Home screen is an **acquisition funnel**: it gets the user into a document. 
 
 | Kind | Authoritative file | What Recent stores |
 |------|--------------------|--------------------|
-| Externally owned (Open Document, Open In…, future Share Extension) | User's file in Files / other app | Security-scoped bookmark + metadata + optional thumbnail |
+| Externally owned (Open Document, Open In…; future Share Extension would use the same path) | User's file in Files / other app | Security-scoped bookmark + metadata + optional thumbnail (**no** PDF copy in the app library) |
 | App-owned (Create Document; Scan/Photo after Create PDF) | App Application Support (`RecentDocuments/appOwned/`) | Relative path + metadata + optional thumbnail |
-| Future Drafts | App-owned draft storage | Same index; `kind: draft` reserved |
+| Future Drafts | App-owned draft storage | Same index; `kind: draft` reserved (unused today) |
 
 **Identity:** Recent represents **document identity** (stable path / app id), not file contents. Two different files with identical bytes remain separate entries. Reopening the same file updates one entry.
 
-**Lifecycle:** A document becomes Recent whenever it becomes the **active** editor document (successful open/create/handoff). Cancelled acquisition flows are not recorded. Missing or unresolvable entries are pruned.
+**Lifecycle:** A document becomes Recent whenever it becomes the **active** editor document (successful open/create/handoff). Cancelled acquisition flows are not recorded. Missing or unresolvable entries are pruned (and removed from the index). There is **no** user-facing delete control on the Recent list today.
 
-**Save / reopen:** Reopening a Recent external document always resolves the bookmark and opens the **current** file on disk (latest saved version in Files). Recent never keeps a second evolving copy of an external PDF. App-owned documents update their authoritative app file on export (and compression adopt). Editor sessions still use a temporary working copy; unsaved in-memory edits are lost on close (same as before).
+**Save / reopen:**
+
+- **External:** Reopen resolves the bookmark and opens whatever bytes are currently at that Files location. **Export does not update that file.** If the user never overwrites the Files original via Share → Save to Files (or another app), Recent reopen shows the **pre-edit** Files version. The share-sheet temp file is deleted when the sheet dismisses.
+- **App-owned:** Export (and opening Compress, which runs the same export pipeline for size preview) **immediately overwrites** the authoritative `appOwned/{id}.pdf`. Compression **Continue Editing** on an already app-owned session replaces that same file. Reopen Recent loads those latest app-owned bytes.
+- Editor sessions always use a **temporary working copy**; closing **New PDF** / closing the session deletes that temp copy only. Unexported in-memory edits are lost on close.
 
 **Included** after an actual PDF exists: Open Document, Create Document, Scan to PDF (after Create PDF), Photo to PDF (after Create PDF), Open In…, reopening Recent.
 
@@ -332,7 +348,7 @@ Review → **Add Pages** → **Import Photos** or **Scan Document** reuses the s
 - Recognized text is embedded as an **invisible text layer** over the rasterized page image (searchable/selectable in PDF readers)
 - OCR results are **cached per draft page**; changing page crop/appearance invalidates cache for that page
 - OCR applies only to **scan-generated PDFs**, not to imported existing PDFs in the editor
-- Toggle preference persists in app settings (default **on**)
+- Toggle preference is **persisted** in `UserDefaults` (default **on**). The control lives on the **Draft Review** bottom bar — **not** in the Settings sheet
 
 ### Persistence
 
@@ -341,7 +357,32 @@ Review → **Add Pages** → **Import Photos** or **Scan Document** reuses the s
 | **Make PDF Searchable** toggle preference | **Yes** |
 | Scan draft pages / session | **No** (temp storage only; no resume) |
 
-Draft files live under temporary app storage. Discarding or successful handoff removes them. Original photos in the user's library are **never modified**.
+Draft files live under temporary app storage. Discarding or successful handoff removes them. Original photos in the user's library are **never modified**. Successful **Create PDF** handoff records an **app-owned** Recent Document (the generated PDF is copied into `RecentDocuments/appOwned/`).
+
+---
+
+## 4.6 Open In…
+
+### Entry point
+
+- Another app uses **Open In…** / “Copy to PDF Pages” / a PDF document link that launches this app (`onOpenURL`)
+- The app registers as a PDF viewer (`Info-DocumentTypes.plist`: `com.adobe.pdf`, role Viewer, `LSSupportsOpeningDocumentsInPlace`)
+
+### Behaviour
+
+1. Incoming URL is handled by `handleIncomingDocumentURL` → same import path as Open Document (ownership **external**)
+2. PDF is **copied** into temporary `PDFImports/` for editing (the app does **not** edit the caller’s file in place despite the in-place capability flag)
+3. Document becomes the active session and is recorded in Recent Documents (bookmark to the external source when possible)
+4. If a document was already open in this session, it is **replaced** (same as a new successful import)
+
+### Errors
+
+- Failures use the same **Import Failed** alert path as Open Document
+- User returns to home if import fails
+
+### Share Extension
+
+- **Not implemented.** A future Share Extension should call the same incoming-document import path.
 
 ---
 
@@ -355,8 +396,8 @@ Draft files live under temporary app storage. Discarding or successful handoff r
 ### What the user sees
 
 - Sheet titled **"Settings"**
-- One section: **"Appearance"**
-- Segmented control with three options: **Device**, **Light**, **Dark**
+- One section: **"Appearance"** (Device / Light / Dark only)
+- **Make PDF Searchable** is **not** in Settings — it appears on Draft Review during scan-to-PDF
 - **Done** button (top-right)
 
 ### Behaviour
@@ -641,41 +682,54 @@ A **new PDF file** built from:
 - Image, text, and signature overlays
 - Applied page numbers (if enabled)
 - Applied watermark (text or image, if enabled)
+- Page annotations (if any)
 - Original PDF page content preserved as vector where possible (searchable text on supported paths)
 
 The exported file name: **`{documentName}-arranged.pdf`** (slashes and colons in the name replaced with hyphens).
 
+### Authoritative write-back (ownership)
+
+| Session ownership | On successful Export generation |
+|-------------------|----------------------------------|
+| **External** | **No** write-back to the Files original. Only the temp share file is created. |
+| **App-owned** | Temp share file is created **and** its bytes are copied over `appOwned/{id}.pdf` **immediately** (before the share sheet). Write-back failures are swallowed silently; share may still proceed. |
+
 ### Flow (within free limit)
 
-1. User taps Export
+1. User taps Export (paywall may appear first — see [Paywall](#12-paywall-export-limit))
 2. App generates PDF to a **temporary file**
-3. **iOS share sheet** appears with the PDF
-4. User can AirDrop, Save to Files, Mail, etc.
-5. When share sheet is dismissed, the temporary export file is **deleted**
+3. If the session is **app-owned**, that temp PDF is written back to the authoritative app-owned file
+4. **iOS share sheet** appears with the PDF
+5. User can AirDrop, Save to Files, Mail, etc. (for **external** documents, overwriting the original in Files is a **manual** Share destination choice — the app does not do it automatically)
+6. When share sheet is dismissed, the **temporary** export file is **deleted** (app-owned authoritative file, if updated in step 3, is **not** rolled back)
 
 ### Export failure
 
 - Alert: **"Export Failed"** with message **"Could not export the PDF."** (or other error text)
 - **OK** dismisses alert
 - User remains in Document Mode; no file is shared
+- If generation failed before write-back, app-owned storage is unchanged
 
 ### Export with paywall
 
 See [Paywall](#12-paywall-export-limit).
 
-### Cancel
+### Cancel / dismiss share sheet
 
-- Dismissing the share sheet without sharing: no error; temp file cleaned up
-- No changes to the editing session
+- Dismissing the share sheet without sharing: no error; **temp** export file cleaned up
+- **In-editor session state** is unchanged
+- **App-owned** authoritative file **remains** at the version written in step 3 if Export generation succeeded (dismissing Share does not undo write-back)
 
 ### Repeat export
 
 - Each export generates a **fresh** temporary file
 - Reflects **current** document state at time of export
+- App-owned write-back runs again on each successful generation
 
 ### After app restart
 
 - No export occurs automatically; user must export again
+- Reopening Recent: **external** → current Files bytes at bookmark; **app-owned** → last successfully written-back app-owned file
 
 ---
 
@@ -683,7 +737,8 @@ See [Paywall](#12-paywall-export-limit).
 
 ### When shown
 
-- When exporting a document with **more than 20 pages** and Pro is not unlocked for the session
+- When the user taps **Export** in Document Actions on a document with **more than 20 pages** and Pro is not unlocked for the session
+- **Not** shown for Compression **Save / Share** (that path is currently ungated — see [Known limitations](#29-known-limitations))
 
 ### What the user sees
 
@@ -724,7 +779,7 @@ This is a **placeholder** paywall for development; there is no real in-app purch
 
 **On open:**
 
-1. Automatically prepares input by **exporting the current document** (same as export pipeline)
+1. Automatically prepares input by **exporting the current document** (same pipeline as [Export](#11-export), including **app-owned write-back** if the session is app-owned)
 2. Shows **"Preparing export preview…"** while preparing
 3. Then shows **Current File Size** as a large formatted value (e.g. "2.4 MB")
 4. Shows **Estimated** size for the selected preset (approximate)
@@ -763,14 +818,17 @@ After success:
 
 - Shows original size → arrow → compressed size
 - **"N% smaller"** in green
-- **Save / Share** — opens share sheet with compressed PDF
-- **Continue Editing** — **replaces the entire session** by importing the compressed PDF (same as new import of that file); dismisses compression sheet
+- **Save / Share** — opens share sheet with compressed PDF (**no** 20-page paywall check today)
+- **Continue Editing** — **replaces the entire session** by re-importing the compressed PDF; dismisses compression sheet; clears undo/redo
+  - If the session was **app-owned**: replaces the **same** app-owned authoritative file, then reopens it
+  - If the session was **external** (or ownership unknown): imports the compressed PDF as a **new app-owned** Recent document (original external Recent entry and Files original remain unchanged)
 
 ### Close without continuing
 
 - **Close** on configuration or result (when not compressing): dismisses sheet
-- Temporary prepared export file is cleaned up
-- **Session unchanged** unless user tapped **Continue Editing**
+- Temporary prepared export / share files are cleaned up
+- **In-editor session** is unchanged unless the user tapped **Continue Editing**
+- If preparation already ran Export for an **app-owned** session, the authoritative app-owned file **may already have been updated** even if the user closes without compressing or continuing
 
 ### Cancel during compression
 
@@ -1852,20 +1910,24 @@ Temporary UI state is **not** restored: selection, search query, zoom/pan, open 
 | Data | Persists across restart? |
 |------|--------------------------|
 | Appearance setting (Device/Light/Dark) | **Yes** |
-| **Make PDF Searchable** (scan-to-PDF) | **Yes** |
+| **Make PDF Searchable** (scan-to-PDF; Draft Review toggle) | **Yes** |
 | **Recent Texts** (text overlay editor) | **Yes** |
-| **Recent Documents** (index: bookmarks / app-owned refs) | **Yes** |
+| **Recent Documents** (index: bookmarks / app-owned refs; schema v2) | **Yes** |
 | Signature library (saved signatures) | **Yes** |
 | Default / favorite signature | **Yes** |
 | Last signature ink thickness (capture UI) | **Yes** |
-| Open document / pages / overlays | **No** |
+| Drawing annotation color / thickness | **Yes** |
+| Open document / pages / overlays / annotations | **No** |
 | Scan draft session | **No** |
 | Undo / redo history | **No** |
 | Page number settings | **No** |
+| Watermark settings | **No** |
 | Pro unlock | **No** |
-| Import temp files | **No** (cleaned on New PDF / close) |
+| Import / export temp files | **No** (current session temp cleaned on New PDF / close; orphans under `PDFImports/` may linger after force-quit until OS temp cleanup) |
 
-After restart: user sees **home screen** with **Recent Documents** (if any). Acquisition actions (**Open Document**, **Create Document**, **Scan to PDF**, **Photo to PDF**) remain available. Saved signatures, default signature, last ink thickness, Recent Texts, Recent Documents, and Make PDF Searchable preference remain available.
+After restart: user sees **home screen** with **Recent Documents** (if any). Acquisition actions (**Open Document**, **Create Document**, **Scan to PDF**, **Photo to PDF**) remain available; **Open In…** works when another app sends a PDF. Saved signatures, default signature, last ink thickness, drawing prefs, Recent Texts, Recent Documents, and Make PDF Searchable preference remain available.
+
+**Legacy Recent index:** schema v1 (content-fingerprint library under `files/`) is incompatible. On load, a non–schema-v2 index is ignored (empty Recent). The legacy `files/` directory is deleted when present. Users may see an empty Recent list until they open documents again.
 
 ---
 
@@ -1873,7 +1935,7 @@ After restart: user sees **home screen** with **Recent Documents** (if any). Acq
 
 | Item | Value |
 |------|-------|
-| Free export page limit | **20 pages** |
+| Free **Export** page limit (Document Actions → Export only) | **20 pages** |
 | Undo stack depth | **50** |
 | Redo stack depth | **50** |
 | Page zoom max | **4×** |
@@ -1904,25 +1966,30 @@ After restart: user sees **home screen** with **Recent Documents** (if any). Acq
 
 ## 29. Known limitations
 
-1. **No session persistence** — closing the app loses in-progress editor edits unless exported; Recent Documents reopens the authoritative file (Files bookmark or app-owned copy), not a parallel hostage library of external PDFs.
-2. **Paywall is a placeholder** — "Continue for now" unlocks Pro for the session only; no real purchase.
-4. **Paywall lists "coming soon" features** (merge & split, batch tools) that are not in the app.
-5. **No split, merge, password protect** in Document Actions (future only). Watermark is implemented.
-6. **OCR is scan-to-PDF only** — imported PDFs are not re-OCR'd in the editor.
-7. **Text overlays (V1)** — system font only; no custom fonts or opacity; not native PDF text reflow.
-8. **Page number font size and opacity** — not user-configurable in UI.
-9. **Image/signature overlay rotation** — not user-configurable in UI (text overlays support rotate).
-10. **No multi-select** for pages or overlays in the editor (scan review supports batch page selection).
-11. **Deleting a page** — no confirmation dialog.
-12. **New PDF** — no confirmation; immediate session loss.
-13. **Image import failure** — silent (no error if photo data invalid).
-14. **Signature rename failure** — silent (no error alert).
-15. **Compression "Continue Editing"** replaces the entire session and clears undo and redo (by design of re-import).
-16. **Document name** in title comes from imported file name (or **Scanned Document** for scan handoff); user cannot rename in app.
-17. **Thumbnail position badge** (1, 2, 3…) is always list position; it is independent of page-number feature formatting unless values coincide.
-18. **Page Numbers preview** in setup sheet always reflects the **last page** in the document, not the page currently being edited in Page Mode.
-19. **Scan draft sessions** do not resume after app restart.
-20. **No visible undo history panel** — only step-by-step Undo and Redo buttons.
+1. **No session persistence** — closing the app loses in-progress editor edits unless Export / Compress prep already wrote an **app-owned** authoritative file, or the user manually saved an **external** export over the Files original. Recent reopens the authoritative location (bookmark or app-owned), not a hostage library of external PDFs.
+2. **External Export does not update Files** — Export only shares a temp copy; Recent reopen of an external document can show the **pre-edit** Files version if the user did not overwrite that file via Share.
+3. **App-owned write-back is immediate** — successful Export generation (and Compress preparation) overwrites `appOwned/{id}.pdf` even if the user dismisses the share sheet or closes Compress without continuing. Write-back failures are silent.
+4. **Paywall is Export-only** — Compression **Save / Share** does **not** enforce the 20-page free limit.
+5. **Paywall is a placeholder** — "Continue for now" unlocks Pro for the session only; no real purchase.
+6. **Paywall lists "coming soon" features** (merge & split, batch tools) that are not in the app.
+7. **No split, merge, password protect** in Document Actions (future only). Watermark is implemented.
+8. **OCR is scan-to-PDF only** — imported PDFs are not re-OCR'd in the editor.
+9. **Text overlays (V1)** — system font only; no custom fonts or opacity; not native PDF text reflow.
+10. **Page number font size and opacity** — not user-configurable in UI.
+11. **Image/signature overlay rotation** — not user-configurable in UI (text overlays support rotate).
+12. **No multi-select** for pages or overlays in the editor (scan review supports batch page selection).
+13. **Deleting a page** — no confirmation dialog.
+14. **New PDF** — no confirmation; immediate session loss.
+15. **Image import failure** — silent (no error if photo data invalid).
+16. **Signature rename failure** — silent (no error alert).
+17. **Compression "Continue Editing"** replaces the entire session and clears undo and redo; for **external** sessions it also creates a **new app-owned** Recent entry (original Files document unchanged).
+18. **Document name** in title comes from imported file name (or **Scanned Document** for scan handoff); user cannot rename in app.
+19. **Thumbnail position badge** (1, 2, 3…) is always list position; it is independent of page-number feature formatting unless values coincide.
+20. **Page Numbers preview** in setup sheet always reflects the **last page** in the document, not the page currently being edited in Page Mode.
+21. **Scan draft sessions** do not resume after app restart.
+22. **No visible undo history panel** — only step-by-step Undo and Redo buttons.
+23. **No user delete on Recent Documents** — entries are pruned only when missing/unresolvable or when the store exceeds 50 (evicted app-owned PDFs are deleted).
+24. **Open In declares in-place support** but editing always uses a sandbox temp copy.
 
 ## 30. Features not implemented
 
