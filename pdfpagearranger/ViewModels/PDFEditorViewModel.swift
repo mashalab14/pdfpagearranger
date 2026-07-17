@@ -618,20 +618,22 @@ final class PDFEditorViewModel {
         to pageItemID: UUID,
         draft: TextOverlayDraft,
         pageAspectRatio: CGFloat,
-        at position: CGPoint
+        at position: CGPoint,
+        existingWidthFraction: CGFloat? = nil
     ) -> UUID {
         pushUndoSnapshot()
 
+        let plain = draft.trimmedText
         let storedText = TextOverlayFormattingEngine.displayText(
-            draft.trimmedText,
-            listMode: draft.listMode
-        )
-        let normalizedSize = TextOverlayLayoutEngine.measuredSize(
-            text: storedText,
-            fontSizePoints: draft.fontSizePoints,
-            bold: draft.isBold,
+            plain,
             listMode: draft.listMode,
-            pageAspectRatio: pageAspectRatio
+            listIndent: draft.listIndent
+        )
+        let widthFraction = existingWidthFraction ?? TextOverlayLayoutEngine.defaultWidthFraction
+        let normalizedSize = TextOverlayLayoutEngine.measuredSize(
+            for: draft,
+            pageAspectRatio: pageAspectRatio,
+            widthFraction: widthFraction
         )
 
         let clampedPosition = OverlayInteractionEngine.clampNormalizedCenter(
@@ -640,23 +642,195 @@ final class PDFEditorViewModel {
         )
 
         let nextZIndex = (pageObjectsByPage[pageItemID]?.map(\.zIndex).max() ?? -1) + 1
-        let object = PageObject(
+        let object = makeTextPageObject(
             pageItemID: pageItemID,
-            type: .text,
+            draft: draft,
+            storedText: storedText,
             position: clampedPosition,
             size: normalizedSize,
-            zIndex: nextZIndex,
-            textContent: storedText,
-            textFontSizePoints: TextOverlayLayoutEngine.clampedFontSize(draft.fontSizePoints),
-            textColorRGBA: draft.colorRGBA,
-            textBold: draft.isBold,
-            textListMode: draft.listMode
+            zIndex: nextZIndex
         )
 
         pageObjectsByPage[pageItemID, default: []].append(object)
         bumpOverlayRevision(for: pageItemID)
         RecentTextsSettings.recordCommittedText(storedText)
         return object.id
+    }
+
+    /// Creates an empty text overlay for immediate on-page editing without recording Recent Texts or undo.
+    /// Undo is pushed when the overlay is committed with non-empty text, or discarded on cancel.
+    @discardableResult
+    func beginDraftTextOverlay(
+        to pageItemID: UUID,
+        draft: TextOverlayDraft = .default,
+        pageAspectRatio: CGFloat,
+        at position: CGPoint
+    ) -> UUID {
+        let measureDraft = draft.isEmpty
+            ? TextOverlayDraft(
+                text: TextOverlayDraft.placeholderHint,
+                fontSizePoints: draft.fontSizePoints,
+                colorRGBA: draft.colorRGBA,
+                isBold: draft.isBold,
+                isItalic: draft.isItalic,
+                isUnderline: draft.isUnderline,
+                isStrikethrough: draft.isStrikethrough,
+                alignment: draft.alignment,
+                listMode: draft.listMode,
+                listIndent: draft.listIndent,
+                fontFamily: draft.fontFamily
+            )
+            : draft
+        let normalizedSize = TextOverlayLayoutEngine.measuredSize(
+            for: measureDraft,
+            pageAspectRatio: pageAspectRatio,
+            widthFraction: TextOverlayLayoutEngine.defaultWidthFraction
+        )
+        let clampedPosition = OverlayInteractionEngine.clampNormalizedCenter(
+            position,
+            normalizedSize: normalizedSize
+        )
+        let nextZIndex = (pageObjectsByPage[pageItemID]?.map(\.zIndex).max() ?? -1) + 1
+        let object = makeTextPageObject(
+            pageItemID: pageItemID,
+            draft: draft,
+            storedText: "",
+            position: clampedPosition,
+            size: normalizedSize,
+            zIndex: nextZIndex
+        )
+        pageObjectsByPage[pageItemID, default: []].append(object)
+        bumpOverlayRevision(for: pageItemID)
+        return object.id
+    }
+
+    /// Live preview while editing — no undo, no Recent Texts. Empty content is allowed.
+    @discardableResult
+    func syncTextOverlayDraft(
+        id: UUID,
+        pageItemID: UUID,
+        draft: TextOverlayDraft,
+        pageAspectRatio: CGFloat,
+        preserveWidth: Bool = true
+    ) -> Bool {
+        guard var objects = pageObjectsByPage[pageItemID],
+              let index = objects.firstIndex(where: { $0.id == id }),
+              objects[index].type == .text else {
+            return false
+        }
+
+        var object = objects[index]
+        let widthFraction = preserveWidth
+            ? max(object.size.width, TextOverlayLayoutEngine.minWidthFraction)
+            : TextOverlayLayoutEngine.defaultWidthFraction
+        let measureDraft = draft.isEmpty
+            ? TextOverlayDraft(
+                text: TextOverlayDraft.placeholderHint,
+                fontSizePoints: draft.fontSizePoints,
+                colorRGBA: draft.colorRGBA,
+                isBold: draft.isBold,
+                isItalic: draft.isItalic,
+                isUnderline: draft.isUnderline,
+                isStrikethrough: draft.isStrikethrough,
+                alignment: draft.alignment,
+                listMode: draft.listMode,
+                listIndent: draft.listIndent,
+                fontFamily: draft.fontFamily
+            )
+            : draft
+        let measured = TextOverlayLayoutEngine.measuredSize(
+            for: measureDraft,
+            pageAspectRatio: pageAspectRatio,
+            widthFraction: widthFraction
+        )
+
+        // Store plain body while editing; list markers applied at render/commit time.
+        object.textContent = draft.text
+        applyTextFormatting(draft, to: &object)
+        object.size = CGSize(width: widthFraction, height: measured.height)
+        object.position = OverlayInteractionEngine.clampNormalizedCenter(
+            object.position,
+            normalizedSize: object.size
+        )
+
+        objects[index] = object
+        pageObjectsByPage[pageItemID] = objects
+        bumpOverlayRevision(for: pageItemID)
+        return true
+    }
+
+    enum TextOverlayCommitResult: Equatable {
+        case committed
+        case cancelledEmptyDraft
+        case deletedEmptyExisting
+        case rejected
+    }
+
+    /// Commits on-page editing. Empty new drafts are removed without an undo entry.
+    /// Empty existing overlays are deleted with undo. Non-empty commits push one undo snapshot.
+    @discardableResult
+    func commitTextOverlayEditing(
+        id: UUID,
+        pageItemID: UUID,
+        draft: TextOverlayDraft,
+        pageAspectRatio: CGFloat,
+        isNewDraft: Bool,
+        baselineSnapshot: EditorSnapshot?
+    ) -> TextOverlayCommitResult {
+        guard var objects = pageObjectsByPage[pageItemID],
+              let index = objects.firstIndex(where: { $0.id == id }),
+              objects[index].type == .text else {
+            return .rejected
+        }
+
+        if draft.isEmpty {
+            if isNewDraft {
+                objects.remove(at: index)
+                pageObjectsByPage[pageItemID] = objects
+                bumpOverlayRevision(for: pageItemID)
+                return .cancelledEmptyDraft
+            }
+            if let baselineSnapshot {
+                pushExternalUndoSnapshot(baselineSnapshot)
+            } else {
+                pushUndoSnapshot()
+            }
+            objects.remove(at: index)
+            pageObjectsByPage[pageItemID] = objects
+            bumpOverlayRevision(for: pageItemID)
+            return .deletedEmptyExisting
+        }
+
+        if let baselineSnapshot {
+            pushExternalUndoSnapshot(baselineSnapshot)
+        } else {
+            pushUndoSnapshot()
+        }
+
+        let storedText = TextOverlayFormattingEngine.displayText(
+            draft.trimmedText,
+            listMode: draft.listMode,
+            listIndent: draft.listIndent
+        )
+        var object = objects[index]
+        let widthFraction = max(object.size.width, TextOverlayLayoutEngine.minWidthFraction)
+        let measured = TextOverlayLayoutEngine.measuredSize(
+            for: draft,
+            pageAspectRatio: pageAspectRatio,
+            widthFraction: widthFraction
+        )
+        object.textContent = storedText
+        applyTextFormatting(draft, to: &object)
+        object.size = CGSize(width: widthFraction, height: measured.height)
+        object.position = OverlayInteractionEngine.clampNormalizedCenter(
+            object.position,
+            normalizedSize: object.size
+        )
+        objects[index] = object
+        pageObjectsByPage[pageItemID] = objects
+        bumpOverlayRevision(for: pageItemID)
+        RecentTextsSettings.recordCommittedText(storedText)
+        return .committed
     }
 
     func updateTextOverlay(
@@ -672,24 +846,73 @@ final class PDFEditorViewModel {
 
         let storedText = TextOverlayFormattingEngine.displayText(
             draft.trimmedText,
-            listMode: draft.listMode
+            listMode: draft.listMode,
+            listIndent: draft.listIndent
         )
-        guard !storedText.isEmpty else { return false }
+        guard !storedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
 
         pushUndoSnapshot()
 
         var object = objects[index]
         object.textContent = storedText
-        object.textFontSizePoints = TextOverlayLayoutEngine.clampedFontSize(draft.fontSizePoints)
-        object.textColorRGBA = draft.colorRGBA
-        object.textBold = draft.isBold
-        object.textListMode = draft.listMode
+        applyTextFormatting(draft, to: &object)
 
         objects[index] = object
         pageObjectsByPage[pageItemID] = objects
         bumpOverlayRevision(for: pageItemID)
         RecentTextsSettings.recordCommittedText(storedText)
         return true
+    }
+
+    func captureEditorSnapshot() -> EditorSnapshot {
+        makeCurrentSnapshot()
+    }
+
+    private func pushExternalUndoSnapshot(_ snapshot: EditorSnapshot) {
+        undoStack.append(snapshot)
+        trimHistoryStack(&undoStack)
+        redoStack.removeAll()
+    }
+
+    private func applyTextFormatting(_ draft: TextOverlayDraft, to object: inout PageObject) {
+        object.textFontSizePoints = TextOverlayLayoutEngine.clampedFontSize(draft.fontSizePoints)
+        object.textColorRGBA = draft.colorRGBA
+        object.textBold = draft.isBold
+        object.textItalic = draft.isItalic
+        object.textUnderline = draft.isUnderline
+        object.textStrikethrough = draft.isStrikethrough
+        object.textAlignment = draft.alignment
+        object.textListMode = draft.listMode
+        object.textListIndent = draft.listIndent
+        object.textFontFamily = draft.fontFamily
+    }
+
+    private func makeTextPageObject(
+        pageItemID: UUID,
+        draft: TextOverlayDraft,
+        storedText: String,
+        position: CGPoint,
+        size: CGSize,
+        zIndex: Int
+    ) -> PageObject {
+        PageObject(
+            pageItemID: pageItemID,
+            type: .text,
+            position: position,
+            size: size,
+            zIndex: zIndex,
+            textContent: storedText,
+            textFontSizePoints: TextOverlayLayoutEngine.clampedFontSize(draft.fontSizePoints),
+            textColorRGBA: draft.colorRGBA,
+            textBold: draft.isBold,
+            textItalic: draft.isItalic,
+            textUnderline: draft.isUnderline,
+            textStrikethrough: draft.isStrikethrough,
+            textAlignment: draft.alignment,
+            textListMode: draft.listMode,
+            textListIndent: draft.listIndent,
+            textFontFamily: draft.fontFamily
+        )
     }
 
     @discardableResult
@@ -726,7 +949,13 @@ final class PDFEditorViewModel {
             textFontSizePoints: source.textFontSizePoints,
             textColorRGBA: source.textColorRGBA,
             textBold: source.textBold,
-            textListMode: source.textListMode
+            textItalic: source.textItalic,
+            textUnderline: source.textUnderline,
+            textStrikethrough: source.textStrikethrough,
+            textAlignment: source.textAlignment,
+            textListMode: source.textListMode,
+            textListIndent: source.textListIndent,
+            textFontFamily: source.textFontFamily
         )
 
         pageObjectsByPage[pageItemID, default: []].append(duplicate)
@@ -1289,7 +1518,13 @@ final class PDFEditorViewModel {
                 textFontSizePoints: overlay.textFontSizePoints,
                 textColorRGBA: overlay.textColorRGBA,
                 textBold: overlay.textBold,
-                textListMode: overlay.textListMode
+                textItalic: overlay.textItalic,
+                textUnderline: overlay.textUnderline,
+                textStrikethrough: overlay.textStrikethrough,
+                textAlignment: overlay.textAlignment,
+                textListMode: overlay.textListMode,
+                textListIndent: overlay.textListIndent,
+                textFontFamily: overlay.textFontFamily
             )
         }
 

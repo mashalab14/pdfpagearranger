@@ -1163,7 +1163,7 @@ Only one selection type may be active at a time. Selecting an annotation clears 
 
 | Option | Subtitle | Enabled? | Action |
 |--------|----------|----------|--------|
-| **Text** | Add editable text | **Yes** | Dismisses sheet → opens **Add Text** editor (see [Text overlays](#195-text-overlays)) |
+| **Text** | Add editable text | **Yes** | Dismisses sheet → creates an on-page text overlay and enters inline editing (see [Text overlays](#195-text-overlays)) |
 | **Image** | Import from Photos or Files | **Yes** | Dismisses sheet → opens **Photos picker** |
 | **Draw** | Draw on the page | **Yes** | Dismisses sheet → enters **Drawing Mode** |
 | **Sticky Note** | Place a note on the page | **Yes** | Dismisses sheet → arms tap-to-place sticky note |
@@ -1304,67 +1304,66 @@ Sticky notes and text comments are **separate workflows** (point anchor vs text-
 
 ## 19.5 Text overlays
 
-Editable text boxes placed on individual pages in Page Mode. Text is stored as overlay data and exported as **vector text** drawn above page content.
+Editable text boxes placed on individual pages in Page Mode. Text is stored as overlay data and exported as **vector text** drawn above page content. Creation and editing happen **directly on the page** (Markup-style), not in a separate entry sheet.
 
 ### Creation flow
 
 1. **Add → Text**
-2. **Add Text** sheet opens (medium/large detent)
-3. User enters text and optional formatting (see below)
-4. Tap **Add** (disabled until text is non-empty)
-5. Sheet dismisses; banner appears: **"Tap the page to place text"**
-6. User taps **inside the displayed PDF page** → text overlay placed at tap (clamped to page bounds), auto-selected with placement haptic + animation
-7. Tapping outside the page does not place text
+2. A new text overlay is created at a sensible visible position on the current page
+3. The overlay is **selected immediately** and enters **inline editing** with the keyboard focused
+4. Placeholder hint **"Text"** is shown only while the body is empty — it is **never** saved, persisted, added to Recent Texts, rendered in thumbnails, or exported
+5. As the user types, the box **grows vertically** to fit wrapped multiline content while preserving any manual width the user set
+6. The page viewport shifts when needed so the active overlay stays visible above the keyboard
+7. **Done** on the format bar, or tapping outside the overlay, finishes editing
+8. If the new overlay is still empty when editing ends, it is **discarded** (no empty object left behind; no undo entry for the cancelled draft)
 
-While placement is armed: PDF text selection and overlay selection are **disabled**; opening **Add** cancels placement.
+### Formatting bar (above keyboard)
 
-### Add Text / Edit Text sheet
-
-**Titles:** **Add Text** (new) or **Edit Text** (existing)  
-**Confirm:** **Add** or **Update** (disabled if text is empty)  
-**Cancel** dismisses without saving
+While editing, a compact bar provides live controls that update the on-page overlay immediately:
 
 | Control | Behaviour |
 |---------|-----------|
-| **Text editor** | Multiline; keyboard focused on open |
-| **Recent Texts** | Up to **10** previously committed texts (most recent first); tap to fill editor; swipe to remove entry |
+| **Font** | System / Serif / Mono |
+| **Font size** | Decrease/increase **8–72 pt** (default **14 pt**) |
+| **Text color** | Color picker (no opacity) |
+| **Bold / Italic / Underline / Strikethrough** | Toggles |
+| **Alignment** | Left / Centre / Right |
+| **List style** | None / Bulleted / Numbered / Dashed |
+| **Indent** | Increase / decrease list indentation |
+| **Recent Texts** | Up to **10** previously committed texts; tap to insert; swipe to remove |
 | **Insert Today** | Inserts localized today's date string |
-| **Font Size** | Stepper **8–72 pt** (default **14 pt**) |
-| **Text Color** | Color picker (no opacity) |
-| **Bold** | Toggle |
-| **Bulleted List** | Prefixes each line with **•** |
-| **Numbered List** | Prefixes lines **1.** **2.** … (mutually exclusive with bulleted) |
+| **Done** | Commits editing (or cancels empty new drafts) |
 
-Committed text (on successful place or update) is added to **Recent Texts** (UserDefaults; survives app restart).
+Committed text (on successful finish with non-empty content) is added to **Recent Texts** (UserDefaults; survives app restart).
 
 ### Editing existing text
 
 | Entry | Result |
 |-------|--------|
-| **Double-tap** text overlay | Opens **Edit Text** sheet |
+| **Double-tap** text overlay | Re-enters on-page inline editing |
 | Context menu **Edit** | Same |
-| **Update** in sheet | Saves changes; **undo** supported |
+| Finish editing | Commits text + formatting as one undoable change |
 
-### Text overlay on page
+### Text overlay on page (after editing)
 
 - Blue selection border when selected
 - **Resize handle** (bottom-right) — non-uniform resize (width and height adjust independently)
 - **Rotate handle** (top-left, orange) — drag to rotate overlay
 - **Floating contextual menu:** **Edit** · **Duplicate** · **Delete**
 - Text always renders **above** page content (including in export)
-- **Undo:** add, edit, move, resize, rotate, duplicate, delete
+- **Undo:** creation (committed), text/formatting commits, move, resize, rotate, duplicate, delete
 
 ### In Document Mode
 
-- Shown composited on thumbnail
+- Shown composited on thumbnail (empty/placeholder drafts are not drawn)
 
 ### In export
 
-- Drawn as vector text via `TextOverlayRenderer` on top of page content
+- Drawn as vector text via `TextOverlayRenderer` on top of page content (placeholder never exported)
 
-### Not supported (V1)
+### Not supported
 
-- Custom fonts (system font only)
+- Arbitrary custom font files (built-in System / Serif / Mono families only)
 - Text opacity control
 - Reflow editing inside the PDF's native text layer (overlays only)
 
@@ -1974,7 +1973,7 @@ After restart: user sees **home screen** with **Recent Documents** (if any). Acq
 6. **Paywall lists "coming soon" features** (merge & split, batch tools) that are not in the app.
 7. **No split, merge, password protect** in Document Actions (future only). Watermark is implemented.
 8. **OCR is scan-to-PDF only** — imported PDFs are not re-OCR'd in the editor.
-9. **Text overlays (V1)** — system font only; no custom fonts or opacity; not native PDF text reflow.
+9. **Text overlays** — System / Serif / Mono families; no opacity control; not native PDF text reflow; editing is on-page (not a separate entry sheet).
 10. **Page number font size and opacity** — not user-configurable in UI.
 11. **Image/signature overlay rotation** — not user-configurable in UI (text overlays support rotate).
 12. **No multi-select** for pages or overlays in the editor (scan review supports batch page selection).

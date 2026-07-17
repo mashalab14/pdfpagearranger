@@ -145,7 +145,7 @@ Reopen Recent → resolve bookmark / app file → importPDF (working temp) → b
 | Concept | Role |
 |--------|------|
 | **`PageItem`** | One page in the document list. Stable `id`, `originalPageIndex` into the source PDF, `rotation`, optional `duplicateSourceID`. |
-| **`PageObject`** | One overlay on a page (image, text, or signature). Normalized `position` / `size`, `rotation`, `zIndex`, `imageAssetID`. Text overlays store `textContent`, `textFontSizePoints`, `textColorRGBA`, `textBold`, `textListMode`. Signatures may also store `signatureSourceImageAssetID`, library baseline appearance, and per-placement ink color/thickness overrides. |
+| **`PageObject`** | One overlay on a page (image, text, or signature). Normalized `position` / `size`, `rotation`, `zIndex`, `imageAssetID`. Text overlays store `textContent`, font/size/color, bold/italic/underline/strikethrough, alignment, list mode/indent, and font family. Signatures may also store `signatureSourceImageAssetID`, library baseline appearance, and per-placement ink color/thickness overrides. |
 | **`PageAnnotation`** | One non-overlay annotation on a page: highlight (multi-rect), drawing (strokes), sticky note (point + text), or text comment (anchor rects + text). Coordinates stored normalized to the unrotated page. |
 | **`pageObjectsByPage`** | `[UUID: [PageObject]]` in `PDFEditorViewModel` — overlays keyed by `PageItem.id`. |
 | **`annotationsByPage`** | `[UUID: [PageAnnotation]]` in `PDFEditorViewModel` — annotations keyed by `PageItem.id`. |
@@ -174,7 +174,8 @@ Reopen Recent → resolve bookmark / app file → importPDF (working temp) → b
 | **`OverlayPDFExporter`** | Draws image and text overlays into a PDF `CGContext` using `OverlayGeometryEngine` and `TextOverlayRenderer`. |
 | **`TextOverlayRenderer`** | Vector text drawing for Page Mode compositing, thumbnails, and PDF export. |
 | **`TextOverlayLayoutEngine`** | Font sizing, measured bounds, attributed string layout for text overlays. |
-| **`TextOverlayFormattingEngine`** | List prefixes (bulleted/numbered), Insert Today, list-mode switching. |
+| **`TextOverlayFormattingEngine`** | List prefixes (bulleted/numbered/dashed), indentation, Insert Today, list-mode switching. |
+| **`TextOverlayInlineEditor` / `TextOverlayFormatBar`** | On-page UITextView editing and keyboard formatting bar (Markup-style). |
 | **`RecentDocumentsStore`** | Files-first recent **index** under Application Support (`RecentDocuments/`). Externally owned: security-scoped bookmark + metadata + optional thumbnail (no PDF library copy). App-owned (`appOwned/`): Create Document and Scan/Photo outputs. Identity by stable path / app id — **not** content hash. Schema v2; legacy `files/` removed on migrate; non-v2 index ignored. Drafts can share the index via `kind: draft` later. Max 50 entries (eviction deletes app-owned PDFs + thumbnails). |
 | **`ActiveDocumentOrigin`** | Session tag on `PDFEditorViewModel`: `.external` vs `.appOwned` for export write-back and compression adopt. |
 | **`handleIncomingDocumentURL`** | Open In… / future Share Extension entry → `importPDF(..., ownership: .external)`. |

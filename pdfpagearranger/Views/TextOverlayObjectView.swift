@@ -7,11 +7,15 @@ struct TextOverlayObjectView: View {
     let pageSize: CGSize
     let canvasScale: CGFloat
     let isSelected: Bool
+    var isEditing: Bool = false
+    var editingDraft: Binding<TextOverlayDraft>? = nil
     var isInteractionEnabled: Bool = true
     let animatePlacement: Bool
     let onPlacementAnimationFinished: (() -> Void)?
     let onSelect: () -> Void
     let onEdit: () -> Void
+    var onEditingChanged: (() -> Void)? = nil
+    var onEndEditing: (() -> Void)? = nil
     let onUpdate: (PageObject) -> Void
     let manipulationState: OverlayManipulationState
 
@@ -74,16 +78,17 @@ struct TextOverlayObjectView: View {
             .opacity(Double(object.opacity * placementReveal))
             .scaleEffect(OverlayPlacementAnimation.scale(for: placementReveal))
             .position(displayPosition)
-            .gesture(isSelected && isInteractionEnabled ? dragGesture : nil)
+            .gesture(isSelected && isInteractionEnabled && !isEditing ? dragGesture : nil)
             .onTapGesture(count: 2) {
-                guard isInteractionEnabled else { return }
+                guard isInteractionEnabled, !isEditing else { return }
                 onEdit()
             }
             .onTapGesture {
                 guard isInteractionEnabled else { return }
+                if isEditing { return }
                 onSelect()
             }
-            .allowsHitTesting(isInteractionEnabled)
+            .allowsHitTesting(isInteractionEnabled || isEditing)
             .onAppear { startPlacementAnimationIfNeeded() }
             .onChange(of: animatePlacement) { _, shouldAnimate in
                 if shouldAnimate {
@@ -105,21 +110,38 @@ struct TextOverlayObjectView: View {
 
     private var textContent: some View {
         ZStack {
-            TextOverlayLabelView(object: object, layoutHeight: activeLayoutSize.height)
-                .frame(width: activeLayoutSize.width, height: activeLayoutSize.height, alignment: .topLeading)
-                .rotationEffect(.degrees(activeRotationDegrees))
-                .overlay {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: 4)
-                            .strokeBorder(Color.accentColor, lineWidth: 2)
-                    }
+            Group {
+                if isEditing, let editingDraft {
+                    let renderScale = TextOverlayLayoutEngine.renderScale(
+                        for: activeLayoutSize.height,
+                        normalizedHeight: object.size.height
+                    )
+                    TextOverlayInlineEditor(
+                        draft: editingDraft,
+                        renderScale: renderScale,
+                        isFocused: true,
+                        onEditingChanged: { onEditingChanged?() },
+                        onRequestEndEditing: { onEndEditing?() }
+                    )
+                    .frame(width: activeLayoutSize.width, height: activeLayoutSize.height, alignment: .topLeading)
+                    .rotationEffect(.degrees(activeRotationDegrees))
+                    .accessibilityIdentifier("textOverlayInlineEditorContainer")
+                } else {
+                    TextOverlayLabelView(object: object, layoutHeight: activeLayoutSize.height)
+                        .frame(width: activeLayoutSize.width, height: activeLayoutSize.height, alignment: .topLeading)
+                        .rotationEffect(.degrees(activeRotationDegrees))
                 }
-                .contentShape(Rectangle())
-
-            if isSelected {
-                rotateHandle
             }
-            if isSelected {
+            .overlay {
+                if isSelected || isEditing {
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(Color.accentColor, lineWidth: 2)
+                }
+            }
+            .contentShape(Rectangle())
+
+            if isSelected && !isEditing {
+                rotateHandle
                 resizeHandle
             }
         }
@@ -355,8 +377,9 @@ private struct TextOverlayLabelView: View {
             for: object,
             renderScale: renderScale
         )
+        let alignment = object.textAlignment ?? .left
         Text(AttributedString(attributed))
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment.swiftUIAlignment)
+            .multilineTextAlignment(alignment.textAlignment)
     }
 }

@@ -16,7 +16,7 @@ struct PageAddOptionsSheet: View {
                 addOption(
                     icon: "textformat",
                     title: "Text",
-                    subtitle: "Add editable text",
+                    subtitle: "Type directly on the page",
                     isEnabled: true,
                     accessibilityIdentifier: "addTextOption"
                 ) {

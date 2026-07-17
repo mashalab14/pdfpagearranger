@@ -250,4 +250,227 @@ final class PDFTextOverlayRegressionTests: XCTestCase {
         XCTAssertLessThanOrEqual(clamped.x, 1)
         XCTAssertLessThanOrEqual(clamped.y, 1)
     }
+
+    func testDirectDraftCreationPlacesSelectedEmptyOverlay() throws {
+        let page = try XCTUnwrap(viewModel.pages.first)
+        let baselineCount = viewModel.overlayObjects(for: page.id).count
+        let overlayID = viewModel.beginDraftTextOverlay(
+            to: page.id,
+            pageAspectRatio: 612.0 / 792.0,
+            at: CGPoint(x: 0.5, y: 0.42)
+        )
+
+        let overlay = try XCTUnwrap(viewModel.overlayObjects(for: page.id).first(where: { $0.id == overlayID }))
+        XCTAssertEqual(viewModel.overlayObjects(for: page.id).count, baselineCount + 1)
+        XCTAssertEqual(overlay.textContent, "")
+        XCTAssertFalse(viewModel.canUndo, "Draft creation must not push undo until commit")
+    }
+
+    func testEmptyDraftCancellationRemovesOverlayWithoutUndo() throws {
+        let page = try XCTUnwrap(viewModel.pages.first)
+        let baseline = viewModel.captureEditorSnapshot()
+        let overlayID = viewModel.beginDraftTextOverlay(
+            to: page.id,
+            pageAspectRatio: 612.0 / 792.0,
+            at: CGPoint(x: 0.5, y: 0.5)
+        )
+
+        let result = viewModel.commitTextOverlayEditing(
+            id: overlayID,
+            pageItemID: page.id,
+            draft: .default,
+            pageAspectRatio: 612.0 / 792.0,
+            isNewDraft: true,
+            baselineSnapshot: baseline
+        )
+
+        XCTAssertEqual(result, .cancelledEmptyDraft)
+        XCTAssertTrue(viewModel.overlayObjects(for: page.id).isEmpty)
+        XCTAssertFalse(viewModel.canUndo)
+    }
+
+    func testPlaceholderNeverPersistedOrExported() throws {
+        let page = try XCTUnwrap(viewModel.pages.first)
+        let overlayID = viewModel.beginDraftTextOverlay(
+            to: page.id,
+            pageAspectRatio: 612.0 / 792.0,
+            at: CGPoint(x: 0.5, y: 0.5)
+        )
+        _ = viewModel.syncTextOverlayDraft(
+            id: overlayID,
+            pageItemID: page.id,
+            draft: .default,
+            pageAspectRatio: 612.0 / 792.0
+        )
+        let live = try XCTUnwrap(viewModel.overlayObjects(for: page.id).first)
+        XCTAssertNotEqual(live.textContent, TextOverlayDraft.placeholderHint)
+
+        let sourceURL = try PDFTestFactory.url(for: .onePage)
+        let imported = try pdfService.importPDF(from: sourceURL)
+        let exportURL = try pdfService.exportPDF(
+            pages: viewModel.pages,
+            sourceDocument: imported.document,
+            outputName: "placeholder-exclusion",
+            overlaysByPage: [page.id: [live]],
+            imageAssets: [:]
+        )
+        tempURLs.append(exportURL)
+        let pageText = PDFDocument(url: exportURL)?.page(at: 0)?.string ?? ""
+        XCTAssertFalse(pageText.contains(TextOverlayDraft.placeholderHint))
+    }
+
+    func testMultilineWrappingGrowsHeightPreservingWidth() throws {
+        let page = try XCTUnwrap(viewModel.pages.first)
+        let overlayID = viewModel.beginDraftTextOverlay(
+            to: page.id,
+            pageAspectRatio: 612.0 / 792.0,
+            at: CGPoint(x: 0.5, y: 0.5)
+        )
+        let initial = try XCTUnwrap(viewModel.overlayObjects(for: page.id).first(where: { $0.id == overlayID }))
+        let width = initial.size.width
+
+        var draft = TextOverlayDraft(text: String(repeating: "Wrapping word ", count: 24))
+        _ = viewModel.syncTextOverlayDraft(
+            id: overlayID,
+            pageItemID: page.id,
+            draft: draft,
+            pageAspectRatio: 612.0 / 792.0,
+            preserveWidth: true
+        )
+        let grown = try XCTUnwrap(viewModel.overlayObjects(for: page.id).first(where: { $0.id == overlayID }))
+        XCTAssertEqual(grown.size.width, width, accuracy: 0.0001)
+        XCTAssertGreaterThan(grown.size.height, initial.size.height)
+    }
+
+    func testLiveFormattingAndAlignmentCommit() throws {
+        let page = try XCTUnwrap(viewModel.pages.first)
+        let baseline = viewModel.captureEditorSnapshot()
+        let overlayID = viewModel.beginDraftTextOverlay(
+            to: page.id,
+            pageAspectRatio: 612.0 / 792.0,
+            at: CGPoint(x: 0.5, y: 0.5)
+        )
+
+        var draft = TextOverlayDraft(
+            text: "Live format",
+            fontSizePoints: 22,
+            colorRGBA: SignatureInkRGBA(red: 0, green: 0, blue: 1, alpha: 1),
+            isBold: true,
+            isItalic: true,
+            isUnderline: true,
+            alignment: .right,
+            listMode: .numbered,
+            listIndent: 1,
+            fontFamily: .monospaced
+        )
+        _ = viewModel.syncTextOverlayDraft(
+            id: overlayID,
+            pageItemID: page.id,
+            draft: draft,
+            pageAspectRatio: 612.0 / 792.0
+        )
+        let result = viewModel.commitTextOverlayEditing(
+            id: overlayID,
+            pageItemID: page.id,
+            draft: draft,
+            pageAspectRatio: 612.0 / 792.0,
+            isNewDraft: true,
+            baselineSnapshot: baseline
+        )
+        XCTAssertEqual(result, .committed)
+
+        let overlay = try XCTUnwrap(viewModel.overlayObjects(for: page.id).first)
+        XCTAssertEqual(overlay.textFontSizePoints, 22)
+        XCTAssertEqual(overlay.textBold, true)
+        XCTAssertEqual(overlay.textItalic, true)
+        XCTAssertEqual(overlay.textUnderline, true)
+        XCTAssertEqual(overlay.textAlignment, .right)
+        XCTAssertEqual(overlay.textListMode, .numbered)
+        XCTAssertEqual(overlay.textListIndent, 1)
+        XCTAssertEqual(overlay.textFontFamily, .monospaced)
+        XCTAssertTrue(overlay.textContent?.contains("1.") == true)
+    }
+
+    func testListStylesAndInsertToday() throws {
+        let page = try XCTUnwrap(viewModel.pages.first)
+        let withToday = TextOverlayFormattingEngine.appendToday(to: "Note")
+        let overlayID = viewModel.addTextOverlay(
+            to: page.id,
+            draft: TextOverlayDraft(text: withToday, listMode: .dashed),
+            pageAspectRatio: 612.0 / 792.0,
+            at: CGPoint(x: 0.5, y: 0.5)
+        )
+        let overlay = try XCTUnwrap(viewModel.overlayObjects(for: page.id).first(where: { $0.id == overlayID }))
+        XCTAssertEqual(overlay.textListMode, .dashed)
+        XCTAssertTrue(overlay.textContent?.contains("–") == true)
+        XCTAssertTrue(overlay.textContent?.contains("Note") == true)
+    }
+
+    func testExistingOverlayReeditCommitsUndoably() throws {
+        let page = try XCTUnwrap(viewModel.pages.first)
+        let overlayID = viewModel.addTextOverlay(
+            to: page.id,
+            draft: TextOverlayDraft(text: "Original"),
+            pageAspectRatio: 612.0 / 792.0,
+            at: CGPoint(x: 0.4, y: 0.4)
+        )
+        let baseline = viewModel.captureEditorSnapshot()
+        var draft = TextOverlayDraft(text: "Re-edited")
+        _ = viewModel.syncTextOverlayDraft(
+            id: overlayID,
+            pageItemID: page.id,
+            draft: draft,
+            pageAspectRatio: 612.0 / 792.0
+        )
+        let result = viewModel.commitTextOverlayEditing(
+            id: overlayID,
+            pageItemID: page.id,
+            draft: draft,
+            pageAspectRatio: 612.0 / 792.0,
+            isNewDraft: false,
+            baselineSnapshot: baseline
+        )
+        XCTAssertEqual(result, .committed)
+        XCTAssertEqual(viewModel.overlayObjects(for: page.id).first?.textContent, "Re-edited")
+
+        viewModel.undo()
+        XCTAssertEqual(viewModel.overlayObjects(for: page.id).first?.textContent, "Original")
+    }
+
+    func testCommitDraftRecordsRecentTextsExcludingPlaceholder() throws {
+        RecentTextsSettings.clear(in: recentDefaults)
+        let page = try XCTUnwrap(viewModel.pages.first)
+        let baseline = viewModel.captureEditorSnapshot()
+        let overlayID = viewModel.beginDraftTextOverlay(
+            to: page.id,
+            pageAspectRatio: 612.0 / 792.0,
+            at: CGPoint(x: 0.5, y: 0.5)
+        )
+        let draft = TextOverlayDraft(text: "Recent Candidate")
+        // Route Recent Texts through standard UserDefaults path used by production.
+        let result = viewModel.commitTextOverlayEditing(
+            id: overlayID,
+            pageItemID: page.id,
+            draft: draft,
+            pageAspectRatio: 612.0 / 792.0,
+            isNewDraft: true,
+            baselineSnapshot: baseline
+        )
+        XCTAssertEqual(result, .committed)
+        let entries = RecentTextsSettings.storedEntries()
+        XCTAssertTrue(entries.contains(where: { $0.contains("Recent Candidate") }))
+        XCTAssertFalse(entries.contains(TextOverlayDraft.placeholderHint))
+    }
+
+    func testPageModeSourceUsesInlineEditorNotLegacySheet() throws {
+        let editorURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("pdfpagearranger/Views/PageEditorView.swift")
+        let source = try String(contentsOf: editorURL, encoding: .utf8)
+        XCTAssertTrue(source.contains("beginDraftTextOverlay"))
+        XCTAssertTrue(source.contains("TextOverlayFormatBar"))
+        XCTAssertFalse(source.contains("TextOverlayEditorSheet"))
+        XCTAssertFalse(source.contains("textPlacementGuidance"))
+    }
 }

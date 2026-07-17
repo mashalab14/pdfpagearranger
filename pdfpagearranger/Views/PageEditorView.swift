@@ -1,6 +1,7 @@
 import PDFKit
 import PhotosUI
 import SwiftUI
+import UIKit
 
 struct PageEditorRoute: Hashable {
     let pageItemID: UUID
@@ -27,12 +28,12 @@ struct PageEditorView: View {
     @State private var lastPageNavigationUptime: TimeInterval = 0
     @State private var signatureEditOverlayID: UUID?
     @State private var signatureSaveErrorMessage: String?
-    @State private var pendingTextDraft: TextOverlayDraft?
-    @State private var editingTextOverlayID: UUID?
-    @State private var showTextEditorSheet = false
-    @State private var textEditorDraft = TextOverlayDraft.default
+    @State private var textEditingOverlayID: UUID?
+    @State private var textEditingDraft = TextOverlayDraft.default
+    @State private var textEditingIsNewDraft = false
+    @State private var textEditingBaseline: EditorSnapshot?
     @State private var recentTexts = RecentTextsSettings.storedEntries()
-    @State private var textEditorErrorMessage: String?
+    @State private var keyboardBottomInset: CGFloat = 0
     @State private var drawingModeActive = false
     @State private var drawingSessionStrokes: [DrawingStroke] = []
     @State private var drawingCurrentPoints: [PageNormalizedPoint] = []
@@ -91,8 +92,8 @@ struct PageEditorView: View {
         pendingSignaturePlacement != nil
     }
 
-    private var textPlacementActive: Bool {
-        pendingTextDraft != nil
+    private var textEditingActive: Bool {
+        textEditingOverlayID != nil
     }
 
     var body: some View {
@@ -100,7 +101,6 @@ struct PageEditorView: View {
             .sheet(isPresented: $showAddSheet, content: addOptionsSheet)
             .sheet(isPresented: $showCommentEditor, content: commentEditorSheet)
             .sheet(isPresented: $showStickyNoteEditor, content: stickyNoteEditorSheet)
-            .sheet(isPresented: $showTextEditorSheet, content: textEditorSheet)
             .sheet(isPresented: $showSignatureLibrary, content: signatureLibrarySheet)
             .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotoItem, matching: .images)
             .onChange(of: selectedPhotoItem) { _, newItem in
@@ -118,21 +118,44 @@ struct PageEditorView: View {
                     clearPDFTextSelection()
                     pageSelection = .none
                     signatureEditOverlayID = nil
+                    endTextEditingIfNeeded()
                 }
             }
             .onChange(of: viewModel.historyRevision) { _, _ in
                 handleHistoryRestoration()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+                updateKeyboardInset(from: notification)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                keyboardBottomInset = 0
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if textEditingActive {
+                    TextOverlayFormatBar(
+                        draft: $textEditingDraft,
+                        recentTexts: recentTexts,
+                        onChange: syncLiveTextEditing,
+                        onInsertRecent: { entry in
+                            textEditingDraft.text = entry
+                            textEditingDraft.listMode = .plain
+                            textEditingDraft.listIndent = 0
+                            syncLiveTextEditing()
+                        },
+                        onRemoveRecent: { entry in
+                            RecentTextsSettings.removeEntry(entry)
+                            recentTexts = RecentTextsSettings.storedEntries()
+                        },
+                        onDone: endTextEditingIfNeeded
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
             .task(id: renderTaskKey) { await loadPageImage() }
             .alert("Could Not Save Signature", isPresented: signatureSaveErrorBinding) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(signatureSaveErrorMessage ?? "")
-            }
-            .alert("Text Required", isPresented: textEditorErrorBinding) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(textEditorErrorMessage ?? "")
             }
             .alert("Annotation Error", isPresented: annotationErrorBinding) {
                 Button("OK", role: .cancel) {}
@@ -168,13 +191,6 @@ struct PageEditorView: View {
             PageModeSearchBar(viewModel: viewModel) {
                 viewModel.closeDocumentSearch()
             }
-        } else if textPlacementActive {
-            Text("Tap the page to place text")
-                .font(.subheadline.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(.bar)
-                .accessibilityIdentifier("textPlacementGuidance")
         } else if stickyNotePlacementActive {
             Text("Tap the page to place sticky note")
                 .font(.subheadline.weight(.semibold))
@@ -243,10 +259,6 @@ struct PageEditorView: View {
         Binding(get: { signatureSaveErrorMessage != nil }, set: { if !$0 { signatureSaveErrorMessage = nil } })
     }
 
-    private var textEditorErrorBinding: Binding<Bool> {
-        Binding(get: { textEditorErrorMessage != nil }, set: { if !$0 { textEditorErrorMessage = nil } })
-    }
-
     private var annotationErrorBinding: Binding<Bool> {
         Binding(get: { annotationErrorMessage != nil }, set: { if !$0 { annotationErrorMessage = nil } })
     }
@@ -304,21 +316,6 @@ struct PageEditorView: View {
     }
 
     @ViewBuilder
-    private func textEditorSheet() -> some View {
-        TextOverlayEditorSheet(
-            title: editingTextOverlayID == nil ? "Add Text" : "Edit Text",
-            confirmTitle: editingTextOverlayID == nil ? "Add" : "Update",
-            draft: $textEditorDraft,
-            recentTexts: recentTexts,
-            onRemoveRecent: { entry in
-                RecentTextsSettings.removeEntry(entry)
-                recentTexts = RecentTextsSettings.storedEntries()
-            },
-            onConfirm: handleTextEditorConfirm
-        )
-    }
-
-    @ViewBuilder
     private func signatureLibrarySheet() -> some View {
         SignatureLibraryView(
             store: signatureLibraryStore,
@@ -331,7 +328,7 @@ struct PageEditorView: View {
     private func handleAddSheetChange(_: Bool, isPresented: Bool) {
         if isPresented {
             cancelSignaturePlacement()
-            cancelTextPlacement()
+            endTextEditingIfNeeded()
             cancelStickyNotePlacement()
             exitDrawingMode(save: false)
             clearPDFTextSelection()
@@ -342,15 +339,13 @@ struct PageEditorView: View {
 
     private func handlePageRouteChange(_: UUID, _: UUID) {
         cancelSignaturePlacement()
-        cancelTextPlacement()
+        endTextEditingIfNeeded()
         cancelStickyNotePlacement()
         exitDrawingMode(save: false)
         signatureEditOverlayID = nil
-        editingTextOverlayID = nil
         editingStickyNoteID = nil
         editingTextCommentID = nil
         editingDrawingID = nil
-        showTextEditorSheet = false
         showStickyNoteEditor = false
         showCommentEditor = false
         pageSelection = .none
@@ -425,11 +420,10 @@ struct PageEditorView: View {
                 placeSignature(atDisplayTap: location, displayPageSize: displaySize)
             },
             onSignaturePlacementDismiss: cancelSignaturePlacement,
-            textPlacementActive: textPlacementActive,
-            onTextPlacementTap: { location, displaySize in
-                placeText(atDisplayTap: location, displayPageSize: displaySize)
-            },
-            onTextPlacementDismiss: cancelTextPlacement,
+            textEditingOverlayID: textEditingOverlayID,
+            textEditingDraft: $textEditingDraft,
+            onTextEditingChanged: syncLiveTextEditing,
+            onEndTextEditing: endTextEditingIfNeeded,
             stickyNotePlacementActive: stickyNotePlacementActive,
             onStickyNotePlacementTap: { location, displaySize in
                 placeStickyNote(atDisplayTap: location, displayPageSize: displaySize)
@@ -507,7 +501,8 @@ struct PageEditorView: View {
                     pageSelection = .none
                 }
             },
-            pageTransitionEdge: pageTransitionEdge
+            pageTransitionEdge: pageTransitionEdge,
+            keyboardBottomInset: keyboardBottomInset
         )
     }
 
@@ -694,10 +689,8 @@ struct PageEditorView: View {
     private func clearTransientInteractionStateForHistoryRestore() {
         clearPDFTextSelection()
         pendingSignaturePlacement = nil
-        pendingTextDraft = nil
+        discardTextEditingSession(commit: false)
         signatureEditOverlayID = nil
-        editingTextOverlayID = nil
-        showTextEditorSheet = false
         drawingModeActive = false
         drawingSessionStrokes = []
         drawingCurrentPoints = []
@@ -749,7 +742,7 @@ struct PageEditorView: View {
         }
 
         cancelSignaturePlacement()
-        cancelTextPlacement()
+        endTextEditingIfNeeded()
         cancelStickyNotePlacement()
         exitDrawingMode(save: false)
         clearPDFTextSelection()
@@ -816,87 +809,115 @@ struct PageEditorView: View {
     }
 
     private func beginNewTextOverlay() {
+        guard let pageItem else { return }
         cancelSignaturePlacement()
-        editingTextOverlayID = nil
-        textEditorDraft = .default
+        cancelStickyNotePlacement()
+        exitDrawingMode(save: false)
+        endTextEditingIfNeeded()
+
+        let baseline = viewModel.captureEditorSnapshot()
+        let draft = TextOverlayDraft.default
+        let overlayID = viewModel.beginDraftTextOverlay(
+            to: pageItem.id,
+            draft: draft,
+            pageAspectRatio: pageAspectRatio,
+            at: CGPoint(x: 0.5, y: 0.42)
+        )
+
+        textEditingBaseline = baseline
+        textEditingIsNewDraft = true
+        textEditingDraft = draft
+        textEditingOverlayID = overlayID
         recentTexts = RecentTextsSettings.storedEntries()
-        showTextEditorSheet = true
+        registerNewOverlayPlacement(overlayID: overlayID)
+        pageSelection = .overlay(overlayID)
     }
 
     private func beginEditingTextOverlay(id: UUID, pageItemID: UUID) {
         guard let overlay = viewModel.overlayObjects(for: pageItemID).first(where: { $0.id == id && $0.type == .text }) else {
-            textEditorErrorMessage = "This text overlay is no longer available."
             return
         }
-        cancelTextPlacement()
         cancelSignaturePlacement()
-        editingTextOverlayID = id
-        textEditorDraft = TextOverlayDraft(from: overlay)
+        if textEditingOverlayID != id {
+            endTextEditingIfNeeded()
+        }
+
+        textEditingBaseline = viewModel.captureEditorSnapshot()
+        textEditingIsNewDraft = false
+        textEditingDraft = TextOverlayDraft(from: overlay)
+        textEditingOverlayID = id
         recentTexts = RecentTextsSettings.storedEntries()
-        showTextEditorSheet = true
+        pageSelection = .overlay(id)
     }
 
-    private func handleTextEditorConfirm() {
-        guard textEditorDraft.isEmpty == false else {
-            textEditorErrorMessage = "Enter text before continuing."
-            return
-        }
-
-        if let editingTextOverlayID, let pageItem {
-            let updated = viewModel.updateTextOverlay(
-                id: editingTextOverlayID,
-                pageItemID: pageItem.id,
-                draft: textEditorDraft
-            )
-            if !updated {
-                textEditorErrorMessage = "Enter text before continuing."
-                return
-            }
-            self.editingTextOverlayID = nil
-            showTextEditorSheet = false
-            recentTexts = RecentTextsSettings.storedEntries()
-            return
-        }
-
-        pendingTextDraft = textEditorDraft
-        showTextEditorSheet = false
-        pageSelection = .none
-    }
-
-    private func cancelTextPlacement() {
-        pendingTextDraft = nil
-    }
-
-    private func placeText(atDisplayTap tap: CGPoint, displayPageSize: CGSize) {
-        guard let pageItem, let draft = pendingTextDraft else { return }
-        guard TextOverlayPlacementEngine.isDisplayTapInsidePage(tap, displayPageSize: displayPageSize) else {
-            return
-        }
-
-        let normalizedSize = TextOverlayLayoutEngine.measuredSize(
-            text: TextOverlayFormattingEngine.displayText(draft.trimmedText, listMode: draft.listMode),
-            fontSizePoints: draft.fontSizePoints,
-            bold: draft.isBold,
-            listMode: draft.listMode,
-            pageAspectRatio: pageAspectRatio
-        )
-        let position = TextOverlayPlacementEngine.storagePosition(
-            forDisplayTap: tap,
-            displayPageSize: displayPageSize,
-            normalizedOverlaySize: normalizedSize,
-            pageRotation: pageItem.rotation
-        )
-
-        pendingTextDraft = nil
-
-        let overlayID = viewModel.addTextOverlay(
-            to: pageItem.id,
-            draft: draft,
+    private func syncLiveTextEditing() {
+        guard let pageItem, let overlayID = textEditingOverlayID else { return }
+        textEditingDraft.clampListIndent()
+        _ = viewModel.syncTextOverlayDraft(
+            id: overlayID,
+            pageItemID: pageItem.id,
+            draft: textEditingDraft,
             pageAspectRatio: pageAspectRatio,
-            at: position
+            preserveWidth: true
         )
-        registerNewOverlayPlacement(overlayID: overlayID)
-        recentTexts = RecentTextsSettings.storedEntries()
+    }
+
+    private func endTextEditingIfNeeded() {
+        guard textEditingActive else { return }
+        commitTextEditing()
+    }
+
+    private func commitTextEditing() {
+        guard let pageItem, let overlayID = textEditingOverlayID else {
+            discardTextEditingSession(commit: false)
+            return
+        }
+
+        let result = viewModel.commitTextOverlayEditing(
+            id: overlayID,
+            pageItemID: pageItem.id,
+            draft: textEditingDraft,
+            pageAspectRatio: pageAspectRatio,
+            isNewDraft: textEditingIsNewDraft,
+            baselineSnapshot: textEditingBaseline
+        )
+
+        switch result {
+        case .cancelledEmptyDraft:
+            if pageSelection.selectedOverlayID == overlayID {
+                pageSelection = .none
+            }
+        case .deletedEmptyExisting:
+            if pageSelection.selectedOverlayID == overlayID {
+                pageSelection = .none
+            }
+        case .committed:
+            pageSelection = .overlay(overlayID)
+            recentTexts = RecentTextsSettings.storedEntries()
+        case .rejected:
+            break
+        }
+
+        discardTextEditingSession(commit: false)
+    }
+
+    private func discardTextEditingSession(commit: Bool) {
+        _ = commit
+        textEditingOverlayID = nil
+        textEditingDraft = .default
+        textEditingIsNewDraft = false
+        textEditingBaseline = nil
+    }
+
+    private func updateKeyboardInset(from notification: Notification) {
+        guard
+            let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
+        else {
+            keyboardBottomInset = 0
+            return
+        }
+        let screenHeight = UIScreen.main.bounds.height
+        keyboardBottomInset = max(0, screenHeight - frame.origin.y)
     }
 
     private func duplicateTextOverlay(id: UUID, pageItemID: UUID) {
@@ -1004,7 +1025,7 @@ struct PageEditorView: View {
 
     private func beginStickyNotePlacement() {
         cancelSignaturePlacement()
-        cancelTextPlacement()
+        endTextEditingIfNeeded()
         exitDrawingMode(save: false)
         stickyNotePlacementActive = true
         pendingStickyNotePosition = nil
@@ -1084,7 +1105,7 @@ struct PageEditorView: View {
 
     private func beginDrawingMode() {
         cancelSignaturePlacement()
-        cancelTextPlacement()
+        endTextEditingIfNeeded()
         cancelStickyNotePlacement()
         clearPDFTextSelection()
         pageSelection = .none

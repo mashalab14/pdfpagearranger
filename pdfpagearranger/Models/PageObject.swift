@@ -34,7 +34,13 @@ struct PageObject: Identifiable, Equatable, Codable {
     var textFontSizePoints: CGFloat?
     var textColorRGBA: SignatureInkRGBA?
     var textBold: Bool?
+    var textItalic: Bool?
+    var textUnderline: Bool?
+    var textStrikethrough: Bool?
+    var textAlignment: TextOverlayAlignment?
     var textListMode: TextOverlayListMode?
+    var textListIndent: Int?
+    var textFontFamily: TextOverlayFontFamily?
 
     var usesRasterImageAsset: Bool {
         (type == .image || type == .signature) && imageAssetID != nil
@@ -122,7 +128,13 @@ struct PageObject: Identifiable, Equatable, Codable {
         textFontSizePoints: CGFloat? = nil,
         textColorRGBA: SignatureInkRGBA? = nil,
         textBold: Bool? = nil,
-        textListMode: TextOverlayListMode? = nil
+        textItalic: Bool? = nil,
+        textUnderline: Bool? = nil,
+        textStrikethrough: Bool? = nil,
+        textAlignment: TextOverlayAlignment? = nil,
+        textListMode: TextOverlayListMode? = nil,
+        textListIndent: Int? = nil,
+        textFontFamily: TextOverlayFontFamily? = nil
     ) {
         self.id = id
         self.pageItemID = pageItemID
@@ -145,6 +157,12 @@ struct PageObject: Identifiable, Equatable, Codable {
         self.textFontSizePoints = textFontSizePoints
         self.textColorRGBA = textColorRGBA
         self.textBold = textBold
+        self.textItalic = textItalic
+        self.textUnderline = textUnderline
+        self.textStrikethrough = textStrikethrough
+        self.textAlignment = textAlignment
         self.textListMode = textListMode
+        self.textListIndent = textListIndent
+        self.textFontFamily = textFontFamily
     }
 }

@@ -16,9 +16,10 @@ struct PageOverlayCanvasView: View {
     let signaturePlacementActive: Bool
     let onSignaturePlacementTap: ((CGPoint, CGSize) -> Void)?
     let onSignaturePlacementDismiss: (() -> Void)?
-    let textPlacementActive: Bool
-    let onTextPlacementTap: ((CGPoint, CGSize) -> Void)?
-    let onTextPlacementDismiss: (() -> Void)?
+    let textEditingOverlayID: UUID?
+    @Binding var textEditingDraft: TextOverlayDraft
+    let onTextEditingChanged: () -> Void
+    let onEndTextEditing: () -> Void
     let stickyNotePlacementActive: Bool
     let onStickyNotePlacementTap: ((CGPoint, CGSize) -> Void)?
     let onStickyNotePlacementDismiss: (() -> Void)?
@@ -57,6 +58,7 @@ struct PageOverlayCanvasView: View {
     let onDuplicateTextOverlay: (UUID) -> Void
     let onDeleteTextOverlay: (UUID) -> Void
     let pageTransitionEdge: Edge
+    var keyboardBottomInset: CGFloat = 0
 
     @State private var scale: CGFloat = 1
     @State private var steadyScale: CGFloat = 1
@@ -70,18 +72,22 @@ struct PageOverlayCanvasView: View {
     private let minScale: CGFloat = 1
     private let maxScale: CGFloat = 4
 
+    private var textEditingActive: Bool {
+        textEditingOverlayID != nil
+    }
+
     private var pageZoomEnabled: Bool {
         pageSelection.selectedOverlayID == nil
             && pageSelection.selectedAnnotationID == nil
             && !signaturePlacementActive
-            && !textPlacementActive
+            && !textEditingActive
             && !stickyNotePlacementActive
             && !drawingModeActive
     }
 
     private var pageSwipeEnabled: Bool {
         !signaturePlacementActive
-            && !textPlacementActive
+            && !textEditingActive
             && !stickyNotePlacementActive
             && !drawingModeActive
             && stickyNoteDragOrigin == nil
@@ -118,7 +124,7 @@ struct PageOverlayCanvasView: View {
 
     private var annotationInteractionEnabled: Bool {
         !signaturePlacementActive
-            && !textPlacementActive
+            && !textEditingActive
             && !stickyNotePlacementActive
             && !drawingModeActive
             && signatureEditOverlayID == nil
@@ -145,7 +151,7 @@ struct PageOverlayCanvasView: View {
     private var showsTextContextMenu: Bool {
         selectedTextOverlay != nil
             && !signaturePlacementActive
-            && !textPlacementActive
+            && !textEditingActive
             && !overlayManipulationState.isActive
     }
 
@@ -153,7 +159,7 @@ struct PageOverlayCanvasView: View {
         selectedSignatureOverlay != nil
             && signatureEditOverlayID == nil
             && !signaturePlacementActive
-            && !textPlacementActive
+            && !textEditingActive
             && !overlayManipulationState.isActive
     }
 
@@ -182,7 +188,10 @@ struct PageOverlayCanvasView: View {
                 pageStack(fitSize: displaySize)
                     .frame(width: displaySize.width, height: displaySize.height)
                     .scaleEffect(scale)
-                    .offset(offset)
+                    .offset(
+                        x: offset.width,
+                        y: offset.height - (textEditingActive ? min(max(keyboardBottomInset - 40, 0) * 0.55, 260) : 0)
+                    )
                     .contentShape(Rectangle())
                     .onTapGesture(coordinateSpace: .local) { location in
                         handlePageTap(at: location, displaySize: displaySize)
@@ -196,7 +205,7 @@ struct PageOverlayCanvasView: View {
             .accessibilityIdentifier("pageModeCanvas")
             .onLongPressGesture(minimumDuration: 0.35) {
                 guard !signaturePlacementActive,
-                      !textPlacementActive,
+                      !textEditingActive,
                       !stickyNotePlacementActive,
                       !drawingModeActive else { return }
                 pdfTextSelectionLayerActive = true
@@ -209,7 +218,7 @@ struct PageOverlayCanvasView: View {
                     }
                 }
             }
-            .onChange(of: textPlacementActive) { _, isActive in
+            .onChange(of: textEditingActive) { _, isActive in
                 if isActive {
                     deactivatePDFTextSelectionLayer()
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -256,7 +265,7 @@ struct PageOverlayCanvasView: View {
                     pageLoadKey: pageLoadKey,
                     displaySize: fitSize,
                     isInteractionEnabled: !signaturePlacementActive
-                        && !textPlacementActive
+                        && !textEditingActive
                         && !stickyNotePlacementActive
                         && !drawingModeActive,
                     pageSwipeEnabled: pageSwipeEnabled,
@@ -349,21 +358,24 @@ struct PageOverlayCanvasView: View {
 
                 ForEach(sortedObjects) { object in
                     if object.isTextOverlay {
+                        let isEditingThis = textEditingOverlayID == object.id
                         TextOverlayObjectView(
                             object: object,
                             pageRotation: pageRotation,
                             pageSize: fitSize,
                             canvasScale: scale,
-                            isSelected: pageSelection.selectedOverlayID == object.id,
+                            isSelected: pageSelection.selectedOverlayID == object.id || isEditingThis,
+                            isEditing: isEditingThis,
+                            editingDraft: isEditingThis ? $textEditingDraft : nil,
                             isInteractionEnabled: !signaturePlacementActive
-                                && !textPlacementActive
+                                && (!textEditingActive || isEditingThis)
                                 && signatureEditOverlayID == nil,
                             animatePlacement: placementAnimatingOverlayIDs.contains(object.id),
                             onPlacementAnimationFinished: {
                                 onPlacementAnimationFinished(object.id)
                             },
                             onSelect: {
-                                guard !signaturePlacementActive, !textPlacementActive else { return }
+                                guard !signaturePlacementActive, !textEditingActive else { return }
                                 signatureEditOverlayID = nil
                                 deactivatePDFTextSelectionLayer()
                                 pageSelection = .overlay(object.id)
@@ -372,6 +384,8 @@ struct PageOverlayCanvasView: View {
                             onEdit: {
                                 onEditTextOverlay(object.id)
                             },
+                            onEditingChanged: onTextEditingChanged,
+                            onEndEditing: onEndTextEditing,
                             onUpdate: onUpdate,
                             manipulationState: overlayManipulationState
                         )
@@ -386,14 +400,14 @@ struct PageOverlayCanvasView: View {
                             canvasScale: scale,
                             isSelected: pageSelection.selectedOverlayID == object.id,
                             isInteractionEnabled: !signaturePlacementActive
-                                && !textPlacementActive
+                                && !textEditingActive
                                 && signatureEditOverlayID == nil,
                             animatePlacement: placementAnimatingOverlayIDs.contains(object.id),
                             onPlacementAnimationFinished: {
                                 onPlacementAnimationFinished(object.id)
                             },
                             onSelect: {
-                                guard !signaturePlacementActive, !textPlacementActive else { return }
+                                guard !signaturePlacementActive, !textEditingActive else { return }
                                 signatureEditOverlayID = nil
                                 deactivatePDFTextSelectionLayer()
                                 pageSelection = .overlay(object.id)
@@ -684,11 +698,8 @@ struct PageOverlayCanvasView: View {
             return
         }
 
-        if textPlacementActive {
-            guard TextOverlayPlacementEngine.isDisplayTapInsidePage(location, displayPageSize: displaySize) else {
-                return
-            }
-            onTextPlacementTap?(location, displaySize)
+        if textEditingActive {
+            onEndTextEditing()
             return
         }
 
@@ -715,8 +726,8 @@ struct PageOverlayCanvasView: View {
             return
         }
 
-        if textPlacementActive {
-            onTextPlacementDismiss?()
+        if textEditingActive {
+            onEndTextEditing()
             return
         }
 
