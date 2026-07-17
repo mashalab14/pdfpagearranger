@@ -65,7 +65,7 @@ This document describes **exactly how the app behaves today** from the user's pe
 
 The app does **not** modify the user's original imported file. All edits are held in memory (and temporary app storage for the working copy) until export. Scan-to-PDF drafts are stored in temporary on-device storage until discarded or converted to a PDF.
 
-**Recent Documents** persists durable copies of opened/created PDFs across launches. There is still **no** full project saving, **no** multi-document simultaneous editing, and **no** account system.
+**Recent Documents** is a Files-first **index** into documents (bookmarks/metadata for externally owned PDFs; app-owned storage only for Create Document and other app-created PDFs). It is **not** an application-managed library of duplicated external files. There is still **no** full project saving, **no** multi-document simultaneous editing, and **no** account system.
 
 ---
 
@@ -138,11 +138,25 @@ The Home screen is an **acquisition funnel**: it gets the user into a document. 
 - Shows up to **five** most recently opened or created PDF documents (most recent first)
 - Each row: filename, last opened date/time, thumbnail when available
 - **More** opens the full Recent Documents list
-- Selecting a row opens that PDF in the editor immediately
+- Selecting a row opens that PDF in the editor immediately from its **authoritative** location (external file via bookmark, or app-owned file)
 - Empty state copy: *"Documents you open or create will appear here."*
 - Acquisition actions remain available when the list is empty
 
-**Included** after an actual PDF exists: Open Document, Create Document, Scan to PDF (after Create PDF), Photo to PDF (after Create PDF).
+**Ownership model**
+
+| Kind | Authoritative file | What Recent stores |
+|------|--------------------|--------------------|
+| Externally owned (Open Document, Open In…, future Share Extension) | User's file in Files / other app | Security-scoped bookmark + metadata + optional thumbnail |
+| App-owned (Create Document; Scan/Photo after Create PDF) | App Application Support (`RecentDocuments/appOwned/`) | Relative path + metadata + optional thumbnail |
+| Future Drafts | App-owned draft storage | Same index; `kind: draft` reserved |
+
+**Identity:** Recent represents **document identity** (stable path / app id), not file contents. Two different files with identical bytes remain separate entries. Reopening the same file updates one entry.
+
+**Lifecycle:** A document becomes Recent whenever it becomes the **active** editor document (successful open/create/handoff). Cancelled acquisition flows are not recorded. Missing or unresolvable entries are pruned.
+
+**Save / reopen:** Reopening a Recent external document always resolves the bookmark and opens the **current** file on disk (latest saved version in Files). Recent never keeps a second evolving copy of an external PDF. App-owned documents update their authoritative app file on export (and compression adopt). Editor sessions still use a temporary working copy; unsaved in-memory edits are lost on close (same as before).
+
+**Included** after an actual PDF exists: Open Document, Create Document, Scan to PDF (after Create PDF), Photo to PDF (after Create PDF), Open In…, reopening Recent.
 
 **Not included:** cancelled scan/photo/open flows, temporary images, draft scan pages, unfinished acquisition.
 
@@ -1840,7 +1854,7 @@ Temporary UI state is **not** restored: selection, search query, zoom/pan, open 
 | Appearance setting (Device/Light/Dark) | **Yes** |
 | **Make PDF Searchable** (scan-to-PDF) | **Yes** |
 | **Recent Texts** (text overlay editor) | **Yes** |
-| **Recent Documents** (opened/created PDFs) | **Yes** |
+| **Recent Documents** (index: bookmarks / app-owned refs) | **Yes** |
 | Signature library (saved signatures) | **Yes** |
 | Default / favorite signature | **Yes** |
 | Last signature ink thickness (capture UI) | **Yes** |
@@ -1890,7 +1904,7 @@ After restart: user sees **home screen** with **Recent Documents** (if any). Acq
 
 ## 29. Known limitations
 
-1. **No session persistence** — closing the app loses in-progress editor edits unless exported; Recent Documents can reopen the last known PDF copy.
+1. **No session persistence** — closing the app loses in-progress editor edits unless exported; Recent Documents reopens the authoritative file (Files bookmark or app-owned copy), not a parallel hostage library of external PDFs.
 2. **Paywall is a placeholder** — "Continue for now" unlocks Pro for the session only; no real purchase.
 4. **Paywall lists "coming soon" features** (merge & split, batch tools) that are not in the app.
 5. **No split, merge, password protect** in Document Actions (future only). Watermark is implemented.
@@ -1914,7 +1928,8 @@ After restart: user sees **home screen** with **Recent Documents** (if any). Acq
 
 The following are **not** available in the current product (do not test for them):
 
-- Save project / reopen project (beyond Recent Documents copies)
+- Save project / reopen project (beyond Recent Documents index)
+- Share Extension target (Open In… is supported; Share Extension should call the same `handleIncomingDocumentURL` / `importPDF` path when added)
 - Multiple open documents
 - Drafts on Home (architecture reserved; not implemented)
 - OCR on imported PDFs (scan-to-PDF OCR is implemented)

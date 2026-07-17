@@ -14,6 +14,11 @@ struct pdfpagearrangerApp: App {
         WindowGroup {
             ContentView(viewModel: viewModel)
                 .preferredColorScheme(appearanceMode.colorScheme)
+                .onOpenURL { url in
+                    Task {
+                        await viewModel.handleIncomingDocumentURL(url)
+                    }
+                }
         }
     }
 }

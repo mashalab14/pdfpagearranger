@@ -29,6 +29,8 @@ final class PDFEditorViewModel {
     private let compressionService = CompressionService()
     let proGate = ProGate()
     private let recentDocumentsStore: RecentDocumentsStore
+    /// Tracks whether the active session is an external reference or an app-owned document.
+    private(set) var activeDocumentOrigin: ActiveDocumentOrigin?
 
     init(recentDocumentsStore: RecentDocumentsStore? = nil) {
         if let recentDocumentsStore {
@@ -152,7 +154,16 @@ final class PDFEditorViewModel {
         closeDocumentSearch()
     }
 
-    func importPDF(from url: URL, displayNameOverride: String? = nil) async {
+    /// Opens a PDF and records it as Recent when it becomes the active document.
+    ///
+    /// - Parameter ownership: `.external` for Files-owned PDFs (Open Document, Open In…);
+    ///   `.appOwned` for Create Document, Scan/Photo handoff, and other app-created PDFs.
+    func importPDF(
+        from url: URL,
+        displayNameOverride: String? = nil,
+        ownership: RecentDocumentOwnership = .external,
+        existingAppOwnedID: UUID? = nil
+    ) async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -176,10 +187,12 @@ final class PDFEditorViewModel {
             clearDocumentSearch()
             await ThumbnailService.shared.clear()
             recordRecentDocumentIfNeeded(
-                localURL: imported.localURL,
+                authoritativeSourceURL: url,
                 displayName: resolvedName,
                 pageCount: imported.pageCount,
-                document: imported.document
+                document: imported.document,
+                ownership: ownership,
+                existingAppOwnedID: existingAppOwnedID
             )
         } catch {
             resetDocument()
@@ -187,15 +200,28 @@ final class PDFEditorViewModel {
         }
     }
 
-    /// Creates a blank one-page PDF and opens it in the editor.
+    /// Creates a blank one-page PDF owned by the app and opens it in the editor.
     func createBlankDocument() async {
         do {
-            let url = try pdfService.createBlankPDF(displayName: "Untitled")
-            await importPDF(from: url)
+            let record = try recentDocumentsStore.createAppOwnedBlankDocument(displayName: "Untitled")
+            guard let url = recentDocumentsStore.appOwnedFileURL(for: record) else {
+                throw RecentDocumentsStoreError.recordNotFound
+            }
+            await importPDF(
+                from: url,
+                displayNameOverride: record.displayName,
+                ownership: .appOwned,
+                existingAppOwnedID: record.id
+            )
         } catch {
             resetDocument()
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Shared entry for Open In… and future Share Extension handoff.
+    func handleIncomingDocumentURL(_ url: URL) async {
+        await importPDF(from: url, ownership: .external)
     }
 
     func recentDocumentsForHome(limit: Int = RecentDocumentsStore.homePreviewLimit) -> [RecentDocumentRecord] {
@@ -207,13 +233,31 @@ final class PDFEditorViewModel {
     }
 
     func openRecentDocument(_ record: RecentDocumentRecord) async {
-        let url = recentDocumentsStore.fileURL(for: record)
-        guard FileManager.default.fileExists(atPath: url.path) else {
+        do {
+            let resolved = try recentDocumentsStore.resolveDocumentURL(for: record)
+            let didAccess = resolved.isSecurityScoped && resolved.url.startAccessingSecurityScopedResource()
+            defer {
+                if didAccess {
+                    resolved.url.stopAccessingSecurityScopedResource()
+                }
+            }
+            await importPDF(
+                from: resolved.url,
+                displayNameOverride: record.displayName,
+                ownership: record.ownership,
+                existingAppOwnedID: record.ownership == .appOwned ? record.id : nil
+            )
+            if errorMessage != nil || !hasDocument {
+                try? recentDocumentsStore.removeDocument(id: record.id)
+                if errorMessage == nil {
+                    errorMessage = RecentDocumentsStoreError.recordNotFound.localizedDescription
+                }
+            }
+        } catch {
             try? recentDocumentsStore.removeDocument(id: record.id)
+            resetDocument()
             errorMessage = RecentDocumentsStoreError.recordNotFound.localizedDescription
-            return
         }
-        await importPDF(from: url, displayNameOverride: record.displayName)
     }
 
     func loadRecentThumbnail(for record: RecentDocumentRecord) -> UIImage? {
@@ -221,19 +265,36 @@ final class PDFEditorViewModel {
     }
 
     private func recordRecentDocumentIfNeeded(
-        localURL: URL,
+        authoritativeSourceURL: URL,
         displayName: String,
         pageCount: Int,
-        document: PDFDocument
+        document: PDFDocument,
+        ownership: RecentDocumentOwnership,
+        existingAppOwnedID: UUID?
     ) {
         // UI tests skip durable recent recording to keep sandbox state isolated.
-        if UITestLaunchConfiguration.autoImportPageCount != nil { return }
-        try? recentDocumentsStore.recordOpenedDocument(
-            sourceFileURL: localURL,
-            displayName: displayName,
-            pageCount: pageCount,
-            document: document
-        )
+        if UITestLaunchConfiguration.autoImportPageCount != nil {
+            activeDocumentOrigin = nil
+            return
+        }
+        do {
+            let record = try recentDocumentsStore.recordActiveDocument(
+                sourceURL: authoritativeSourceURL,
+                displayName: displayName,
+                pageCount: pageCount,
+                ownership: ownership,
+                document: document,
+                existingAppOwnedID: existingAppOwnedID
+            )
+            switch record.ownership {
+            case .external:
+                activeDocumentOrigin = .external(identityKey: record.identityKey)
+            case .appOwned:
+                activeDocumentOrigin = .appOwned(id: record.id)
+            }
+        } catch {
+            activeDocumentOrigin = nil
+        }
     }
 
     private func importUITestDocument(pageCount: Int) async {
@@ -259,6 +320,7 @@ final class PDFEditorViewModel {
         documentName = ""
         sourceDocument = nil
         localSourceURL = nil
+        activeDocumentOrigin = nil
         undoStack.removeAll()
         redoStack.removeAll()
         historyRevision = 0
@@ -383,7 +445,7 @@ final class PDFEditorViewModel {
         guard let sourceDocument else {
             throw PDFServiceError.exportFailed
         }
-        return try pdfService.exportPDF(
+        let exportURL = try pdfService.exportPDF(
             pages: pages,
             sourceDocument: sourceDocument,
             outputName: documentName.isEmpty ? "document" : documentName,
@@ -394,6 +456,12 @@ final class PDFEditorViewModel {
             watermarkSettings: watermarkSettings,
             watermarkImage: watermarkImage
         )
+        // App-owned documents keep a single authoritative copy; write export bytes back.
+        // External documents remain Files-owned — export never mutates the user's original.
+        if case .appOwned(let id) = activeDocumentOrigin {
+            try? recentDocumentsStore.replaceAppOwnedFile(id: id, withContentsOf: exportURL)
+        }
+        return exportURL
     }
 
     var watermarkImage: UIImage? {
@@ -496,7 +564,24 @@ final class PDFEditorViewModel {
     }
 
     func adoptCompressedPDF(from url: URL) async {
-        await importPDF(from: url)
+        switch activeDocumentOrigin {
+        case .appOwned(let id):
+            try? recentDocumentsStore.replaceAppOwnedFile(id: id, withContentsOf: url)
+            let ownedURL = recentDocumentsStore.appOwnedFileURL(id: id)
+            await importPDF(
+                from: ownedURL,
+                displayNameOverride: documentName,
+                ownership: .appOwned,
+                existingAppOwnedID: id
+            )
+        case .external, .none:
+            // Derived work product becomes app-owned so Recent stays Files-first for the original.
+            await importPDF(
+                from: url,
+                displayNameOverride: documentName.isEmpty ? nil : documentName,
+                ownership: .appOwned
+            )
+        }
     }
 
     private func fileByteCount(at url: URL) -> Int64 {

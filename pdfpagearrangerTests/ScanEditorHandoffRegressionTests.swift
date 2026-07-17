@@ -65,4 +65,15 @@ final class ScanEditorHandoffRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("ScanDraftRootView"))
         XCTAssertTrue(source.contains("importPDF(from: url)"))
     }
+
+    func testHandoffImportsGeneratedPDFAsAppOwned() throws {
+        let source = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("pdfpagearranger/Services/ScanEditorHandoffService.swift")
+        )
+
+        XCTAssertTrue(source.contains("importPDF(from: pdfURL, ownership: .appOwned)"))
+    }
 }

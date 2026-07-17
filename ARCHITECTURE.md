@@ -12,8 +12,9 @@ PDF Pages is a **local-first PDF transformation workspace**.
 - The app can **create PDFs from camera scans or photos** via the scan-to-PDF workflow (draft review → generate → open in editor).
 - The app can **create a blank PDF** via **Create Document** on Home.
 - Home is an **acquisition funnel** (Recent Documents + open/create/scan/photo), not a feature toolbox.
+- **Files-first:** externally owned PDFs remain owned by the user; Recent Documents indexes them via bookmarks and must never become a second evolving copy (“hostage library”).
 - The app runs **on-device OCR only during scan-to-PDF generation** to embed an invisible searchable text layer. In-editor **document search** reads the PDF text layer (native or OCR-embedded) via PDFKit; it does not run OCR on imported PDFs or extract structured fields.
-- **Original imported PDFs must remain untouched.** All editing happens in app state; output is a new file at export time.
+- **Original imported PDFs must remain untouched.** All editing happens in app state; output is a new file at export time (app-owned Create Document / scan outputs may write back to their app-owned authoritative file on export).
 
 Everything runs on-device. There is no cloud account, sync layer, or server-side processing in the current product.
 
@@ -102,6 +103,31 @@ Never edit the imported source bytes in place. Never assume export output overwr
 
 ---
 
+## 3.1 Recent Documents (Files-first index)
+
+Recent Documents is an **index into documents**, not an app-managed document library.
+
+```
+Acquisition → active document → RecentDocumentsStore.recordActiveDocument
+                                      ├─ external → bookmark + metadata (+ thumbnail)
+                                      └─ appOwned  → appOwned/{id}.pdf + metadata (+ thumbnail)
+Reopen Recent → resolve bookmark / app file → importPDF (working temp) → bump Recent
+```
+
+| Ownership | Examples | Authoritative bytes | Recent persistence |
+|-----------|----------|---------------------|--------------------|
+| **External** | Open Document, Open In…, future Share Extension | User's file | Bookmark + path + metadata + optional thumbnail |
+| **App-owned** | Create Document, Scan/Photo after Create PDF | `Application Support/RecentDocuments/appOwned/` | Relative path + metadata + optional thumbnail |
+| **Draft** *(future)* | Home Drafts | App-owned draft files | Same store; `RecentDocumentKind.draft` |
+
+**Identity:** `identityKey` is `external:<standardizedPath>` or `appOwned:<uuid>`. Identical content at different paths yields different entries. Content hashing is intentionally **not** used.
+
+**Save / reopen trust:** Opening a Recent external entry always resolves the live file. Export does **not** write back to external originals. Export (and compression adopt) **does** replace the app-owned authoritative file when `activeDocumentOrigin` is `.appOwned`.
+
+**Minimal integration for new acquisition:** call `importPDF(from:ownership:)` or `handleIncomingDocumentURL(_:)` so recording stays centralized.
+
+---
+
 ## 4. Current implementation mapping
 
 | Concept | Role |
@@ -137,7 +163,9 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`TextOverlayRenderer`** | Vector text drawing for Page Mode compositing, thumbnails, and PDF export. |
 | **`TextOverlayLayoutEngine`** | Font sizing, measured bounds, attributed string layout for text overlays. |
 | **`TextOverlayFormattingEngine`** | List prefixes (bulleted/numbered), Insert Today, list-mode switching. |
-| **`RecentDocumentsStore`** | Persistent recent PDFs under Application Support (`RecentDocuments/`); durable file copies + index; dedupe by content fingerprint; home preview limit 5. Designed so a future Drafts kind can share the index. |
+| **`RecentDocumentsStore`** | Files-first recent **index** under Application Support (`RecentDocuments/`). Externally owned: security-scoped bookmark + metadata + optional thumbnail (no PDF library copy). App-owned (`appOwned/`): Create Document and Scan/Photo outputs. Identity by stable path / app id — **not** content hash. Schema v2; legacy fingerprint library discarded on migrate. Drafts can share the index via `kind: draft` later. |
+| **`ActiveDocumentOrigin`** | Session tag on `PDFEditorViewModel`: `.external` vs `.appOwned` for write-back and trust boundaries. |
+| **`handleIncomingDocumentURL`** | Shared Open In… / future Share Extension entry → `importPDF(..., ownership: .external)`. |
 | **`RecentTextsSettings`** | UserDefaults-backed Recent Texts list (max 10 entries). |
 | **`ScanDraftSessionViewModel`** | Scan-to-PDF draft session: acquisition, review, adjustment, PDF generation, editor handoff. For **Scan to PDF**, draft disk storage is created only after a successful VisionKit scan returns pages. |
 | **`ScanDraftPDFGenerator`** | Raster page assembly + optional OCR text layer embedding. |
@@ -339,4 +367,4 @@ When in doubt: if it **transforms an imported PDF locally** and **exports a new 
 
 ---
 
-*Last updated to reflect document search, V1 page annotations (highlights, drawing, sticky notes, text comments), scan-to-PDF with searchable OCR, V1 text overlays, and the Project → Document → Page → Export hierarchy.*
+*Last updated to reflect Files-first Recent Documents, document search, V1 page annotations, scan-to-PDF with searchable OCR, V1 text overlays, and the Project → Document → Page → Export hierarchy.*
