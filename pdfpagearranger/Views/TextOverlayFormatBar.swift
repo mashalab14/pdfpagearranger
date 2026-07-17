@@ -11,7 +11,6 @@ struct TextOverlayFormatBar: View {
     let onDone: () -> Void
 
     @State private var showRecentTexts = false
-    @State private var showFontMenu = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,6 +19,7 @@ struct TextOverlayFormatBar: View {
                     fontMenu
                     sizeStepper
                     colorPicker
+                    opacityControl
                     styleToggles
                     alignmentControls
                     listControls
@@ -43,7 +43,10 @@ struct TextOverlayFormatBar: View {
         Menu {
             ForEach(TextOverlayFontFamily.allCases, id: \.self) { family in
                 Button(family.displayName) {
-                    draft.fontFamily = family
+                    draft.applyFormatting(
+                        updateDefaults: { $0.fontFamily = family },
+                        updateSpan: { $0.fontFamily = family }
+                    )
                     onChange()
                 }
             }
@@ -58,7 +61,11 @@ struct TextOverlayFormatBar: View {
     private var sizeStepper: some View {
         HStack(spacing: 4) {
             Button {
-                draft.fontSizePoints = TextOverlayLayoutEngine.clampedFontSize(draft.fontSizePoints - 1)
+                let next = TextOverlayLayoutEngine.clampedFontSize(draft.fontSizePoints - 1)
+                draft.applyFormatting(
+                    updateDefaults: { $0.fontSizePoints = next },
+                    updateSpan: { $0.fontSizePoints = next }
+                )
                 onChange()
             } label: {
                 Image(systemName: "textformat.size.smaller")
@@ -70,7 +77,11 @@ struct TextOverlayFormatBar: View {
                 .frame(minWidth: 24)
 
             Button {
-                draft.fontSizePoints = TextOverlayLayoutEngine.clampedFontSize(draft.fontSizePoints + 1)
+                let next = TextOverlayLayoutEngine.clampedFontSize(draft.fontSizePoints + 1)
+                draft.applyFormatting(
+                    updateDefaults: { $0.fontSizePoints = next },
+                    updateSpan: { $0.fontSizePoints = next }
+                )
                 onChange()
             } label: {
                 Image(systemName: "textformat.size.larger")
@@ -86,7 +97,11 @@ struct TextOverlayFormatBar: View {
             selection: Binding(
                 get: { Color(draft.colorRGBA.uiColor) },
                 set: {
-                    draft.colorRGBA = SignatureInkRGBA(uiColor: UIColor($0))
+                    let rgba = SignatureInkRGBA(uiColor: UIColor($0))
+                    draft.applyFormatting(
+                        updateDefaults: { $0.colorRGBA = rgba },
+                        updateSpan: { $0.colorRGBA = rgba }
+                    )
                     onChange()
                 }
             ),
@@ -98,22 +113,60 @@ struct TextOverlayFormatBar: View {
         .accessibilityIdentifier("textColorPicker")
     }
 
+    private var opacityControl: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "circle.lefthalf.filled")
+                .font(.caption)
+            Slider(
+                value: Binding(
+                    get: { Double(draft.opacity) },
+                    set: {
+                        draft.opacity = TextOverlayDraft.clampedOpacity(CGFloat($0))
+                        onChange()
+                    }
+                ),
+                in: Double(TextOverlayDraft.minOpacity)...Double(TextOverlayDraft.maxOpacity)
+            )
+            .frame(width: 88)
+            Text("\(Int((draft.opacity * 100).rounded()))%")
+                .font(.caption.monospacedDigit())
+                .frame(minWidth: 36, alignment: .trailing)
+        }
+        .accessibilityIdentifier("textOpacitySlider")
+    }
+
     private var styleToggles: some View {
         HStack(spacing: 6) {
             formatToggle("bold", isOn: draft.isBold, id: "textBoldToggle") {
-                draft.isBold.toggle()
+                let next = !draft.isBold
+                draft.applyFormatting(
+                    updateDefaults: { $0.isBold = next },
+                    updateSpan: { $0.isBold = next }
+                )
                 onChange()
             }
             formatToggle("italic", isOn: draft.isItalic, id: "textItalicToggle") {
-                draft.isItalic.toggle()
+                let next = !draft.isItalic
+                draft.applyFormatting(
+                    updateDefaults: { $0.isItalic = next },
+                    updateSpan: { $0.isItalic = next }
+                )
                 onChange()
             }
             formatToggle("underline", isOn: draft.isUnderline, id: "textUnderlineToggle") {
-                draft.isUnderline.toggle()
+                let next = !draft.isUnderline
+                draft.applyFormatting(
+                    updateDefaults: { $0.isUnderline = next },
+                    updateSpan: { $0.isUnderline = next }
+                )
                 onChange()
             }
             formatToggle("strikethrough", isOn: draft.isStrikethrough, id: "textStrikethroughToggle") {
-                draft.isStrikethrough.toggle()
+                let next = !draft.isStrikethrough
+                draft.applyFormatting(
+                    updateDefaults: { $0.isStrikethrough = next },
+                    updateSpan: { $0.isStrikethrough = next }
+                )
                 onChange()
             }
         }
@@ -170,7 +223,26 @@ struct TextOverlayFormatBar: View {
 
     private var insertTodayButton: some View {
         Button {
-            draft.text = TextOverlayFormattingEngine.appendToday(to: draft.text)
+            let updated = TextOverlayFormattingEngine.appendToday(to: draft.text)
+            let appended = String(updated.dropFirst(draft.text.count))
+            draft.text = updated
+            draft.synchronizeSpansWithTextIfNeeded()
+            if !appended.isEmpty {
+                let defaults = TextOverlayRichTextEngine.StyleDefaults(from: draft)
+                draft.spans.append(
+                    TextOverlayTextSpan(
+                        text: appended,
+                        fontSizePoints: defaults.fontSizePoints,
+                        colorRGBA: defaults.colorRGBA,
+                        isBold: defaults.isBold,
+                        isItalic: defaults.isItalic,
+                        isUnderline: defaults.isUnderline,
+                        isStrikethrough: defaults.isStrikethrough,
+                        fontFamily: defaults.fontFamily
+                    )
+                )
+                draft.spans = TextOverlayRichTextEngine.mergeAdjacent(draft.spans)
+            }
             onChange()
         } label: {
             Image(systemName: "calendar")

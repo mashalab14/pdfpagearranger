@@ -9,7 +9,7 @@
 - **Open In…** — PDF document type registration + `onOpenURL` → `handleIncomingDocumentURL` (external ownership; always copies to temp working file)
 - **Searchable PDF OCR (scan-to-PDF)** — on-device Vision text recognition; invisible text layer in generated PDFs; Make PDF Searchable toggle on Draft Review (default on, persisted)
 - Image overlays
-- **Text overlays** — direct on-page creation/editing with live formatting bar, Recent Texts, vector export
+- **Text overlays** — direct on-page creation/editing with live formatting bar, selection-aware rich text, opacity, Recent Texts, vector export
 - **Page annotations (V1)** — PDF text highlights, freehand drawing mode, tap-to-place sticky notes, text comments from PDF selection; composited in Page Mode, thumbnails, and export
 - **Document search** — incremental find across native PDF text and OCR-embedded text; Document Mode results list and Page Mode prev/next navigation with temporary highlights
 - Signature library, Quick Signature, default signature, stroke thickness

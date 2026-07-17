@@ -41,6 +41,8 @@ struct PageObject: Identifiable, Equatable, Codable {
     var textListMode: TextOverlayListMode?
     var textListIndent: Int?
     var textFontFamily: TextOverlayFontFamily?
+    /// Optional rich-text runs for mixed formatting. Nil/empty = whole-overlay style only.
+    var textSpans: [TextOverlayTextSpan]?
 
     var usesRasterImageAsset: Bool {
         (type == .image || type == .signature) && imageAssetID != nil
@@ -134,7 +136,8 @@ struct PageObject: Identifiable, Equatable, Codable {
         textAlignment: TextOverlayAlignment? = nil,
         textListMode: TextOverlayListMode? = nil,
         textListIndent: Int? = nil,
-        textFontFamily: TextOverlayFontFamily? = nil
+        textFontFamily: TextOverlayFontFamily? = nil,
+        textSpans: [TextOverlayTextSpan]? = nil
     ) {
         self.id = id
         self.pageItemID = pageItemID
@@ -164,5 +167,6 @@ struct PageObject: Identifiable, Equatable, Codable {
         self.textListMode = textListMode
         self.textListIndent = textListIndent
         self.textFontFamily = textFontFamily
+        self.textSpans = textSpans
     }
 }

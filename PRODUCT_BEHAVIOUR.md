@@ -1323,18 +1323,23 @@ While editing, a compact bar provides live controls that update the on-page over
 
 | Control | Behaviour |
 |---------|-----------|
-| **Font** | System / Serif / Mono |
-| **Font size** | Decrease/increase **8–72 pt** (default **14 pt**) |
-| **Text color** | Color picker (no opacity) |
-| **Bold / Italic / Underline / Strikethrough** | Toggles |
-| **Alignment** | Left / Centre / Right |
+| **Font** | System / Serif / Mono — applies to the **selected range**, or to typing defaults / whole overlay when nothing is selected |
+| **Font size** | Decrease/increase **8–72 pt** (default **14 pt**) — selection-aware |
+| **Text color** | Color picker (no color-alpha control) — selection-aware |
+| **Opacity** | Slider **5–100%** for the whole overlay; updates live on page, thumbnails, and export |
+| **Bold / Italic / Underline / Strikethrough** | Toggles — selection-aware; with no selection, become typing attributes for newly typed text |
+| **Alignment** | Left / Centre / Right (paragraph alignment for the overlay) |
 | **List style** | None / Bulleted / Numbered / Dashed |
 | **Indent** | Increase / decrease list indentation |
 | **Recent Texts** | Up to **10** previously committed texts; tap to insert; swipe to remove |
 | **Insert Today** | Inserts localized today's date string |
 | **Done** | Commits editing (or cancels empty new drafts) |
 
-Committed text (on successful finish with non-empty content) is added to **Recent Texts** (UserDefaults; survives app restart).
+### Rich text
+
+A single text overlay can contain **multiple differently formatted ranges** (font, size, color, bold, italic, underline, strikethrough). Formatting is stored as contiguous `textSpans` on `PageObject` while whole-overlay defaults remain for typing attributes and plain-text compatibility. Existing overlays without spans continue to render with whole-overlay style only.
+
+Committed text (on successful finish with non-empty content) is added to **Recent Texts** (UserDefaults; survives app restart). Overlay objects themselves remain session-scoped until export (same as other overlays).
 
 ### Editing existing text
 
@@ -1364,8 +1369,9 @@ Committed text (on successful finish with non-empty content) is added to **Recen
 ### Not supported
 
 - Arbitrary custom font files (built-in System / Serif / Mono families only)
-- Text opacity control
+- Per-glyph color alpha separate from overlay opacity (overlay opacity is supported)
 - Reflow editing inside the PDF's native text layer (overlays only)
+- Multi-select overlay position alignment / distribute tools
 
 ---
 
@@ -1973,7 +1979,7 @@ After restart: user sees **home screen** with **Recent Documents** (if any). Acq
 6. **Paywall lists "coming soon" features** (merge & split, batch tools) that are not in the app.
 7. **No split, merge, password protect** in Document Actions (future only). Watermark is implemented.
 8. **OCR is scan-to-PDF only** — imported PDFs are not re-OCR'd in the editor.
-9. **Text overlays** — System / Serif / Mono families; no opacity control; not native PDF text reflow; editing is on-page (not a separate entry sheet).
+9. **Text overlays** — System / Serif / Mono families; selection-aware rich text + overlay opacity; not native PDF text reflow; editing is on-page (not a separate entry sheet).
 10. **Page number font size and opacity** — not user-configurable in UI.
 11. **Image/signature overlay rotation** — not user-configurable in UI (text overlays support rotate).
 12. **No multi-select** for pages or overlays in the editor (scan review supports batch page selection).

@@ -60,69 +60,53 @@ enum TextOverlayLayoutEngine {
         let listIndent = object.textListIndent ?? 0
         let raw = object.textContent ?? ""
         let plain = TextOverlayFormattingEngine.plainText(from: raw, listMode: listMode)
-        let isEmpty = plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let sourceText: String
-        if isEmpty {
-            guard placeholderWhenEmpty else {
-                return NSAttributedString(string: "")
-            }
-            sourceText = TextOverlayDraft.placeholderHint
-        } else {
-            sourceText = plain
-        }
-
-        let display = TextOverlayFormattingEngine.displayText(
-            sourceText,
-            listMode: listMode,
-            listIndent: listIndent
+        let defaults = TextOverlayRichTextEngine.StyleDefaults(from: object)
+        let spans = TextOverlayRichTextEngine.normalizedSpans(
+            object.textSpans,
+            plainText: plain,
+            defaults: defaults
         )
-        return makeAttributedString(
-            text: display,
-            fontSizePoints: object.textFontSizePoints ?? TextOverlayDraft.defaultFontSizePoints,
-            color: (object.textColorRGBA ?? TextOverlayDraft.defaultColor).uiColor,
-            bold: object.textBold ?? false,
-            italic: object.textItalic ?? false,
-            underline: object.textUnderline ?? false,
-            strikethrough: object.textStrikethrough ?? false,
+        return TextOverlayRichTextEngine.attributedString(
+            spans: spans,
+            defaults: defaults,
             alignment: object.textAlignment ?? .left,
-            fontFamily: object.textFontFamily ?? .system,
+            listMode: listMode,
+            listIndent: listIndent,
             renderScale: renderScale,
-            placeholderStyle: isEmpty && placeholderWhenEmpty
+            placeholderWhenEmpty: placeholderWhenEmpty
         )
     }
 
     static func attributedString(
         for draft: TextOverlayDraft,
         renderScale: CGFloat = 1,
+        placeholderWhenEmpty: Bool = false,
+        includeListMarkers: Bool = false
+    ) -> NSAttributedString {
+        var draft = draft
+        draft.synchronizeSpansWithTextIfNeeded()
+        let defaults = TextOverlayRichTextEngine.StyleDefaults(from: draft)
+        return TextOverlayRichTextEngine.attributedString(
+            spans: draft.spans,
+            defaults: defaults,
+            alignment: draft.alignment,
+            listMode: includeListMarkers ? draft.listMode : .plain,
+            listIndent: includeListMarkers ? draft.listIndent : 0,
+            renderScale: renderScale,
+            placeholderWhenEmpty: placeholderWhenEmpty
+        )
+    }
+
+    static func attributedStringForDisplay(
+        for draft: TextOverlayDraft,
+        renderScale: CGFloat = 1,
         placeholderWhenEmpty: Bool = false
     ) -> NSAttributedString {
-        let isEmpty = draft.isEmpty
-        let sourceText: String
-        if isEmpty {
-            guard placeholderWhenEmpty else {
-                return NSAttributedString(string: "")
-            }
-            sourceText = TextOverlayDraft.placeholderHint
-        } else {
-            sourceText = draft.text
-        }
-        let display = TextOverlayFormattingEngine.displayText(
-            sourceText,
-            listMode: draft.listMode,
-            listIndent: draft.listIndent
-        )
-        return makeAttributedString(
-            text: display,
-            fontSizePoints: draft.fontSizePoints,
-            color: draft.colorRGBA.uiColor,
-            bold: draft.isBold,
-            italic: draft.isItalic,
-            underline: draft.isUnderline,
-            strikethrough: draft.isStrikethrough,
-            alignment: draft.alignment,
-            fontFamily: draft.fontFamily,
+        attributedString(
+            for: draft,
             renderScale: renderScale,
-            placeholderStyle: isEmpty && placeholderWhenEmpty
+            placeholderWhenEmpty: placeholderWhenEmpty,
+            includeListMarkers: true
         )
     }
 
@@ -175,17 +159,43 @@ enum TextOverlayLayoutEngine {
         pageAspectRatio: CGFloat,
         widthFraction: CGFloat
     ) -> CGSize {
-        measuredSize(
-            text: draft.text,
-            fontSizePoints: draft.fontSizePoints,
-            bold: draft.isBold,
-            italic: draft.isItalic,
-            listMode: draft.listMode,
-            listIndent: draft.listIndent,
-            fontFamily: draft.fontFamily,
-            pageAspectRatio: pageAspectRatio,
-            widthFraction: widthFraction
+        var draft = draft
+        draft.synchronizeSpansWithTextIfNeeded()
+        let attributed = attributedStringForDisplay(
+            for: draft.isEmpty
+                ? TextOverlayDraft(
+                    text: TextOverlayDraft.placeholderHint,
+                    fontSizePoints: draft.fontSizePoints,
+                    colorRGBA: draft.colorRGBA,
+                    isBold: draft.isBold,
+                    isItalic: draft.isItalic,
+                    isUnderline: draft.isUnderline,
+                    isStrikethrough: draft.isStrikethrough,
+                    alignment: draft.alignment,
+                    listMode: draft.listMode,
+                    listIndent: draft.listIndent,
+                    fontFamily: draft.fontFamily,
+                    opacity: draft.opacity,
+                    spans: draft.spans
+                )
+                : draft,
+            placeholderWhenEmpty: false
         )
+        let widthFractionResult = min(
+            max(widthFraction, minWidthFraction),
+            maxWidthFraction
+        )
+        let referenceWidth = widthFractionResult * referencePageHeight * pageAspectRatio
+        let bounding = attributed.boundingRect(
+            with: CGSize(width: referenceWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            context: nil
+        ).integral
+        let heightFraction = min(
+            max(bounding.height / referencePageHeight, minHeightFraction),
+            maxHeightFraction
+        )
+        return CGSize(width: widthFractionResult, height: heightFraction)
     }
 
     static func renderScale(for layoutHeight: CGFloat, normalizedHeight: CGFloat) -> CGFloat {

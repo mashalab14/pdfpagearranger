@@ -84,4 +84,15 @@ final class TextOverlayFormattingRegressionTests: XCTestCase {
         )
         XCTAssertTrue(exportEmpty.string.isEmpty)
     }
+
+    func testRichTextEngineMergesAdjacentIdenticalSpans() {
+        let spans = TextOverlayRichTextEngine.mergeAdjacent([
+            TextOverlayTextSpan(text: "A", isBold: true),
+            TextOverlayTextSpan(text: "B", isBold: true),
+            TextOverlayTextSpan(text: "C", isBold: false)
+        ])
+        XCTAssertEqual(spans.count, 2)
+        XCTAssertEqual(spans[0].text, "AB")
+        XCTAssertEqual(spans[1].text, "C")
+    }
 }

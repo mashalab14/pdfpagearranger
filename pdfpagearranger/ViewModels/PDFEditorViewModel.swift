@@ -875,6 +875,9 @@ final class PDFEditorViewModel {
     }
 
     private func applyTextFormatting(_ draft: TextOverlayDraft, to object: inout PageObject) {
+        var draft = draft
+        draft.synchronizeSpansWithTextIfNeeded()
+        object.opacity = TextOverlayDraft.clampedOpacity(draft.opacity)
         object.textFontSizePoints = TextOverlayLayoutEngine.clampedFontSize(draft.fontSizePoints)
         object.textColorRGBA = draft.colorRGBA
         object.textBold = draft.isBold
@@ -885,6 +888,7 @@ final class PDFEditorViewModel {
         object.textListMode = draft.listMode
         object.textListIndent = draft.listIndent
         object.textFontFamily = draft.fontFamily
+        object.textSpans = draft.spans.isEmpty ? nil : draft.spans
     }
 
     private func makeTextPageObject(
@@ -895,11 +899,14 @@ final class PDFEditorViewModel {
         size: CGSize,
         zIndex: Int
     ) -> PageObject {
-        PageObject(
+        var draft = draft
+        draft.synchronizeSpansWithTextIfNeeded()
+        return PageObject(
             pageItemID: pageItemID,
             type: .text,
             position: position,
             size: size,
+            opacity: TextOverlayDraft.clampedOpacity(draft.opacity),
             zIndex: zIndex,
             textContent: storedText,
             textFontSizePoints: TextOverlayLayoutEngine.clampedFontSize(draft.fontSizePoints),
@@ -911,7 +918,8 @@ final class PDFEditorViewModel {
             textAlignment: draft.alignment,
             textListMode: draft.listMode,
             textListIndent: draft.listIndent,
-            textFontFamily: draft.fontFamily
+            textFontFamily: draft.fontFamily,
+            textSpans: draft.spans.isEmpty ? nil : draft.spans
         )
     }
 
@@ -955,7 +963,8 @@ final class PDFEditorViewModel {
             textAlignment: source.textAlignment,
             textListMode: source.textListMode,
             textListIndent: source.textListIndent,
-            textFontFamily: source.textFontFamily
+            textFontFamily: source.textFontFamily,
+            textSpans: source.textSpans
         )
 
         pageObjectsByPage[pageItemID, default: []].append(duplicate)
@@ -1524,7 +1533,8 @@ final class PDFEditorViewModel {
                 textAlignment: overlay.textAlignment,
                 textListMode: overlay.textListMode,
                 textListIndent: overlay.textListIndent,
-                textFontFamily: overlay.textFontFamily
+                textFontFamily: overlay.textFontFamily,
+                textSpans: overlay.textSpans
             )
         }
 

@@ -140,6 +140,7 @@ struct PageEditorView: View {
                             textEditingDraft.text = entry
                             textEditingDraft.listMode = .plain
                             textEditingDraft.listIndent = 0
+                            textEditingDraft.synchronizeSpansWithTextIfNeeded()
                             syncLiveTextEditing()
                         },
                         onRemoveRecent: { entry in
