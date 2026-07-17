@@ -28,8 +28,18 @@ final class PDFEditorViewModel {
     private let pdfService = PDFService()
     private let compressionService = CompressionService()
     let proGate = ProGate()
+    private let recentDocumentsStore: RecentDocumentsStore
 
-    init() {
+    init(recentDocumentsStore: RecentDocumentsStore? = nil) {
+        if let recentDocumentsStore {
+            self.recentDocumentsStore = recentDocumentsStore
+        } else {
+            self.recentDocumentsStore = (try? RecentDocumentsStore.makeDefault())
+                ?? RecentDocumentsStore(
+                    rootDirectory: FileManager.default.temporaryDirectory
+                        .appendingPathComponent("RecentDocuments-\(UUID().uuidString)", isDirectory: true)
+                )
+        }
         if let pageCount = UITestLaunchConfiguration.autoImportPageCount {
             Task {
                 await self.importUITestDocument(pageCount: pageCount)
@@ -142,16 +152,20 @@ final class PDFEditorViewModel {
         closeDocumentSearch()
     }
 
-    func importPDF(from url: URL) async {
+    func importPDF(from url: URL, displayNameOverride: String? = nil) async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
 
         do {
             let imported = try pdfService.importPDF(from: url)
+            let resolvedName = {
+                let trimmed = displayNameOverride?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return trimmed.isEmpty ? imported.displayName : trimmed
+            }()
             sourceDocument = imported.document
             localSourceURL = imported.localURL
-            documentName = imported.displayName
+            documentName = resolvedName
             pages = pdfService.makeInitialPages(pageCount: imported.pageCount)
             undoStack.removeAll()
             redoStack.removeAll()
@@ -161,10 +175,65 @@ final class PDFEditorViewModel {
             clearOverlays()
             clearDocumentSearch()
             await ThumbnailService.shared.clear()
+            recordRecentDocumentIfNeeded(
+                localURL: imported.localURL,
+                displayName: resolvedName,
+                pageCount: imported.pageCount,
+                document: imported.document
+            )
         } catch {
             resetDocument()
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Creates a blank one-page PDF and opens it in the editor.
+    func createBlankDocument() async {
+        do {
+            let url = try pdfService.createBlankPDF(displayName: "Untitled")
+            await importPDF(from: url)
+        } catch {
+            resetDocument()
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func recentDocumentsForHome(limit: Int = RecentDocumentsStore.homePreviewLimit) -> [RecentDocumentRecord] {
+        recentDocumentsStore.homePreviewDocuments(limit: limit)
+    }
+
+    func allRecentDocuments() -> [RecentDocumentRecord] {
+        recentDocumentsStore.loadAvailableDocuments()
+    }
+
+    func openRecentDocument(_ record: RecentDocumentRecord) async {
+        let url = recentDocumentsStore.fileURL(for: record)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            try? recentDocumentsStore.removeDocument(id: record.id)
+            errorMessage = RecentDocumentsStoreError.recordNotFound.localizedDescription
+            return
+        }
+        await importPDF(from: url, displayNameOverride: record.displayName)
+    }
+
+    func loadRecentThumbnail(for record: RecentDocumentRecord) -> UIImage? {
+        recentDocumentsStore.loadThumbnailImage(for: record)
+    }
+
+    private func recordRecentDocumentIfNeeded(
+        localURL: URL,
+        displayName: String,
+        pageCount: Int,
+        document: PDFDocument
+    ) {
+        // UI tests skip durable recent recording to keep sandbox state isolated.
+        if UITestLaunchConfiguration.autoImportPageCount != nil { return }
+        try? recentDocumentsStore.recordOpenedDocument(
+            sourceFileURL: localURL,
+            displayName: displayName,
+            pageCount: pageCount,
+            document: document
+        )
     }
 
     private func importUITestDocument(pageCount: Int) async {

@@ -12,6 +12,8 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showError = false
     @State private var importErrorMessage: String?
+    @State private var showAllRecentDocuments = false
+    @State private var recentDocuments: [RecentDocumentRecord] = []
 
     var body: some View {
         NavigationStack {
@@ -34,6 +36,11 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     settingsButton
+                }
+            }
+            .navigationDestination(isPresented: $showAllRecentDocuments) {
+                RecentDocumentsListView(viewModel: viewModel) { record in
+                    Task { await viewModel.openRecentDocument(record) }
                 }
             }
         }
@@ -98,6 +105,7 @@ struct ContentView: View {
                 case .success(let urls):
                     guard let url = urls.first else { return }
                     await viewModel.importPDF(from: url)
+                    refreshRecentDocuments()
                 case .failure(let error):
                     importErrorMessage = error.localizedDescription
                     showError = true
@@ -145,6 +153,11 @@ struct ContentView: View {
         .onChange(of: scanSessionViewModel.isImportingPhotos) { _, _ in
             updateDraftReviewPresentationIfNeeded()
         }
+        .onChange(of: viewModel.hasDocument) { _, hasDocument in
+            if !hasDocument {
+                refreshRecentDocuments()
+            }
+        }
     }
 
     private var showsHomeAcquisitionImportOverlay: Bool {
@@ -179,63 +192,149 @@ struct ContentView: View {
         isScanDraftReviewPresented = true
     }
 
+    private func refreshRecentDocuments() {
+        recentDocuments = viewModel.recentDocumentsForHome()
+    }
+
     private var emptyState: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            Image(systemName: "doc.on.doc")
-                .font(.system(size: 64))
-                .foregroundStyle(.tint)
-                .accessibilityHidden(true)
-
-            VStack(spacing: 8) {
-                Text(HomeScreenCopy.appTitle)
-                    .font(.largeTitle.bold())
-
-                Text(HomeScreenCopy.subtitle)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                homeHeader
+                recentDocumentsSection
+                acquisitionActions
             }
-
-            VStack(spacing: 12) {
-                Button(HomeScreenCopy.openPDF) {
-                    showImporter = true
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .accessibilityLabel(HomeScreenCopy.openPDF)
-                .accessibilityHint(HomeScreenCopy.openPDFAccessibilityHint)
-                .accessibilityIdentifier("openPDFButton")
-
-                Button(HomeScreenCopy.scanToPDF) {
-                    Task { @MainActor in
-                        await scanSessionViewModel.beginCameraScanFlow()
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .accessibilityLabel(HomeScreenCopy.scanToPDF)
-                .accessibilityHint(HomeScreenCopy.scanToPDFAccessibilityHint)
-                .accessibilityIdentifier("scanDocumentButton")
-
-                Button(HomeScreenCopy.photoToPDF) {
-                    _ = scanSessionViewModel.beginPhotosImportFlow()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .accessibilityLabel(HomeScreenCopy.photoToPDF)
-                .accessibilityHint(HomeScreenCopy.photoToPDFAccessibilityHint)
-                .accessibilityIdentifier("importPhotosButton")
-            }
-
-            Spacer()
+            .padding(.horizontal, 20)
+            .padding(.vertical, 24)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemGroupedBackground))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("emptyStateView")
+        .onAppear {
+            refreshRecentDocuments()
+        }
+    }
+
+    private var homeHeader: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "doc.on.doc")
+                .font(.system(size: 48))
+                .foregroundStyle(.tint)
+                .accessibilityHidden(true)
+
+            Text(HomeScreenCopy.appTitle)
+                .font(.largeTitle.bold())
+                .frame(maxWidth: .infinity)
+
+            Text(HomeScreenCopy.subtitle)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var recentDocumentsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(HomeScreenCopy.recentDocuments)
+                    .font(.title3.weight(.semibold))
+
+                Spacer()
+
+                if !recentDocuments.isEmpty {
+                    Button(HomeScreenCopy.recentDocumentsMore) {
+                        showAllRecentDocuments = true
+                    }
+                    .font(.body.weight(.semibold))
+                    .accessibilityHint(HomeScreenCopy.recentDocumentsMoreAccessibilityHint)
+                    .accessibilityIdentifier("recentDocumentsMoreButton")
+                }
+            }
+
+            if recentDocuments.isEmpty {
+                Text(HomeScreenCopy.recentDocumentsEmpty)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 12)
+                    .accessibilityIdentifier("recentDocumentsEmptyLabel")
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(recentDocuments.enumerated()), id: \.element.id) { index, record in
+                        Button {
+                            Task { await viewModel.openRecentDocument(record) }
+                        } label: {
+                            RecentDocumentRow(
+                                record: record,
+                                thumbnail: viewModel.loadRecentThumbnail(for: record)
+                            )
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 12)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("homeRecentDocument-\(index)")
+
+                        if index < recentDocuments.count - 1 {
+                            Divider()
+                                .padding(.leading, 68)
+                        }
+                    }
+                }
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .accessibilityIdentifier("recentDocumentsHomeList")
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("recentDocumentsSection")
+    }
+
+    private var acquisitionActions: some View {
+        VStack(spacing: 12) {
+            Button(HomeScreenCopy.openDocument) {
+                showImporter = true
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel(HomeScreenCopy.openDocument)
+            .accessibilityHint(HomeScreenCopy.openDocumentAccessibilityHint)
+            .accessibilityIdentifier("openPDFButton")
+
+            Button(HomeScreenCopy.createDocument) {
+                Task { await viewModel.createBlankDocument() }
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel(HomeScreenCopy.createDocument)
+            .accessibilityHint(HomeScreenCopy.createDocumentAccessibilityHint)
+            .accessibilityIdentifier("createDocumentButton")
+
+            Button(HomeScreenCopy.scanToPDF) {
+                Task { @MainActor in
+                    await scanSessionViewModel.beginCameraScanFlow()
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel(HomeScreenCopy.scanToPDF)
+            .accessibilityHint(HomeScreenCopy.scanToPDFAccessibilityHint)
+            .accessibilityIdentifier("scanDocumentButton")
+
+            Button(HomeScreenCopy.photoToPDF) {
+                _ = scanSessionViewModel.beginPhotosImportFlow()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel(HomeScreenCopy.photoToPDF)
+            .accessibilityHint(HomeScreenCopy.photoToPDFAccessibilityHint)
+            .accessibilityIdentifier("importPhotosButton")
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var loadingOverlay: some View {

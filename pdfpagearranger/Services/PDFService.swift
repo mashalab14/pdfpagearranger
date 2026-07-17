@@ -273,6 +273,43 @@ final class PDFService {
         document.page(at: index)
     }
 
+    /// Creates a blank single-page US Letter PDF and returns a temp file URL ready for `importPDF`.
+    func createBlankPDF(displayName: String = "Untitled") throws -> URL {
+        let mediaBox = CGRect(x: 0, y: 0, width: 612, height: 792)
+        let data = NSMutableData()
+        var box = mediaBox
+        guard let consumer = CGDataConsumer(data: data as CFMutableData),
+              let context = CGContext(consumer: consumer, mediaBox: &box, nil) else {
+            throw PDFServiceError.exportFailed
+        }
+
+        context.beginPDFPage(nil)
+        context.endPDFPage()
+        context.closePDF()
+
+        let importsDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("PDFImports", isDirectory: true)
+        let sessionDirectory = importsDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try fileManager.createDirectory(at: sessionDirectory, withIntermediateDirectories: true)
+
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseName = trimmed.isEmpty ? "Untitled" : trimmed
+        let flatURL = sessionDirectory.appendingPathComponent(baseName).appendingPathExtension("pdf")
+
+        do {
+            try (data as Data).write(to: flatURL, options: .atomic)
+        } catch {
+            throw PDFServiceError.copyFailed
+        }
+
+        guard let document = PDFDocument(url: flatURL), document.pageCount > 0 else {
+            try? fileManager.removeItem(at: sessionDirectory)
+            throw PDFServiceError.unreadable
+        }
+
+        return flatURL
+    }
+
     private func copyToLocalStorage(sourceURL: URL) throws -> URL {
         let importsDirectory = fileManager.temporaryDirectory
             .appendingPathComponent("PDFImports", isDirectory: true)

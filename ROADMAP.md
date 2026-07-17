@@ -5,6 +5,7 @@
 - Document Mode (import, reorder, delete, duplicate, rotate)
 - Page Mode (overlays, zoom, swipe navigation)
 - **Scan-to-PDF workflow** — Home presents VisionKit and system Photos picker directly; Draft Review opens after successful acquisition; page adjustment, PDF generation, handoff to editor
+- **Recent Documents** — Home lists recently opened/created PDFs with More list; durable Application Support copies; Create Document blank PDF entry point
 - **Searchable PDF OCR (scan-to-PDF)** — on-device Vision text recognition; invisible text layer in generated PDFs; Make PDF Searchable toggle (default on, persisted)
 - Image overlays
 - **Text overlays (V1)** — tap-to-place editable text with formatting, Recent Texts, vector export
@@ -22,7 +23,7 @@
 - Split / merge PDFs
 - Password protect
 - Document rename and information panel
-- Recent documents / project save
+- Project save / multi-document workspace (beyond Recent Documents)
 - Custom watermark fonts
 - Batch tools
 - Real in-app purchase

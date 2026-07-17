@@ -61,7 +61,7 @@ final class ScanEditorHandoffRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("HomeScreenCopy"))
         XCTAssertTrue(source.contains("HomeScreenCopy.scanToPDF"))
         XCTAssertTrue(source.contains("HomeScreenCopy.photoToPDF"))
-        XCTAssertTrue(source.contains("HomeScreenCopy.openPDF"))
+        XCTAssertTrue(source.contains("HomeScreenCopy.openDocument"))
         XCTAssertTrue(source.contains("ScanDraftRootView"))
         XCTAssertTrue(source.contains("importPDF(from: url)"))
     }

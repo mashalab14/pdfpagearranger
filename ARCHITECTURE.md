@@ -9,7 +9,9 @@ This document describes the product and technical architecture of **PDF Pages** 
 PDF Pages is a **local-first PDF transformation workspace**.
 
 - The app **transforms existing PDFs** — it rearranges, edits, annotates, and exports them.
-- The app can **create PDFs from camera scans or photos** via the scan-to-PDF workflow (draft review → generate → open in editor). There is no blank-document authoring flow.
+- The app can **create PDFs from camera scans or photos** via the scan-to-PDF workflow (draft review → generate → open in editor).
+- The app can **create a blank PDF** via **Create Document** on Home.
+- Home is an **acquisition funnel** (Recent Documents + open/create/scan/photo), not a feature toolbox.
 - The app runs **on-device OCR only during scan-to-PDF generation** to embed an invisible searchable text layer. In-editor **document search** reads the PDF text layer (native or OCR-embedded) via PDFKit; it does not run OCR on imported PDFs or extract structured fields.
 - **Original imported PDFs must remain untouched.** All editing happens in app state; output is a new file at export time.
 
@@ -135,6 +137,7 @@ Never edit the imported source bytes in place. Never assume export output overwr
 | **`TextOverlayRenderer`** | Vector text drawing for Page Mode compositing, thumbnails, and PDF export. |
 | **`TextOverlayLayoutEngine`** | Font sizing, measured bounds, attributed string layout for text overlays. |
 | **`TextOverlayFormattingEngine`** | List prefixes (bulleted/numbered), Insert Today, list-mode switching. |
+| **`RecentDocumentsStore`** | Persistent recent PDFs under Application Support (`RecentDocuments/`); durable file copies + index; dedupe by content fingerprint; home preview limit 5. Designed so a future Drafts kind can share the index. |
 | **`RecentTextsSettings`** | UserDefaults-backed Recent Texts list (max 10 entries). |
 | **`ScanDraftSessionViewModel`** | Scan-to-PDF draft session: acquisition, review, adjustment, PDF generation, editor handoff. For **Scan to PDF**, draft disk storage is created only after a successful VisionKit scan returns pages. |
 | **`ScanDraftPDFGenerator`** | Raster page assembly + optional OCR text layer embedding. |
@@ -158,7 +161,7 @@ Never edit the imported source bytes in place. Never assume export output overwr
 
 | Mode | View | Purpose |
 |------|------|---------|
-| **Empty / Import** | `ContentView` | Open PDF, Scan to PDF, or Photo to PDF; Home presents VisionKit and Photos picker directly |
+| **Empty / Import** | `ContentView` | Recent Documents, Open Document, Create Document, Scan to PDF, Photo to PDF; Home presents VisionKit and Photos picker directly |
 | **Scan-to-PDF** | `ScanDraftRootView` | Draft review, page adjustment, PDF generation (opens after successful home acquisition) |
 | **Document Mode** | `EditorView` | Page grid, page ops, export |
 | **Page Mode** | `PageEditorView` | Overlay editing on one page |

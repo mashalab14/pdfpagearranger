@@ -3,18 +3,22 @@ import XCTest
 
 final class HomeScreenCopyRegressionTests: XCTestCase {
     func testHomeScreenCopyUsesOutcomeFocusedLabels() {
-        XCTAssertEqual(HomeScreenCopy.openPDF, "Open PDF")
+        XCTAssertEqual(HomeScreenCopy.openDocument, "Open Document")
+        XCTAssertEqual(HomeScreenCopy.createDocument, "Create Document")
         XCTAssertEqual(HomeScreenCopy.scanToPDF, "Scan to PDF")
         XCTAssertEqual(HomeScreenCopy.photoToPDF, "Photo to PDF")
+        XCTAssertEqual(HomeScreenCopy.recentDocuments, "Recent Documents")
         XCTAssertEqual(
             HomeScreenCopy.subtitle,
-            "Edit PDFs, scan documents, and convert photos into PDFs."
+            "Open, create, scan, or convert photos into PDFs."
         )
     }
 
     func testHomeScreenCopyProvidesAccessibilityHints() {
-        XCTAssertFalse(HomeScreenCopy.openPDFAccessibilityHint.isEmpty)
+        XCTAssertFalse(HomeScreenCopy.openDocumentAccessibilityHint.isEmpty)
+        XCTAssertFalse(HomeScreenCopy.createDocumentAccessibilityHint.isEmpty)
         XCTAssertFalse(HomeScreenCopy.scanToPDFAccessibilityHint.isEmpty)
         XCTAssertFalse(HomeScreenCopy.photoToPDFAccessibilityHint.isEmpty)
+        XCTAssertFalse(HomeScreenCopy.recentDocumentsMoreAccessibilityHint.isEmpty)
     }
 }

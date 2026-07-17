@@ -11,7 +11,7 @@ This document describes **exactly how the app behaves today** from the user's pe
 1. [Product overview](#1-product-overview)
 2. [App launch and global behaviour](#2-app-launch-and-global-behaviour)
 3. [Home / empty state (no document open)](#3-home--empty-state-no-document-open)
-4. [Import (Open PDF)](#4-import-open-pdf)
+4. [Import (Open Document)](#4-import-open-document)
 4.5. [Scan-to-PDF workflow](#45-scan-to-pdf-workflow)
 5. [Settings](#5-settings)
 6. [Document Mode](#6-document-mode)
@@ -48,7 +48,9 @@ This document describes **exactly how the app behaves today** from the user's pe
 
 **PDF Pages** is an iOS app for working with PDF documents. The user can:
 
-- Open an existing PDF (**Open PDF**)
+- Open an existing PDF (**Open Document**)
+- Create a blank PDF (**Create Document**)
+- Reopen from **Recent Documents**
 - Create a PDF from a **camera scan** or **imported photos** (scan-to-PDF workflow)
 - View all pages in a scrollable grid (**Document Mode**)
 - Reorder, rotate, duplicate, and delete pages
@@ -63,7 +65,7 @@ This document describes **exactly how the app behaves today** from the user's pe
 
 The app does **not** modify the user's original imported file. All edits are held in memory (and temporary app storage for the working copy) until export. Scan-to-PDF drafts are stored in temporary on-device storage until discarded or converted to a PDF.
 
-There is **no** recent-documents list, **no** project saving, **no** multi-document library, and **no** account system.
+**Recent Documents** persists durable copies of opened/created PDFs across launches. There is still **no** full project saving, **no** multi-document simultaneous editing, and **no** account system.
 
 ---
 
@@ -105,30 +107,60 @@ App
 
 ## 3. Home / empty state (no document open)
 
+The Home screen is an **acquisition funnel**: it gets the user into a document. It is not a feature catalog or toolbox. Editing capabilities remain contextual inside an open document.
+
+### Layout order
+
+1. **Recent Documents** (visual focus)
+2. **Open Document**
+3. **Create Document**
+4. **Scan to PDF**
+5. **Photo to PDF**
+
+(A future Digitize Document action may be added later; do not treat Home as a utilities surface.)
+
 ### What the user sees
 
 - Large document icon (`doc.on.doc`)
 - Title: **"PDF Pages"**
-- Subtitle: **"Rearrange, delete, rotate, and export PDF pages."**
-- Three prominent buttons (stacked):
-  - **Open PDF**
-  - **Scan Document**
-  - **Import Photos**
+- Subtitle: **"Open, create, scan, or convert photos into PDFs."**
+- **Recent Documents** section at the top (five most recent, with **More** when any exist)
+- Acquisition buttons (stacked):
+  - **Open Document**
+  - **Create Document**
+  - **Scan to PDF**
+  - **Photo to PDF**
 - Background: grouped system background (light grey in light mode)
 - Settings gear in top-right
+
+### Recent Documents
+
+- Shows up to **five** most recently opened or created PDF documents (most recent first)
+- Each row: filename, last opened date/time, thumbnail when available
+- **More** opens the full Recent Documents list
+- Selecting a row opens that PDF in the editor immediately
+- Empty state copy: *"Documents you open or create will appear here."*
+- Acquisition actions remain available when the list is empty
+
+**Included** after an actual PDF exists: Open Document, Create Document, Scan to PDF (after Create PDF), Photo to PDF (after Create PDF).
+
+**Not included:** cancelled scan/photo/open flows, temporary images, draft scan pages, unfinished acquisition.
 
 ### What the user can do
 
 | Action | Result |
 |--------|--------|
-| Tap **Open PDF** | Opens the system file picker limited to **PDF files**, **single selection only** |
+| Tap a **Recent Document** | Opens that PDF in the editor |
+| Tap **More** | Opens the full Recent Documents list |
+| Tap **Open Document** | Opens the system file picker limited to **PDF files**, **single selection only** |
+| Tap **Create Document** | Creates a blank one-page PDF and opens it in the editor |
 | Tap **Scan to PDF** | Opens Apple VisionKit document scanner immediately (camera permission dialog on first use only) |
 | Tap **Photo to PDF** | Opens the system Photos picker immediately (Photos permission dialog on first use only) |
 | Tap **Settings** | Opens Settings sheet |
 
-Starting **Scan Document** or **Import Photos** from home **discards any in-progress scan draft** (temp files removed).
+Starting **Scan to PDF** or **Photo to PDF** from home **discards any in-progress scan draft** (temp files removed).
 
-### If the user cancels Open PDF import
+### If the user cancels Open Document import
 
 - File picker closes
 - User remains on home screen
@@ -136,11 +168,11 @@ Starting **Scan Document** or **Import Photos** from home **discards any in-prog
 
 ---
 
-## 4. Import (Open PDF)
+## 4. Import (Open Document)
 
 ### Entry point
 
-- **Open PDF** button on home screen
+- **Open Document** button on home screen
 
 ### File picker behaviour
 
@@ -1534,7 +1566,10 @@ All create **undo** entries.
 
 | Gesture | Target | Effect |
 |---------|--------|--------|
-| Tap | Open PDF | Open file picker |
+| Tap | Open Document | Open file picker |
+| Tap | Create Document | Create blank PDF |
+| Tap | Recent document row | Open that PDF |
+| Tap | More | Show all recent documents |
 | Tap | Scan Document | Open scan-to-PDF flow (camera) |
 | Tap | Import Photos | Open scan-to-PDF flow (photos) |
 | Tap | Settings | Open settings |
@@ -1755,7 +1790,7 @@ Temporary UI state is **not** restored: selection, search query, zoom/pan, open 
 
 | Context | State | What user sees |
 |---------|-------|----------------|
-| No document | Empty home | PDF Pages title, Open PDF / Scan Document / Import Photos buttons |
+| No document | Empty home | PDF Pages title, Recent Documents, Open Document / Create Document / Scan to PDF / Photo to PDF |
 | All pages deleted | Empty document | "No Pages" + hint to import |
 | Importing | Loading overlay | Dimmed screen + "Importing PDF…" |
 | Import failed | Alert | "Import Failed" + message |
@@ -1805,6 +1840,7 @@ Temporary UI state is **not** restored: selection, search query, zoom/pan, open 
 | Appearance setting (Device/Light/Dark) | **Yes** |
 | **Make PDF Searchable** (scan-to-PDF) | **Yes** |
 | **Recent Texts** (text overlay editor) | **Yes** |
+| **Recent Documents** (opened/created PDFs) | **Yes** |
 | Signature library (saved signatures) | **Yes** |
 | Default / favorite signature | **Yes** |
 | Last signature ink thickness (capture UI) | **Yes** |
@@ -1815,7 +1851,7 @@ Temporary UI state is **not** restored: selection, search query, zoom/pan, open 
 | Pro unlock | **No** |
 | Import temp files | **No** (cleaned on New PDF / close) |
 
-After restart: user sees **home screen** and must **Open PDF**, **Scan Document**, or **Import Photos** again. Saved signatures, default signature, last ink thickness, Recent Texts, and Make PDF Searchable preference remain available.
+After restart: user sees **home screen** with **Recent Documents** (if any). Acquisition actions (**Open Document**, **Create Document**, **Scan to PDF**, **Photo to PDF**) remain available. Saved signatures, default signature, last ink thickness, Recent Texts, Recent Documents, and Make PDF Searchable preference remain available.
 
 ---
 
@@ -1845,6 +1881,8 @@ After restart: user sees **home screen** and must **Open PDF**, **Scan Document*
 | Photos import (scan-to-PDF) | **Up to 50** images per pick |
 | Text overlay font size | **8–72 pt** (default **14 pt**) |
 | Recent Texts storage | **10** entries max |
+| Recent Documents home preview | **5** entries |
+| Recent Documents max stored | **50** entries |
 | Make PDF Searchable (scan-to-PDF) | **On** by default |
 | Multi-page selection | **Not supported** (editor; scan review supports batch selection for delete/apply) |
 
@@ -1852,9 +1890,8 @@ After restart: user sees **home screen** and must **Open PDF**, **Scan Document*
 
 ## 29. Known limitations
 
-1. **No session persistence** — closing the app loses all document edits unless exported.
-2. **No recent documents** — user must re-import every session.
-3. **Paywall is a placeholder** — "Continue for now" unlocks Pro for the session only; no real purchase.
+1. **No session persistence** — closing the app loses in-progress editor edits unless exported; Recent Documents can reopen the last known PDF copy.
+2. **Paywall is a placeholder** — "Continue for now" unlocks Pro for the session only; no real purchase.
 4. **Paywall lists "coming soon" features** (merge & split, batch tools) that are not in the app.
 5. **No split, merge, password protect** in Document Actions (future only). Watermark is implemented.
 6. **OCR is scan-to-PDF only** — imported PDFs are not re-OCR'd in the editor.
@@ -1877,9 +1914,9 @@ After restart: user sees **home screen** and must **Open PDF**, **Scan Document*
 
 The following are **not** available in the current product (do not test for them):
 
-- Recent documents list
-- Save project / reopen project
+- Save project / reopen project (beyond Recent Documents copies)
 - Multiple open documents
+- Drafts on Home (architecture reserved; not implemented)
 - OCR on imported PDFs (scan-to-PDF OCR is implemented)
 - Split / merge PDFs
 - Password protect PDF
