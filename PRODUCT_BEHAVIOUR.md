@@ -1304,7 +1304,7 @@ Sticky notes and text comments are **separate workflows** (point anchor vs text-
 
 ## 19.5 Text overlays
 
-Editable text boxes placed on individual pages in Page Mode. Text is stored as overlay data and exported as **vector text** drawn above page content. Creation and editing happen **directly on the page** (Markup-style), not in a separate entry sheet.
+Editable text boxes placed on individual pages in Page Mode. Text is stored as overlay data and exported as **vector text** drawn above page content. Creation and editing happen **directly on the page** (Freeform-style compact formatting bar), not in a separate entry sheet.
 
 ### Creation flow
 
@@ -1319,21 +1319,32 @@ Editable text boxes placed on individual pages in Page Mode. Text is stored as o
 
 ### Formatting bar (above keyboard)
 
-While editing, a compact bar provides live controls that update the on-page overlay immediately:
+While editing, a **Freeform-style compact bar** sits above the keyboard. It keeps the active text and caret visible and does **not** expose every formatting control at once. The large Page Mode **Add** button is hidden for the duration of text editing. Object chrome (move, resize, rotate, duplicate, delete) stays outside this typing toolbar.
 
-| Control | Behaviour |
-|---------|-----------|
-| **Font** | System / Serif / Mono — applies to the **selected range**, or to typing defaults / whole overlay when nothing is selected |
-| **Font size** | Decrease/increase **8–72 pt** (default **14 pt**) — selection-aware |
-| **Text color** | Color picker (no color-alpha control) — selection-aware |
-| **Opacity** | Slider **5–100%** for the whole overlay; updates live on page, thumbnails, and export |
-| **Bold / Italic / Underline / Strikethrough** | Toggles — selection-aware; with no selection, become typing attributes for newly typed text |
-| **Alignment** | Left / Centre / Right (paragraph alignment for the overlay) |
-| **List style** | None / Bulleted / Numbered / Dashed |
-| **Indent** | Increase / decrease list indentation |
-| **Recent Texts** | Up to **10** previously committed texts; tap to insert; swipe to remove |
-| **Insert Today** | Inserts localized today's date string |
-| **Done** | Commits editing (or cancels empty new drafts) |
+The compact bar shows five progressive-disclosure controls plus **Done**:
+
+| Control | Opens | Contents |
+|---------|-------|----------|
+| **Aa** | Appearance menu | Font family (System / Serif / Mono), font size **8–72 pt**, text color, overlay opacity **5–100%** |
+| **BIU** | Style menu | Bold, italic, underline, strikethrough |
+| **Alignment** | Alignment menu | Left / Centre / Right |
+| **Lists** | Lists menu | None / Bulleted / Numbered / Dashed, increase/decrease indent |
+| **…** | More menu | Insert Today, Recent Texts, Duplicate, Reset Formatting |
+| **Done** | — | Commits editing (or discards empty new drafts) |
+
+Rules:
+
+- **Only one** focused menu (or the Recent Texts sheet) may be open at a time
+- Menus dismiss when editing ends (Done, tap outside, or session teardown)
+- Font, size, color, and style changes apply to the **selected range**, or to typing defaults / whole-overlay attributes when nothing is selected
+- Opacity, alignment, and list/indent apply to the whole overlay
+- All changes update the on-page overlay **live**
+- **Recent Texts:** up to **10** previously committed texts; tap to insert; swipe to remove
+- **Insert Today:** inserts a localized today's date string
+- **Duplicate** (from More): duplicates the overlay being edited (object-level duplicate remains on the selection contextual menu when not typing)
+- **Reset Formatting:** restores default styles while preserving the current text body
+
+Object-level move, resize, rotate, and delete remain available via selection chrome outside the typing toolbar when appropriate; they are not part of the compact formatting bar.
 
 ### Rich text
 
@@ -1553,15 +1564,15 @@ Image overlays are unchanged: inline × delete and toolbar **Delete** remain ava
 
 ### Text contextual menu
 
-When a **text overlay** is selected (and the user is not dragging/resizing/rotating it, and text placement mode is off):
+When a **text overlay** is selected (and the user is not dragging/resizing/rotating it, and inline text editing is not active):
 
 | Control | Behaviour |
 |---------|-----------|
-| **Edit** (pencil icon) | Opens **Edit Text** sheet |
+| **Edit** (pencil icon) | Re-enters on-page inline editing |
 | **Duplicate** (plus.square.on.square icon) | Creates a copy offset from the original (**undo** supported) |
 | **Delete** (trash icon) | Deletes the selected text overlay (**undo** supported) |
 
-The menu is positioned above the text overlay, clamped within the visible page area. It **hides** while the overlay is being manipulated, while the edit sheet is open, when selection is cleared, when PDF text is selected, when the Add sheet opens, or when text/signature placement mode starts.
+The menu is positioned above the text overlay, clamped within the visible page area. It **hides** while the overlay is being manipulated, while inline text editing is active, when selection is cleared, when PDF text is selected, when the Add sheet opens, or when signature placement mode starts.
 
 ### Overlay placement feedback
 

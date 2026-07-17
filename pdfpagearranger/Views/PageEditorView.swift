@@ -147,6 +147,15 @@ struct PageEditorView: View {
                             RecentTextsSettings.removeEntry(entry)
                             recentTexts = RecentTextsSettings.storedEntries()
                         },
+                        onDuplicate: {
+                            guard let pageItem, let overlayID = textEditingOverlayID else { return }
+                            syncLiveTextEditing()
+                            duplicateTextOverlay(id: overlayID, pageItemID: pageItem.id)
+                        },
+                        onResetFormatting: {
+                            textEditingDraft.resetFormattingPreservingText()
+                            syncLiveTextEditing()
+                        },
                         onDone: endTextEditingIfNeeded
                     )
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -182,7 +191,9 @@ struct PageEditorView: View {
             pageModeGuidanceBar
             pageContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            addButtonBar
+            if !textEditingActive {
+                addButtonBar
+            }
         }
     }
 

@@ -212,6 +212,25 @@ struct TextOverlayDraft: Equatable, Sendable {
             }
         }
     }
+
+    /// Resets style defaults and collapses rich spans to unstyled body text.
+    mutating func resetFormattingPreservingText() {
+        let body = text
+        fontSizePoints = Self.defaultFontSizePoints
+        colorRGBA = Self.defaultColor
+        isBold = false
+        isItalic = false
+        isUnderline = false
+        isStrikethrough = false
+        alignment = .left
+        listMode = .plain
+        listIndent = 0
+        fontFamily = .system
+        opacity = 1
+        spans = body.isEmpty ? [] : [TextOverlayTextSpan(text: body)]
+        selectedUTF16Location = min(selectedUTF16Location, (body as NSString).length)
+        selectedUTF16Length = 0
+    }
 }
 
 extension TextOverlayRichTextEngine.StyleDefaults {

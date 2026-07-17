@@ -472,5 +472,7 @@ final class PDFTextOverlayRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("TextOverlayFormatBar"))
         XCTAssertFalse(source.contains("TextOverlayEditorSheet"))
         XCTAssertFalse(source.contains("textPlacementGuidance"))
+        XCTAssertFalse(source.contains("ScrollView(.horizontal"))
+        XCTAssertTrue(source.contains("if !textEditingActive"))
     }
 }
