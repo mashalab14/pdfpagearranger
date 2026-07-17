@@ -244,21 +244,84 @@ final class RecentDocumentsStoreRegressionTests: XCTestCase {
         guard let firstPage = viewModel.pages.first else {
             return XCTFail("Missing page")
         }
-        viewModel.rotatePage(id: firstPage.id)
+        viewModel.duplicatePage(id: firstPage.id)
+        XCTAssertEqual(viewModel.pageCount, 2)
 
         let exportURL = try viewModel.exportPDF()
         XCTAssertTrue(FileManager.default.fileExists(atPath: exportURL.path))
 
         let ownedURL = isolated.appOwnedFileURL(id: beforeID)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: ownedURL.path))
+        let ownedDocument = try XCTUnwrap(PDFDocument(url: ownedURL))
+        XCTAssertEqual(ownedDocument.pageCount, 2, "Export must write edited bytes back to app-owned file")
+        XCTAssertEqual(try Data(contentsOf: ownedURL), try Data(contentsOf: exportURL))
 
         await viewModel.closeSession()
         let record = try XCTUnwrap(isolated.loadAvailableDocuments().first)
         await viewModel.openRecentDocument(record)
 
         XCTAssertTrue(viewModel.hasDocument)
-        XCTAssertEqual(viewModel.pageCount, 1)
+        XCTAssertEqual(viewModel.pageCount, 2)
         XCTAssertEqual(record.id, beforeID)
+    }
+
+    func testMaxStoredDocumentsEvictsOldestAndDeletesAppOwnedFile() throws {
+        var keptIDs: [UUID] = []
+        for index in 0..<RecentDocumentsStore.maxStoredDocuments {
+            let record = try store.createAppOwnedBlankDocument(displayName: "Keep\(index)")
+            keptIDs.append(record.id)
+        }
+        let oldestID = keptIDs[0]
+        let oldestURL = store.appOwnedFileURL(id: oldestID)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: oldestURL.path))
+
+        let overflow = try store.createAppOwnedBlankDocument(displayName: "Overflow")
+        let entries = store.loadAvailableDocuments()
+        XCTAssertEqual(entries.count, RecentDocumentsStore.maxStoredDocuments)
+        XCTAssertEqual(entries.first?.id, overflow.id)
+        XCTAssertFalse(entries.contains(where: { $0.id == oldestID }))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldestURL.path))
+    }
+
+    func testLegacySchemaIndexIsIgnoredAndLegacyFilesDirectoryRemoved() throws {
+        let legacyRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LegacyRecent-\(UUID().uuidString)", isDirectory: true)
+        let legacyFiles = legacyRoot.appendingPathComponent(RecentDocumentsStore.legacyFilesDirectoryName, isDirectory: true)
+        try FileManager.default.createDirectory(at: legacyFiles, withIntermediateDirectories: true)
+        let leftoverPDF = legacyFiles.appendingPathComponent("legacy.pdf")
+        try makePDFData(named: "Legacy", pageCount: 1).write(to: leftoverPDF)
+
+        let v1Index = """
+        [{"id":"\(UUID().uuidString)","displayName":"Old","lastOpenedAt":"2020-01-01T00:00:00Z","relativeFilePath":"files/legacy.pdf","contentFingerprint":"abc","pageCount":1,"kind":"document"}]
+        """
+        try Data(v1Index.utf8).write(to: legacyRoot.appendingPathComponent(RecentDocumentsStore.indexFileName))
+
+        let migrated = RecentDocumentsStore(rootDirectory: legacyRoot)
+        XCTAssertTrue(migrated.loadAvailableDocuments().isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: legacyFiles.path))
+
+        try? FileManager.default.removeItem(at: legacyRoot)
+    }
+
+    func testCancelledScanAcquisitionDoesNotRecordRecent() async throws {
+        let isolated = RecentDocumentsStore(rootDirectory: root)
+        let editor = PDFEditorViewModel(recentDocumentsStore: isolated)
+        let storage = ScanDraftTestFactory.makeIsolatedStorage()
+        let permissionChecker = MockScanCameraPermissionChecker()
+        permissionChecker.status = .authorized
+        let scannerAvailability = MockScanDocumentScannerAvailabilityChecker(isDocumentScannerSupported: true)
+        let session = ScanDraftSessionViewModel(
+            storage: storage,
+            permissionChecker: permissionChecker,
+            scannerAvailability: scannerAvailability
+        )
+
+        let ready = await session.beginCameraScanFlow()
+        XCTAssertTrue(ready)
+        session.handleVisionKitScanCancelled()
+
+        XCTAssertNil(session.document)
+        XCTAssertTrue(isolated.loadAvailableDocuments().isEmpty)
+        XCTAssertFalse(editor.hasDocument)
     }
 
     func testOpenMissingRecentDocumentCleansUp() async throws {

@@ -15,6 +15,8 @@ final class HookScriptsRegressionTests: XCTestCase {
         let source = try hookScript(named: "run-full-regression.sh")
         XCTAssertTrue(source.contains("run-full-regression: running complete PDF Pages regression suite"))
         XCTAssertTrue(source.contains("test"))
+        XCTAssertTrue(source.contains("resolve_destination") || source.contains("DESTINATION"))
+        XCTAssertTrue(source.contains("REGRESSION_DESTINATION") || source.contains("iPhone 17"))
         XCTAssertFalse(source.contains("PRE_COMMIT_ONLY_TESTING"))
         XCTAssertFalse(source.contains("-only-testing:"))
     }
