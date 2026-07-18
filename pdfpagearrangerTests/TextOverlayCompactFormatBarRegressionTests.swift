@@ -81,6 +81,7 @@ final class TextOverlayCompactFormatBarRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("textFormatMorePanel"))
         XCTAssertTrue(source.contains("insertDateButton"))
         XCTAssertTrue(source.contains("textInsertDatePicker"))
+        XCTAssertTrue(source.contains("textRecentTextsButton"))
         XCTAssertTrue(source.contains("textFormatDuplicateButton"))
         XCTAssertTrue(source.contains("textFormatResetButton"))
         XCTAssertTrue(source.contains("recentTextsSection"))
@@ -91,11 +92,12 @@ final class TextOverlayCompactFormatBarRegressionTests: XCTestCase {
     func testMenusAreExclusiveSingleOpenMenuState() throws {
         let source = try formatBarSource()
         XCTAssertTrue(source.contains("@State private var openMenu: TextOverlayFormatMenu?"))
-        XCTAssertTrue(source.contains("openMenu = menu"))
-        XCTAssertTrue(source.contains("textFormatBackButton"))
-        // Single toolbar surface morphs; no stacked detached panel cards.
-        XCTAssertFalse(source.contains("RoundedRectangle(cornerRadius: 14"))
-        XCTAssertTrue(source.contains("contextualToolbar(for:"))
+        XCTAssertTrue(source.contains("openMenu = isOpen ? nil : menu"))
+        XCTAssertTrue(source.contains("focusedPanel(for:"))
+        XCTAssertTrue(source.contains("RoundedRectangle(cornerRadius: 14"))
+        // Opening a non-more menu dismisses the Recent Texts sheet path.
+        XCTAssertTrue(source.contains("if menu != .more"))
+        XCTAssertTrue(source.contains("showRecentTexts = false"))
     }
 
     func testMenusDismissWhenEditingEnds() throws {
@@ -121,7 +123,8 @@ final class TextOverlayCompactFormatBarRegressionTests: XCTestCase {
         let editor = try pageEditorSource()
         // Appearance mode may scroll horizontally inside the same toolbar; root toolbar must not be a full-width strip of every control.
         XCTAssertTrue(formatBar.contains("textOverlayCompactToolbar"))
-        XCTAssertTrue(formatBar.contains("contextualToolbar(for:"))
+        XCTAssertTrue(formatBar.contains("focusedPanel(for:"))
+        XCTAssertFalse(formatBar.contains("contextualToolbar(for:"))
         XCTAssertFalse(formatBar.contains("ToolbarItemGroup(placement: .keyboard)"))
         XCTAssertFalse(editor.contains("TextOverlayEditorSheet"))
         XCTAssertFalse(editor.contains("showTextOverlayEditor"))

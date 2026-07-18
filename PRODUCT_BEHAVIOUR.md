@@ -1313,37 +1313,36 @@ Editable text boxes placed on individual pages in Page Mode. Text is stored as o
 3. The overlay is **selected immediately** and enters **inline editing** with the keyboard focused
 4. Placeholder hint **"Text"** is shown only while the body is empty — it is **never** saved, persisted, added to Recent Texts, rendered in thumbnails, or exported
 5. As the user types, the box **grows vertically** to fit wrapped multiline content while preserving any manual width the user set
-6. The format bar uses the bottom safe-area inset above the keyboard so the page does not jump; the active overlay and caret stay visible
+6. The page viewport shifts when needed so the active overlay stays visible above the keyboard
 7. **Done** on the format bar, or tapping outside the overlay, finishes editing
 8. If the new overlay is still empty when editing ends, it is **discarded** (no empty object left behind; no undo entry for the cancelled draft)
 
 ### Formatting bar (above keyboard)
 
-While editing, a **single lightweight toolbar** sits above the keyboard. The document stays primary: controls are compact, padding is tight, and the bar **morphs in place** into contextual controls instead of stacking detached floating cards. The large Page Mode **Add** button is hidden for the duration of text editing. Object chrome (move, resize, rotate, duplicate, delete) stays outside this typing toolbar.
+While editing, a **Freeform-style compact bar** sits above the keyboard. It keeps the active text and caret visible and does **not** expose every formatting control at once. The large Page Mode **Add** button is hidden for the duration of text editing. Object chrome (move, resize, rotate, duplicate, delete) stays outside this typing toolbar.
 
-Root controls:
+The compact bar shows five progressive-disclosure controls plus **Done**. Tapping a control opens a **focused menu panel** above the bar (only one at a time):
 
-| Control | Morphs into |
-|---------|-------------|
-| **Aa** | Font family, size, text color, opacity |
-| **BIU** | Bold, italic, underline, strikethrough |
-| **Alignment** | Left / Centre / Right |
-| **Lists** | None / Bulleted / Numbered / Dashed, increase/decrease indent |
-| **…** | Insert Date, Recent Texts, Duplicate, Reset Formatting |
-| **Done** | Commits editing (or discards empty new drafts) |
+| Control | Opens | Contents |
+|---------|-------|----------|
+| **Aa** | Appearance menu | Font family (System / Serif / Mono), font size **8–72 pt**, text color, overlay opacity **5–100%** |
+| **BIU** | Style menu | Bold, italic, underline, strikethrough |
+| **Alignment** | Alignment menu | Left / Centre / Right |
+| **Lists** | Lists menu | None / Bulleted / Numbered / Dashed, increase/decrease indent |
+| **…** | More menu | Insert Date, Recent Texts, Duplicate, Reset Formatting |
+| **Done** | — | Commits editing (or discards empty new drafts) |
 
 Rules:
 
-- Only **one** contextual mode is visible at a time; a back chevron returns to the root controls
-- Contextual controls stay visually anchored in the same toolbar surface
+- **Only one** focused menu (or the Recent Texts sheet) may be open at a time
 - Menus dismiss when editing ends (Done, tap outside, or session teardown)
-- Font, size, color, and style changes apply to the **selected range**, or to typing defaults when nothing is selected
+- Font, size, color, and style changes apply to the **selected range**, or to typing defaults / whole-overlay attributes when nothing is selected
 - Opacity, alignment, and list/indent apply to the whole overlay
 - All changes update the on-page overlay **live**
 - **Recent Texts:** up to **10** previously committed texts; tap to insert; swipe to remove
 - **Insert Date:** opens a compact date picker (defaults to today, with a **Today** shortcut); inserts the selected date at the caret (or replaces the selection) using the app’s medium date format and current typing attributes
-- **Duplicate** / **Reset Formatting:** from More
-- Keyboard appearance does **not** jump the page; the format bar uses the bottom safe-area inset so the document remains as visible as possible
+- **Duplicate** (from More): duplicates the overlay being edited (object-level duplicate remains on the selection contextual menu when not typing)
+- **Reset Formatting:** restores default styles while preserving the current text body
 
 ### Lists while editing
 

@@ -199,18 +199,18 @@ final class TextOverlayListAndDateRegressionTests: XCTestCase {
         XCTAssertTrue(formatBar.contains("textInsertDateTodayButton"))
         XCTAssertTrue(formatBar.contains("textInsertDateConfirmButton"))
         XCTAssertTrue(formatBar.contains("case insertDate"))
-        XCTAssertTrue(formatBar.contains("textFormatBackButton"))
+        XCTAssertTrue(formatBar.contains("focusedPanel(for:"))
+        XCTAssertTrue(formatBar.contains("RoundedRectangle(cornerRadius: 14"))
         XCTAssertFalse(formatBar.contains("Insert Today"))
         XCTAssertFalse(formatBar.contains("insertTodayButton"))
-        XCTAssertFalse(formatBar.contains("RoundedRectangle(cornerRadius: 14"))
-        XCTAssertFalse(formatBar.contains("focusedPanel(for:"))
+        XCTAssertFalse(formatBar.contains("contextualToolbar(for:"))
 
         let canvas = try String(
             contentsOf: projectRoot().appendingPathComponent("pdfpagearranger/Views/PageOverlayCanvasView.swift"),
             encoding: .utf8
         )
-        XCTAssertFalse(canvas.contains("keyboardBottomInset - 40"))
-        XCTAssertFalse(canvas.contains("* 0.55, 260"))
+        XCTAssertTrue(canvas.contains("keyboardBottomInset - 40"))
+        XCTAssertTrue(canvas.contains("* 0.55, 260"))
     }
 
     private func projectRoot() -> URL {

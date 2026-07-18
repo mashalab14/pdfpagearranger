@@ -10,7 +10,7 @@ enum TextOverlayFormatMenu: String, Equatable, CaseIterable {
     case insertDate
 }
 
-/// Freeform-style compact formatting bar. A single persistent toolbar morphs into contextual controls.
+/// Freeform-style compact formatting bar with progressive disclosure menus.
 struct TextOverlayFormatBar: View {
     @Binding var draft: TextOverlayDraft
     let recentTexts: [String]
@@ -26,11 +26,45 @@ struct TextOverlayFormatBar: View {
     @State private var selectedDate = Date()
 
     var body: some View {
-        HStack(spacing: 6) {
-            toolbarContent
-                .animation(.easeInOut(duration: 0.2), value: openMenu)
+        VStack(spacing: 8) {
+            if let openMenu {
+                focusedPanel(for: openMenu)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .accessibilityIdentifier("textOverlayFormatMenuPanel")
+            }
 
-            Spacer(minLength: 6)
+            compactBar
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.bar)
+        .accessibilityIdentifier("textOverlayFormatBar")
+        .animation(.easeInOut(duration: 0.18), value: openMenu)
+        .sheet(isPresented: $showRecentTexts, onDismiss: {
+            if openMenu == .more { openMenu = nil }
+        }) {
+            recentTextsSheet
+        }
+        .onChange(of: showRecentTexts) { _, isPresented in
+            if isPresented {
+                openMenu = .more
+            }
+        }
+        .onDisappear {
+            showRecentTexts = false
+            openMenu = nil
+        }
+    }
+
+    private var compactBar: some View {
+        HStack(spacing: 6) {
+            menuToggle(.appearance, title: "Aa", systemImage: nil, id: "textFormatAppearanceButton")
+            menuToggle(.style, title: nil, systemImage: "bold.italic.underline", id: "textFormatStyleButton")
+            menuToggle(.alignment, title: nil, systemImage: alignmentIcon, id: "textFormatAlignmentButton")
+            menuToggle(.lists, title: nil, systemImage: "list.bullet", id: "textFormatListsButton")
+            menuToggle(.more, title: nil, systemImage: "ellipsis", id: "textFormatMoreButton")
+
+            Spacer(minLength: 8)
 
             Button("Done", action: {
                 openMenu = nil
@@ -40,42 +74,9 @@ struct TextOverlayFormatBar: View {
             .accessibilityIdentifier("textOverlayEditingDone")
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.bar)
-        .accessibilityIdentifier("textOverlayFormatBar")
-        .sheet(isPresented: $showRecentTexts, onDismiss: {
-            if openMenu == .more { openMenu = nil }
-        }) {
-            recentTextsSheet
-        }
-        .onDisappear {
-            showRecentTexts = false
-            openMenu = nil
-        }
-    }
-
-    @ViewBuilder
-    private var toolbarContent: some View {
-        if let openMenu {
-            contextualToolbar(for: openMenu)
-                .transition(.opacity.combined(with: .move(edge: .leading)))
-                .accessibilityIdentifier("textOverlayFormatMenuPanel")
-        } else {
-            rootToolbar
-                .transition(.opacity)
-                .accessibilityIdentifier("textOverlayCompactToolbar")
-        }
-    }
-
-    private var rootToolbar: some View {
-        HStack(spacing: 4) {
-            menuToggle(.appearance, title: "Aa", systemImage: nil, id: "textFormatAppearanceButton")
-            menuToggle(.style, title: nil, systemImage: "bold.italic.underline", id: "textFormatStyleButton")
-            menuToggle(.alignment, title: nil, systemImage: alignmentIcon, id: "textFormatAlignmentButton")
-            menuToggle(.lists, title: nil, systemImage: "list.bullet", id: "textFormatListsButton")
-            menuToggle(.more, title: nil, systemImage: "ellipsis", id: "textFormatMoreButton")
-        }
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial, in: Capsule())
+        .accessibilityIdentifier("textOverlayCompactToolbar")
     }
 
     private var alignmentIcon: String {
@@ -86,54 +87,15 @@ struct TextOverlayFormatBar: View {
         }
     }
 
-    @ViewBuilder
-    private func contextualToolbar(for menu: TextOverlayFormatMenu) -> some View {
-        HStack(spacing: 6) {
-            backButton
-
-            switch menu {
-            case .appearance:
-                appearanceControls
-            case .style:
-                styleControls
-            case .alignment:
-                alignmentControls
-            case .lists:
-                listsControls
-            case .more:
-                moreControls
-            case .insertDate:
-                insertDateControls
-            }
-        }
-    }
-
-    private var backButton: some View {
-        Button {
-            if openMenu == .insertDate {
-                openMenu = .more
-            } else {
-                openMenu = nil
-            }
-        } label: {
-            Image(systemName: "chevron.backward")
-                .font(.body.weight(.semibold))
-                .frame(width: 28, height: 28)
-        }
-        .accessibilityIdentifier("textFormatBackButton")
-        .accessibilityLabel("Back")
-    }
-
     private func menuToggle(
         _ menu: TextOverlayFormatMenu,
         title: String?,
         systemImage: String?,
         id: String
     ) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                openMenu = menu
-            }
+        let isOpen = openMenu == menu
+        return Button {
+            openMenu = isOpen ? nil : menu
             if menu != .more {
                 showRecentTexts = false
             }
@@ -147,15 +109,48 @@ struct TextOverlayFormatBar: View {
                         .font(.body.weight(.semibold))
                 }
             }
-            .foregroundStyle(Color.primary)
-            .frame(minWidth: 32, minHeight: 28)
-            .padding(.horizontal, 4)
+            .foregroundStyle(isOpen ? Color.accentColor : Color.primary)
+            .frame(minWidth: 36, minHeight: 32)
+            .padding(.horizontal, 6)
+            .background(
+                isOpen ? Color.accentColor.opacity(0.14) : Color.clear,
+                in: Capsule()
+            )
         }
         .accessibilityIdentifier(id)
+        .accessibilityAddTraits(isOpen ? .isSelected : [])
     }
 
-    private var appearanceControls: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+    @ViewBuilder
+    private func focusedPanel(for menu: TextOverlayFormatMenu) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            switch menu {
+            case .appearance:
+                appearancePanel
+            case .style:
+                stylePanel
+            case .alignment:
+                alignmentPanel
+            case .lists:
+                listsPanel
+            case .more:
+                morePanel
+            case .insertDate:
+                insertDatePanel
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var appearancePanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Font & Appearance")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("textFormatAppearanceTitle")
+
             HStack(spacing: 8) {
                 ForEach(TextOverlayFontFamily.allCases, id: \.self) { family in
                     Button(family.displayName) {
@@ -165,14 +160,14 @@ struct TextOverlayFormatBar: View {
                         )
                         onChange()
                     }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(draft.fontFamily == family ? Color.accentColor : Color.primary)
+                    .buttonStyle(.bordered)
+                    .tint(draft.fontFamily == family ? Color.accentColor : Color.secondary)
                     .accessibilityIdentifier("textFontFamily_\(family.rawValue)")
                 }
-                .accessibilityIdentifier("textFontFamilyMenu")
+            }
+            .accessibilityIdentifier("textFontFamilyMenu")
 
-                Divider().frame(height: 18)
-
+            HStack(spacing: 8) {
                 Button {
                     let next = TextOverlayLayoutEngine.clampedFontSize(draft.fontSizePoints - 1)
                     draft.applyFormatting(
@@ -185,9 +180,9 @@ struct TextOverlayFormatBar: View {
                 }
                 .accessibilityIdentifier("textFontSizeDecrease")
 
-                Text("\(Int(draft.fontSizePoints))")
-                    .font(.caption.monospacedDigit().weight(.medium))
-                    .frame(minWidth: 24)
+                Text("\(Int(draft.fontSizePoints)) pt")
+                    .font(.subheadline.monospacedDigit().weight(.medium))
+                    .frame(minWidth: 52)
 
                 Button {
                     let next = TextOverlayLayoutEngine.clampedFontSize(draft.fontSizePoints + 1)
@@ -200,7 +195,10 @@ struct TextOverlayFormatBar: View {
                     Image(systemName: "textformat.size.larger")
                 }
                 .accessibilityIdentifier("textFontSizeIncrease")
+            }
+            .accessibilityIdentifier("textFontSizeStepper")
 
+            HStack(spacing: 12) {
                 ColorPicker(
                     "Text Color",
                     selection: Binding(
@@ -220,9 +218,8 @@ struct TextOverlayFormatBar: View {
                 .accessibilityLabel("Text Color")
                 .accessibilityIdentifier("textColorPicker")
 
-                HStack(spacing: 4) {
+                HStack(spacing: 8) {
                     Image(systemName: "circle.lefthalf.filled")
-                        .font(.caption)
                     Slider(
                         value: Binding(
                             get: { Double(draft.opacity) },
@@ -233,20 +230,18 @@ struct TextOverlayFormatBar: View {
                         ),
                         in: Double(TextOverlayDraft.minOpacity)...Double(TextOverlayDraft.maxOpacity)
                     )
-                    .frame(width: 84)
                     Text("\(Int((draft.opacity * 100).rounded()))%")
-                        .font(.caption2.monospacedDigit())
-                        .frame(minWidth: 28, alignment: .trailing)
+                        .font(.caption.monospacedDigit())
+                        .frame(minWidth: 36, alignment: .trailing)
                 }
                 .accessibilityIdentifier("textOpacitySlider")
             }
-            .accessibilityIdentifier("textFontSizeStepper")
         }
         .accessibilityIdentifier("textFormatAppearancePanel")
     }
 
-    private var styleControls: some View {
-        HStack(spacing: 6) {
+    private var stylePanel: some View {
+        HStack(spacing: 10) {
             styleToggle("bold", isOn: draft.isBold, id: "textBoldToggle") {
                 let next = !draft.isBold
                 draft.applyFormatting(
@@ -280,68 +275,68 @@ struct TextOverlayFormatBar: View {
                 onChange()
             }
         }
+        .frame(maxWidth: .infinity)
         .accessibilityIdentifier("textFormatStylePanel")
     }
 
-    private var alignmentControls: some View {
-        HStack(spacing: 6) {
+    private var alignmentPanel: some View {
+        HStack(spacing: 10) {
             alignButton(.left, icon: "text.alignleft", id: "textAlignLeft")
             alignButton(.center, icon: "text.aligncenter", id: "textAlignCenter")
             alignButton(.right, icon: "text.alignright", id: "textAlignRight")
         }
+        .frame(maxWidth: .infinity)
         .accessibilityIdentifier("textFormatAlignmentPanel")
     }
 
-    private var listsControls: some View {
-        HStack(spacing: 6) {
-            listButton(.plain, icon: "text.justify.left", id: "textListNone")
-            listButton(.bulleted, icon: "list.bullet", id: "textBulletedListToggle")
-            listButton(.numbered, icon: "list.number", id: "textNumberedListToggle")
-            listButton(.dashed, icon: "list.dash", id: "textDashedListToggle")
-
-            Divider().frame(height: 18)
-
-            Button {
-                draft.listIndent = max(0, draft.listIndent - 1)
-                onChange()
-            } label: {
-                Image(systemName: "decrease.indent")
+    private var listsPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                listButton(.plain, icon: "text.justify.left", id: "textListNone")
+                listButton(.bulleted, icon: "list.bullet", id: "textBulletedListToggle")
+                listButton(.numbered, icon: "list.number", id: "textNumberedListToggle")
+                listButton(.dashed, icon: "list.dash", id: "textDashedListToggle")
             }
-            .disabled(draft.listIndent <= 0)
-            .accessibilityIdentifier("textIndentDecrease")
 
-            Button {
-                draft.listIndent = min(TextOverlayDraft.maxListIndent, draft.listIndent + 1)
-                onChange()
-            } label: {
-                Image(systemName: "increase.indent")
+            HStack(spacing: 8) {
+                Button {
+                    draft.listIndent = max(0, draft.listIndent - 1)
+                    onChange()
+                } label: {
+                    Label("Decrease Indent", systemImage: "decrease.indent")
+                }
+                .disabled(draft.listIndent <= 0)
+                .accessibilityIdentifier("textIndentDecrease")
+
+                Button {
+                    draft.listIndent = min(TextOverlayDraft.maxListIndent, draft.listIndent + 1)
+                    onChange()
+                } label: {
+                    Label("Increase Indent", systemImage: "increase.indent")
+                }
+                .disabled(draft.listIndent >= TextOverlayDraft.maxListIndent)
+                .accessibilityIdentifier("textIndentIncrease")
             }
-            .disabled(draft.listIndent >= TextOverlayDraft.maxListIndent)
-            .accessibilityIdentifier("textIndentIncrease")
         }
         .accessibilityIdentifier("textFormatListsPanel")
     }
 
-    private var moreControls: some View {
-        HStack(spacing: 8) {
+    private var morePanel: some View {
+        VStack(spacing: 8) {
             Button {
                 selectedDate = Date()
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    openMenu = .insertDate
-                }
+                openMenu = .insertDate
             } label: {
                 Label("Insert Date", systemImage: "calendar")
-                    .labelStyle(.titleAndIcon)
-                    .font(.caption.weight(.semibold))
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .accessibilityIdentifier("insertDateButton")
 
             Button {
                 showRecentTexts = true
             } label: {
-                Label("Recent", systemImage: "clock.arrow.circlepath")
-                    .labelStyle(.titleAndIcon)
-                    .font(.caption.weight(.semibold))
+                Label("Recent Texts", systemImage: "clock.arrow.circlepath")
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .accessibilityIdentifier("textRecentTextsButton")
 
@@ -349,7 +344,8 @@ struct TextOverlayFormatBar: View {
                 onDuplicate()
                 openMenu = nil
             } label: {
-                Image(systemName: "plus.square.on.square")
+                Label("Duplicate", systemImage: "plus.square.on.square")
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .accessibilityIdentifier("textFormatDuplicateButton")
 
@@ -357,15 +353,21 @@ struct TextOverlayFormatBar: View {
                 onResetFormatting()
                 openMenu = nil
             } label: {
-                Image(systemName: "arrow.counterclockwise")
+                Label("Reset Formatting", systemImage: "arrow.counterclockwise")
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .accessibilityIdentifier("textFormatResetButton")
         }
+        .buttonStyle(.borderless)
         .accessibilityIdentifier("textFormatMorePanel")
     }
 
-    private var insertDateControls: some View {
-        HStack(spacing: 8) {
+    private var insertDatePanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Insert Date")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
             DatePicker(
                 "Date",
                 selection: $selectedDate,
@@ -375,18 +377,23 @@ struct TextOverlayFormatBar: View {
             .labelsHidden()
             .accessibilityIdentifier("textInsertDatePicker")
 
-            Button("Today") {
-                selectedDate = Date()
-            }
-            .font(.caption.weight(.semibold))
-            .accessibilityIdentifier("textInsertDateTodayButton")
+            HStack(spacing: 10) {
+                Button("Today") {
+                    selectedDate = Date()
+                }
+                .accessibilityIdentifier("textInsertDateTodayButton")
 
-            Button("Insert") {
-                insertSelectedDate()
-                openMenu = nil
+                Spacer()
+
+                Button("Insert") {
+                    let value = TextOverlayFormattingEngine.localizedDateString(date: selectedDate)
+                    draft.insertTextAtSelection(value)
+                    onChange()
+                    openMenu = nil
+                }
+                .fontWeight(.semibold)
+                .accessibilityIdentifier("textInsertDateConfirmButton")
             }
-            .font(.caption.weight(.bold))
-            .accessibilityIdentifier("textInsertDateConfirmButton")
         }
         .accessibilityIdentifier("textFormatInsertDatePanel")
     }
@@ -434,12 +441,6 @@ struct TextOverlayFormatBar: View {
         .presentationDetents([.medium])
     }
 
-    private func insertSelectedDate() {
-        let value = TextOverlayFormattingEngine.localizedDateString(date: selectedDate)
-        draft.insertTextAtSelection(value)
-        onChange()
-    }
-
     private func styleToggle(
         _ systemName: String,
         isOn: Bool,
@@ -450,8 +451,8 @@ struct TextOverlayFormatBar: View {
             Image(systemName: systemName)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(isOn ? Color.accentColor : Color.primary)
-                .frame(width: 32, height: 28)
-                .background(isOn ? Color.accentColor.opacity(0.14) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+                .frame(width: 44, height: 36)
+                .background(isOn ? Color.accentColor.opacity(0.14) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
         }
         .accessibilityIdentifier(id)
     }
