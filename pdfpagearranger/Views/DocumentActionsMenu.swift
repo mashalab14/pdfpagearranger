@@ -4,6 +4,7 @@ enum DocumentAction: String, CaseIterable, Identifiable {
     case compress
     case pageNumbers
     case watermark
+    case organizePages
     case export
 
     // Future document-level actions:
@@ -20,6 +21,8 @@ enum DocumentAction: String, CaseIterable, Identifiable {
             return "Page Numbers"
         case .watermark:
             return "Watermark"
+        case .organizePages:
+            return "Pages"
         case .export:
             return "Export"
         }
@@ -33,6 +36,8 @@ enum DocumentAction: String, CaseIterable, Identifiable {
             return "number"
         case .watermark:
             return "drop.degreesign"
+        case .organizePages:
+            return "square.grid.2x2"
         case .export:
             return "square.and.arrow.up"
         }
@@ -46,6 +51,8 @@ enum DocumentAction: String, CaseIterable, Identifiable {
             return "pageNumbersButton"
         case .watermark:
             return "watermarkButton"
+        case .organizePages:
+            return "organizePagesButton"
         case .export:
             return "documentActionExport"
         }
@@ -53,7 +60,7 @@ enum DocumentAction: String, CaseIterable, Identifiable {
 
     /// Actions currently exposed in the Document Actions menu.
     static var implementedActions: [DocumentAction] {
-        [.compress, .pageNumbers, .watermark, .export]
+        [.compress, .pageNumbers, .watermark, .organizePages, .export]
     }
 }
 

@@ -5,17 +5,20 @@ final class DocumentActionsMenuRegressionTests: XCTestCase {
     func testDocumentActionsMenuDefinesImplementedActions() {
         XCTAssertEqual(
             DocumentAction.implementedActions,
-            [.compress, .pageNumbers, .watermark, .export]
+            [.compress, .pageNumbers, .watermark, .organizePages, .export]
         )
     }
 
     func testEditorViewUsesDocumentActionsMenuInsteadOfStandaloneDocumentButtons() throws {
         let editorSource = try TestSourceLoader.source(named: "EditorView.swift")
 
-        XCTAssertTrue(editorSource.contains("DocumentActionsMenu"))
+        XCTAssertTrue(editorSource.contains("DocumentActionsMenu") || editorSource.contains("onDocumentAction"))
         XCTAssertTrue(editorSource.contains("showWatermark"))
+        XCTAssertTrue(editorSource.contains("showPagesOrganizer"))
+        XCTAssertTrue(editorSource.contains("isUnifiedDocumentSurface"))
         XCTAssertFalse(editorSource.contains("Button(\"Compress\")"))
         XCTAssertFalse(editorSource.contains("Button(\"Export\")"))
+        XCTAssertFalse(editorSource.contains("navigationDestination(item:"))
     }
 
     func testDocumentActionsMenuIsFutureReadyForAdditionalActions() throws {
@@ -26,6 +29,7 @@ final class DocumentActionsMenuRegressionTests: XCTestCase {
         XCTAssertTrue(menuSource.contains("case compress"))
         XCTAssertTrue(menuSource.contains("case pageNumbers"))
         XCTAssertTrue(menuSource.contains("case watermark"))
+        XCTAssertTrue(menuSource.contains("case organizePages"))
         XCTAssertTrue(menuSource.contains("case export"))
     }
 }

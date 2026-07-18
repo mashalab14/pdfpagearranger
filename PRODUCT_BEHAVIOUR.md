@@ -2,7 +2,7 @@
 
 This document describes **exactly how the app behaves today** from the user's perspective. It is intended for designers, product managers, QA engineers, and other agents who need to understand the product without reading source code.
 
-**Last verified against:** the codebase as of the current release (includes Files-first Recent Documents, Open In…, Create Document, scan-to-PDF with searchable OCR, Document Mode, Page Mode, image/text/signature overlays, Quick Signature and default/favorite, signature stroke thickness, page annotations, document search, page numbers, text and image watermark, compression, export, appearance settings, and horizontal Page Mode navigation).
+**Last verified against:** the codebase as of the current release (includes Files-first Recent Documents, Open In…, Create Document, scan-to-PDF with searchable OCR, Document Mode, Page Mode, image/text/signature overlays, Quick Signature and default/favorite, signature stroke thickness, page annotations, document search, page numbers, text and image watermark, compression, export, appearance settings, and the unified vertically scrolling document editor).
 
 ---
 
@@ -15,8 +15,8 @@ This document describes **exactly how the app behaves today** from the user's pe
 4.5. [Scan-to-PDF workflow](#45-scan-to-pdf-workflow)
 4.6. [Open In…](#46-open-in)
 5. [Settings](#5-settings)
-6. [Document Mode](#6-document-mode)
-7. [Page thumbnails (Document Mode)](#7-page-thumbnails-document-mode)
+6. [Document Editor (unified vertical surface)](#6-document-editor-unified-vertical-surface)
+7. [Page thumbnails (Pages organizer)](#7-page-thumbnails-pages-organizer)
 7.5. [Document search](#75-document-search)
 8. [Page reordering](#8-page-reordering)
 9. [Page rotate, duplicate, delete](#9-page-rotate-duplicate-delete)
@@ -26,8 +26,8 @@ This document describes **exactly how the app behaves today** from the user's pe
 13. [Compression](#13-compression)
 14. [Page Numbers](#14-page-numbers)
 14.5. [Document Watermark](#145-document-watermark)
-15. [Page Mode](#15-page-mode)
-16. [Page Mode navigation (swipe between pages)](#16-page-mode-navigation-swipe-between-pages)
+15. [Active page editing](#15-active-page-editing)
+16. [Vertical page navigation](#16-vertical-page-navigation)
 17. [Page Mode zoom and pan](#17-page-mode-zoom-and-pan)
 18. [Adding content in Page Mode](#18-adding-content-in-page-mode)
 19.4. [Page annotations (V1)](#194-page-annotations-v1)
@@ -99,10 +99,10 @@ Scan-to-PDF drafts are stored in temporary on-device storage until discarded or 
 
 ```
 App
-├── Home (empty) OR Document Mode
+├── Home (empty) OR Document Editor (unified vertical scroll)
 │   ├── Settings (sheet)
 │   ├── Scan-to-PDF (full-screen cover: camera / photos → review → Create PDF → editor)
-│   └── Page Mode (pushed navigation)
+│   └── Pages organizer sheet (thumbnails / reorder)
 │       ├── Add options (sheet: Text, Image, Quick Signature, Signature Library)
 │       ├── Text editor (sheet)
 │       ├── Photos picker (system)
@@ -419,94 +419,45 @@ Draft files live under temporary app storage. Discarding or successful handoff r
 
 ---
 
-## 6. Document Mode
+## 6. Document Editor (unified vertical surface)
 
-### When shown
+Shown when a document session is active (after import, create, open, or scan handoff).
 
-- After successful PDF import
-- After tapping **Done** from Page Mode (back navigation)
-- After **Continue Editing** from compression (re-imports compressed file)
+There is **no separate Document Mode vs Page Mode navigation push**. The editor is one continuous vertically scrolling sequence of full editable pages.
 
-### What the user sees
+### Chrome
 
-- Navigation title: **document file name** (without `.pdf`)
-- **Toolbar (leading):**
-  - **New PDF** — starts a new session (compact toolbar icon with accessibility label **New PDF**; identifier `newPDFButton`)
-  - **Undo** — undoes last action (disabled when undo stack is empty; `arrow.uturn.backward` icon)
-  - **Redo** — redoes last undone action (disabled when redo stack is empty; `arrow.uturn.forward` icon)
-- **Toolbar (trailing):**
-  - **Search** (magnifying glass) — opens document search (disabled if all pages deleted)
-  - **⋯ (ellipsis.circle)** — Document Actions menu (disabled if all pages deleted)
-- **Main content:** scrollable grid of page thumbnails (see [Page thumbnails](#7-page-thumbnails-document-mode))
+| Placement | Controls |
+|-----------|----------|
+| **Leading** | New PDF, Search, Undo, Redo |
+| **Trailing** | Document Actions **…** menu (Compress, Page Numbers, Watermark, Pages, Export) |
+| **Bottom page toolbar** | Rotate / Duplicate / Delete **active page**; **Add** content for the active page |
 
-### Empty document state (all pages deleted)
+### Vertical document
 
-If the user deletes every page:
+- Pages appear **top to bottom** in document order
+- Neighbouring pages may remain partially visible
+- Tap a page to activate it; scrolling updates the active page when another page becomes primary
+- Active page shows a subtle accent border
+- Inactive pages show full-size composited previews (not a thumbnail grid)
+- Horizontal swipe is **not** the primary page-navigation behaviour on this surface
+- Search matches and Pages-organizer selection scroll to / activate the target page
 
-- **ContentUnavailableView** appears:
-  - Title: **"No Pages"**
-  - Icon: document
-  - Message: **"All pages were removed. Tap New PDF to import another document."**
-- Grid is hidden
-- Document Actions menu is **disabled**
+### Page-level vs document-level actions
 
-### New PDF
+| Scope | Where |
+|-------|--------|
+| **Document** | Top-right **…** menu |
+| **Active page** | Bottom page toolbar (Add, rotate, duplicate, delete page) and overlay editing on the active canvas |
 
-Tapping **New PDF**:
+## 7. Page thumbnails (Pages organizer)
 
-1. Any temporary export file from a previous share is deleted
-2. Paywall and share sheets are dismissed if open
-3. The working PDF copy in temp storage is deleted
-4. All session state is cleared (pages, overlays, annotations, undo, redo, page numbers, **search**)
-5. Thumbnail cache is cleared
-6. User returns to **home / empty state**
+Opened from Document Actions **… → Pages**. Preserves the previous thumbnail grid for organization:
 
-**No confirmation dialog** is shown.
-
-### Scrolling
-
-- The page grid is in a vertical **ScrollView**
-- Grid uses adaptive columns (minimum ~140 pt, maximum ~180 pt per column)
-- Spacing between cards: 16 pt
-
----
-
-## 7. Page thumbnails (Document Mode)
-
-### What each thumbnail card shows
-
-1. **Page preview image** — rendered PDF page, including:
-   - Current rotation
-   - Image/signature overlays composited on top
-   - Applied page numbers (if page numbers are enabled and apply to this page)
-2. **Position badge** (top-left of thumbnail): shows **"1"**, **"2"**, etc. — the page's **current position** in the document list (not the same as applied page-number text unless coincidentally matching)
-3. **Three action buttons** below the thumbnail:
-   - **Rotate** (rotate.right icon)
-   - **Duplicate** (plus.square.on.square icon)
-   - **Delete** (trash icon, destructive styling)
-
-### Thumbnail loading
-
-- While loading: **spinning ProgressView** inside the thumbnail frame
-- Thumbnail reloads when: rotation changes, overlays change, page numbers change, or page order changes
-- Cached for performance; cache cleared on undo and some global changes
-
-### Thumbnail sizing
-
-- **Portrait-style pages** (0° or 180° rotation): fixed height **200 pt**, width from aspect ratio
-- **Landscape-style pages** (90° or 270° rotation): fixed width **200 pt**, height from aspect ratio
-- Thumbnail is scaled to fit within the card
-
-### Tap thumbnail
-
-- Opens **Page Mode** for that page (navigation push)
-- Navigation title in Page Mode: **"Page N"** where N is current list position
-
-### Visual feedback during page drag-reorder
-
-- While dragging a page in the grid, that thumbnail's opacity becomes **50%**
-
----
+- Reorder via drag-and-drop
+- Rotate / Duplicate / Delete per card
+- Tap a thumbnail to activate that page and dismiss the sheet
+- Accessibility identifier remains `documentPageGrid`
 
 ## 7.5 Document search
 
@@ -985,137 +936,25 @@ After success:
 
 ---
 
-## 15. Page Mode
+## 15. Active page editing
 
-### Entry point
+Editing happens on the **active page** inside the unified vertical document. The active page uses the existing `PageOverlayCanvasView` overlay/annotation system.
 
-- Tap any page thumbnail in Document Mode
+- Double-tap / selection / Add sheet behaviours are unchanged for the active page
+- Overlay editing gestures take priority over document scrolling while active
+- Keyboard avoidance keeps the active text overlay visible without abandoning scroll position
 
-### What the user sees
+## 16. Vertical page navigation
 
-- Navigation title: **"Page N"** (N = position in current list, 1-based)
-- **Back** chevron (system) — returns to Document Mode
-- **Toolbar (leading):**
-  - **Search** (magnifying glass) — toggles Page Mode document search
-  - **Undo** — same shared document-session undo as Document Mode (disabled when undo stack is empty)
-  - **Redo** — same shared document-session redo as Document Mode (disabled when redo stack is empty)
-- **Done** button (top-right) — returns to Document Mode
-- **Main area:** page preview scaled to **fill the maximum horizontal width** (16 pt margin from each safe-area edge); aspect ratio preserved; document centered horizontally; any extra vertical space remains below the page
-- **Bottom bar:** prominent **Add** button (plus.circle.fill)
+Primary navigation is **vertical scrolling**.
 
-### Loading state
-
-- While page image loads: centred **"Loading page…"** with progress spinner
-- Only the **current page** is loaded (not the whole document)
-
-### Toolbar when overlay selected
-
-- **Delete** button (destructive, top-right) appears in addition to **Done**
-- Deletes the **selected** overlay
-
-### PDF text selection
-
-Page Mode uses native **PDFKit** text selection on the underlying vector page (not rasterized). The selection layer is **lazy**: it mounts only after the user long-presses the page (intent precedes interface) or while text remains selected. It sits beneath the composited page preview image.
-
-**Entering text selection:** long-press (~0.35s) on the page canvas, then use standard PDFKit text selection (drag handles / loupe).
-
-**Selection state** (`PageModeSelection`):
-
-| State | Meaning |
-|-------|---------|
-| `none` | Nothing selected |
-| `overlay` | A user overlay (image, text, or signature) is selected |
-| `pdfText` | Native PDF text is selected |
-| `highlight` | A highlight annotation is selected |
-| `drawing` | A completed drawing annotation is selected |
-| `stickyNote` | A sticky note annotation is selected |
-| `textComment` | A text comment annotation is selected |
-
-Only one selection type may be active at a time. Selecting an annotation clears overlays and PDF text selection.
-
-**When text is selected:**
-
-- A lightweight contextual menu appears near the selection:
-  - **Copy** — copies selected text to the pasteboard
-  - **Highlight** — creates a yellow highlight (35% opacity) over the selected text rectangles, clears PDF selection, selects the new highlight, light haptic
-  - **Comment** — opens the text comment editor (requires non-empty comment text)
-  - **›** chevron — placeholder for future actions (not labeled “More”)
-- Menu disappears when selection is cleared
-- No permanent annotation toolbar; menu only appears after text is selected
-
-**Clearing text selection:**
-
-- Tap outside the selection / empty page
-- Select an overlay or annotation
-- Enter **Add** sheet, **Drawing Mode**, sticky-note placement, or **Signature Placement Mode**
-- Change pages
-
-**Gestures preserved:** pinch zoom, double-tap zoom reset, page swipe (except during Drawing Mode or sticky-note placement), overlay tap/select — unchanged when no text is selected. Text selection does not add a permanent chrome bar.
-
-**Export:** highlights, drawings, sticky-note markers, and text-comment anchors are composited into exported PDFs above vector page content. Original PDF text remains selectable/searchable.
-
-### Leaving Page Mode
-
-| Action | Result |
-|--------|--------|
-| **Done** | Pop to Document Mode |
-| **Back swipe / back button** | Pop to Document Mode |
-| Session state (overlays, order, etc.) | **Preserved** |
-
-### Page-specific vs document state
-
-- Overlays belong to **specific pages** (by internal page ID)
-- Navigating between pages in Page Mode does **not** move overlays between pages
-- Changing pages **clears overlay, annotation, and PDF text selection**
-- Page zoom/pan resets when changing pages (fresh canvas per page)
-
----
-
-## 16. Page Mode navigation (swipe between pages)
-
-### Gestures
-
-| Gesture | Result |
-|---------|--------|
-| **Swipe left** (horizontal, on page canvas) | **Next page** (if not on last page) |
-| **Swipe right** (horizontal, on page canvas) | **Previous page** (if not on first page) |
-
-### Animation
-
-- Page content transitions with **0.25 s ease-in-out** slide animation
-- Next page: slides in from trailing edge
-- Previous page: slides in from leading edge
-- Navigation title updates to new **"Page N"**
-
-### Boundaries
-
-| Situation | Behaviour |
-|-----------|-----------|
-| First page, swipe right | **Nothing** — no bounce, no wrap |
-| Last page, swipe left | **Nothing** — no bounce, no wrap |
-
-### Swipe recognition rules
-
-- Minimum horizontal distance: **~60 pt**
-- Horizontal movement must be **~1.35× greater than vertical** (diagonal/vertical swipes ignored)
-- Minimum drag distance before gesture activates: **20 pt**
-
-### Blocked when
-
-- Page is **zoomed** (scale > 1 or panned off centre)
-- User is **actively manipulating an overlay** (dragging, resizing, or pinch-resizing)
-
-### Allowed when
-
-- Page at default zoom
-- Overlay **selected but idle** (swipe on empty canvas area still works)
-- Overlay not selected
-
-### Undo
-
-- Page navigation does **not** create undo entries
-
----
+| Behaviour | Detail |
+|-----------|--------|
+| Scroll | Moves through pages in document order |
+| Tap page | Activates that page |
+| Auto-activate | Primary visible page becomes active while scrolling (blocked during text/drawing/placement) |
+| Search / Pages sheet | Programmatically scrolls to and activates the target page |
+| Horizontal swipe | Disabled on the unified surface (retained only in non-unified canvas paths) |
 
 ## 17. Page Mode zoom and pan
 

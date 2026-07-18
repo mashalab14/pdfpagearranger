@@ -79,6 +79,9 @@ final class PageModeNavigationRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("navigateToAdjacentPage"))
         XCTAssertTrue(source.contains("PageModeNavigationEngine.adjacentPageIndex"))
         XCTAssertTrue(source.contains("pageSelection = .none"))
+        XCTAssertTrue(source.contains("isUnifiedDocumentSurface"))
+        XCTAssertTrue(source.contains("unifiedDocumentScroll"))
+        XCTAssertTrue(source.contains("isUnifiedDocumentSurface || drawingModeActive || stickyNotePlacementActive"))
     }
 
     func testOverlayStateRemainsCorrectPerPage() throws {

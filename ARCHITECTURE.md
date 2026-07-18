@@ -52,8 +52,9 @@ Examples (implemented):
 - Rotate pages
 - Duplicate pages
 - Undo page-level operations
-- View Document Mode thumbnail grid
-- Search document text from Document Mode or Page Mode
+- View the document as a continuous vertically scrolling editable surface
+- Organize pages in the Pages sheet (thumbnails, reorder, rotate, duplicate, delete)
+- Search document text from the unified document editor
 
 **Current code:** a session in `PDFEditorViewModel` with `pages: [PageItem]`, `sourceDocument`, and overlay state keyed by page.
 
@@ -70,7 +71,7 @@ Examples (implemented):
 - Undo overlay and annotation operations
 - Page numbers, watermarks *(document-level; text and image watermark implemented)*
 
-**Current code:** Page Mode (`PageEditorView`) edits overlays and annotations for one `PageItem`. Overlays are stored in `pageObjectsByPage[pageItemID]`. Annotations are stored in `annotationsByPage[pageItemID]`.
+**Current code:** The unified document surface (`EditorView` → `PageEditorView` with `isUnifiedDocumentSurface`) edits overlays and annotations on the **active** `PageItem` while showing surrounding pages in a vertical scroller. Overlays are stored in `pageObjectsByPage[pageItemID]`. Annotations are stored in `annotationsByPage[pageItemID]`.
 
 ### Export *(final output step)*
 
@@ -157,6 +158,7 @@ Reopen Recent → resolve bookmark / app file → importPDF (working temp) → b
 | **`PDFService`** | Import (copy to temp `PDFImports/`), export (assemble new PDF to temp share URL), initial `PageItem` list. `createBlankPDF` exists but Create Document uses `RecentDocumentsStore.createAppOwnedBlankDocument` instead. |
 | **`PDFPreviewRenderer`** | On-screen PDF page rasterization via `PDFPage.thumbnail` (correct orientation). |
 | **`PageRenderService`** | High-resolution page image for Page Mode. |
+| **`DocumentScrollNavigationEngine`** | Active-page detection and scroll targets for the unified vertical document surface. |
 | **`WatermarkType`** | Extensible watermark payload kind (V1: text, image; future: QR code, PDF page, stamp). |
 | **`WatermarkSettings`** | Document-level watermark configuration (`watermarkType`, text, `imageAssetID`, opacity, normalized scale, color, rotation, position, layer, apply scope). |
 | **`WatermarkGeometryEngine`** | Single source of truth for watermark normalized position, scale, rotation, and bounds across all watermark types; derives text font size or image content size from render target width. |
@@ -206,8 +208,8 @@ Reopen Recent → resolve bookmark / app file → importPDF (working temp) → b
 |------|------|---------|
 | **Empty / Import** | `ContentView` | Recent Documents, Open Document, Create Document, Scan to PDF, Photo to PDF; Home presents VisionKit and Photos picker directly |
 | **Scan-to-PDF** | `ScanDraftRootView` | Draft review, page adjustment, PDF generation (opens after successful home acquisition) |
-| **Document Mode** | `EditorView` | Page grid, page ops, export |
-| **Page Mode** | `PageEditorView` | Overlay editing on one page |
+| **Document Editor** | `EditorView` + `PageEditorView` | Unified vertically scrolling editable pages; document … menu; page toolbar for the active page |
+| **Pages organizer** | `DocumentPagesOrganizerSheet` | Thumbnail grid for reorder / rotate / duplicate / delete without leaving the document |
 
 ### Export pipeline (overlays, watermark, page numbers)
 

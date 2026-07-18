@@ -270,12 +270,19 @@ final class DocumentSearchRegressionTests: XCTestCase {
 
 final class DocumentSearchUIRegressionTests: XCTestCase {
     func testDocumentModeIncludesSearchButton() throws {
-        let source = try String(
+        let editorSource = try String(
             contentsOf: sourcePath("Views/EditorView.swift"),
             encoding: .utf8
         )
-        XCTAssertTrue(source.contains("documentModeSearchButton"))
-        XCTAssertTrue(source.contains("DocumentSearchSheet"))
+        let pageEditorSource = try String(
+            contentsOf: sourcePath("Views/PageEditorView.swift"),
+            encoding: .utf8
+        )
+        // Unified surface hosts search on PageEditorView with the document-mode accessibility id.
+        XCTAssertTrue(pageEditorSource.contains("documentModeSearchButton"))
+        XCTAssertTrue(pageEditorSource.contains("PageModeSearchBar"))
+        XCTAssertTrue(editorSource.contains("isUnifiedDocumentSurface"))
+        XCTAssertTrue(pageEditorSource.contains("DocumentSearch") || pageEditorSource.contains("documentSearch"))
     }
 
     func testPageModeIncludesSearchBarAndHighlights() throws {
@@ -289,7 +296,7 @@ final class DocumentSearchUIRegressionTests: XCTestCase {
         )
 
         XCTAssertTrue(editorSource.contains("PageModeSearchBar"))
-        XCTAssertTrue(editorSource.contains("pageModeSearchButton"))
+        XCTAssertTrue(editorSource.contains("pageModeSearchButton") || editorSource.contains("documentModeSearchButton"))
         XCTAssertTrue(canvasSource.contains("SearchHighlightCanvasLayer"))
         XCTAssertTrue(canvasSource.contains("searchHighlightLayer"))
     }

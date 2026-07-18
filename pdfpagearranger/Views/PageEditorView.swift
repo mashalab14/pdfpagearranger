@@ -12,9 +12,13 @@ struct PageEditorView: View {
     @Binding var pageRoute: PageEditorRoute
 
     let document: PDFDocument
+    var isUnifiedDocumentSurface: Bool = false
+    var onCloseDocument: (() -> Void)? = nil
+    var onDocumentAction: ((DocumentAction) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var pageImage: UIImage?
+    @State private var pageImages: [UUID: UIImage] = [:]
     @State private var showAddSheet = false
     @State private var showPhotosPicker = false
     @State private var showSignatureLibrary = false
@@ -52,6 +56,8 @@ struct PageEditorView: View {
     @State private var commentDraft = ""
     @State private var showCommentEditor = false
     @State private var annotationErrorMessage: String?
+    @State private var scrollToPageToken = UUID()
+    @State private var interactionBlockingScroll = false
 
     private let signatureLibraryStore: SignatureLibraryStore
 
@@ -59,24 +65,36 @@ struct PageEditorView: View {
         viewModel: PDFEditorViewModel,
         pageRoute: Binding<PageEditorRoute>,
         document: PDFDocument,
-        signatureLibraryStore: SignatureLibraryStore
+        signatureLibraryStore: SignatureLibraryStore,
+        isUnifiedDocumentSurface: Bool = false,
+        onCloseDocument: (() -> Void)? = nil,
+        onDocumentAction: ((DocumentAction) -> Void)? = nil
     ) {
         self._viewModel = Bindable(wrappedValue: viewModel)
         self._pageRoute = pageRoute
         self.document = document
         self.signatureLibraryStore = signatureLibraryStore
+        self.isUnifiedDocumentSurface = isUnifiedDocumentSurface
+        self.onCloseDocument = onCloseDocument
+        self.onDocumentAction = onDocumentAction
     }
 
     init(
         viewModel: PDFEditorViewModel,
         pageRoute: Binding<PageEditorRoute>,
-        document: PDFDocument
+        document: PDFDocument,
+        isUnifiedDocumentSurface: Bool = false,
+        onCloseDocument: (() -> Void)? = nil,
+        onDocumentAction: ((DocumentAction) -> Void)? = nil
     ) {
         self.init(
             viewModel: viewModel,
             pageRoute: pageRoute,
             document: document,
-            signatureLibraryStore: Self.makeDefaultSignatureLibraryStore()
+            signatureLibraryStore: Self.makeDefaultSignatureLibraryStore(),
+            isUnifiedDocumentSurface: isUnifiedDocumentSurface,
+            onCloseDocument: onCloseDocument,
+            onDocumentAction: onDocumentAction
         )
     }
 
@@ -177,9 +195,9 @@ struct PageEditorView: View {
     private var pageWithNavigation: some View {
         pageModeStack
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Page \(pageNumber)")
+            .navigationTitle(isUnifiedDocumentSurface ? viewModel.documentName : "Page \(pageNumber)")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationBarBackButtonHidden(false)
+            .navigationBarBackButtonHidden(isUnifiedDocumentSurface)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("pageModeView")
             .accessibilityValue("page \(pageNumber) of \(viewModel.pageCount)")
@@ -192,7 +210,7 @@ struct PageEditorView: View {
             pageContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             if !textEditingActive {
-                addButtonBar
+                pageBottomToolbar
             }
         }
     }
@@ -227,13 +245,23 @@ struct PageEditorView: View {
     @ToolbarContentBuilder
     private var pageToolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarLeading) {
+            if isUnifiedDocumentSurface {
+                Button {
+                    onCloseDocument?()
+                } label: {
+                    Image(systemName: "doc.badge.plus")
+                }
+                .accessibilityLabel("New PDF")
+                .accessibilityIdentifier("newPDFButton")
+            }
+
             Button {
                 togglePageModeSearch()
             } label: {
                 Image(systemName: viewModel.documentSearch.isActive ? "magnifyingglass.circle.fill" : "magnifyingglass")
             }
             .accessibilityLabel("Search")
-            .accessibilityIdentifier("pageModeSearchButton")
+            .accessibilityIdentifier(isUnifiedDocumentSurface ? "documentModeSearchButton" : "pageModeSearchButton")
 
             Button {
                 withAnimation { viewModel.undo() }
@@ -242,7 +270,7 @@ struct PageEditorView: View {
             }
             .disabled(!viewModel.canUndo)
             .accessibilityLabel("Undo")
-            .accessibilityIdentifier("pageModeUndoButton")
+            .accessibilityIdentifier(isUnifiedDocumentSurface ? "undoButton" : "pageModeUndoButton")
 
             Button {
                 withAnimation { viewModel.redo() }
@@ -251,11 +279,21 @@ struct PageEditorView: View {
             }
             .disabled(!viewModel.canRedo)
             .accessibilityLabel("Redo")
-            .accessibilityIdentifier("pageModeRedoButton")
+            .accessibilityIdentifier(isUnifiedDocumentSurface ? "redoButton" : "pageModeRedoButton")
         }
-        ToolbarItem(placement: .topBarTrailing) {
-            Button("Done") { dismiss() }
+
+        if isUnifiedDocumentSurface {
+            ToolbarItem(placement: .topBarTrailing) {
+                DocumentActionsMenu(isEnabled: !viewModel.pages.isEmpty) { action in
+                    onDocumentAction?(action)
+                }
+            }
+        } else {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Done") { dismiss() }
+            }
         }
+
         if pageSelection.selectedOverlayID != nil || pageSelection.selectedAnnotationID != nil,
            !signaturePlacementActive,
            !drawingModeActive {
@@ -401,11 +439,142 @@ struct PageEditorView: View {
 
     @ViewBuilder
     private var pageContent: some View {
-        if let pageImage, let pageItem, let pdfPage = document.page(at: pageItem.originalPageIndex) {
+        if isUnifiedDocumentSurface {
+            unifiedDocumentScroll
+        } else if let pageImage, let pageItem, let pdfPage = document.page(at: pageItem.originalPageIndex) {
             pageCanvas(pageItem: pageItem, pdfPage: pdfPage, pageImage: pageImage)
         } else {
             ProgressView("Loading page…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var unifiedDocumentScroll: some View {
+        GeometryReader { outer in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: DocumentScrollNavigationEngine.pageSpacing(forContainerWidth: outer.size.width)) {
+                        ForEach(Array(viewModel.pages.enumerated()), id: \.element.id) { index, item in
+                            documentPageSlot(item: item, index: index, containerWidth: outer.size.width)
+                                .id(item.id)
+                                .background {
+                                    GeometryReader { geo in
+                                        Color.clear.preference(
+                                            key: DocumentPageVisibilityKey.self,
+                                            value: DocumentPageVisibility(
+                                                centersInViewport: [
+                                                    item.id: geo.frame(in: .named("documentScroll")).midY
+                                                ],
+                                                viewportHeight: outer.size.height
+                                            )
+                                        )
+                                    }
+                                }
+                        }
+                    }
+                    .padding(.horizontal, PageModeLayoutSizing.horizontalMargin)
+                    .padding(.vertical, 16)
+                }
+                .coordinateSpace(name: "documentScroll")
+                .scrollDisabled(interactionBlockingScroll || textEditingActive || drawingModeActive || stickyNotePlacementActive || signaturePlacementActive)
+                .accessibilityIdentifier("unifiedDocumentScroll")
+                .onPreferenceChange(DocumentPageVisibilityKey.self) { visibility in
+                    guard isUnifiedDocumentSurface else { return }
+                    let proposed = DocumentScrollNavigationEngine.primaryPageID(
+                        visibilityCenters: visibility.centersInViewport,
+                        viewportHeight: visibility.viewportHeight,
+                        fallback: pageRoute.pageItemID
+                    )
+                    if DocumentScrollNavigationEngine.shouldUpdateActivePage(
+                        proposedID: proposed,
+                        currentID: pageRoute.pageItemID,
+                        interactionBlockingScroll: interactionBlockingScroll || textEditingActive || drawingModeActive
+                    ), let proposed {
+                        activatePage(id: proposed, scroll: false)
+                    }
+                }
+                .onChange(of: pageRoute.pageItemID) { _, newID in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        proxy.scrollTo(newID, anchor: .center)
+                    }
+                }
+                .onChange(of: scrollToPageToken) { _, _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        proxy.scrollTo(pageRoute.pageItemID, anchor: .center)
+                    }
+                }
+                .onAppear {
+                    proxy.scrollTo(pageRoute.pageItemID, anchor: .center)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func documentPageSlot(item: PageItem, index: Int, containerWidth: CGFloat) -> some View {
+        let isActive = item.id == pageRoute.pageItemID
+        let image = pageImages[item.id] ?? (isActive ? pageImage : nil)
+        Group {
+            if let image, let pdfPage = document.page(at: item.originalPageIndex) {
+                let displayWidth = max(0, containerWidth - PageModeLayoutSizing.horizontalMargin * 2)
+                let displaySize = PageModeLayoutSizing.displaySize(imageSize: image.size, availableWidth: displayWidth)
+                ZStack {
+                    if isActive {
+                        pageCanvas(pageItem: item, pdfPage: pdfPage, pageImage: image)
+                            .frame(width: displaySize.width, height: displaySize.height)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                    .strokeBorder(Color.accentColor.opacity(0.85), lineWidth: 2)
+                            }
+                    } else {
+                        DocumentInactivePagePreview(
+                            pageImage: image,
+                            objects: viewModel.overlayObjects(for: item.id),
+                            overlayImages: viewModel.overlayImages(for: item.id),
+                            pageRotation: item.rotation,
+                            isActiveChrome: false
+                        )
+                        .frame(width: displaySize.width, height: displaySize.height)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            activatePage(id: item.id, scroll: true)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("documentPageSlot_\(index + 1)")
+                .task(id: pageRenderKey(for: item, index: index)) {
+                    await loadPageImage(for: item, exportIndex: index)
+                }
+            } else {
+                ProgressView("Loading page…")
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 240)
+                    .task(id: pageRenderKey(for: item, index: index)) {
+                        await loadPageImage(for: item, exportIndex: index)
+                    }
+            }
+        }
+    }
+
+    private func pageRenderKey(for item: PageItem, index: Int) -> String {
+        "\(item.id.uuidString)-\(item.rotation)-\(viewModel.pageNumberSettings.thumbnailCacheKeySuffix)-\(viewModel.watermarkSettings.thumbnailCacheKeySuffix)-\(index)-\(viewModel.pageCount)-\(viewModel.historyRevision)-\(viewModel.overlayRevision(for: item.id))"
+    }
+
+    private func activatePage(id: UUID, scroll: Bool) {
+        guard id != pageRoute.pageItemID else { return }
+        endTextEditingIfNeeded()
+        cancelSignaturePlacement()
+        cancelStickyNotePlacement()
+        if drawingModeActive {
+            exitDrawingMode(save: false)
+        }
+        pageSelection = .none
+        signatureEditOverlayID = nil
+        clearPDFTextSelection()
+        pageRoute = PageEditorRoute(pageItemID: id)
+        if scroll {
+            scrollToPageToken = UUID()
         }
     }
 
@@ -455,9 +624,11 @@ struct PageEditorView: View {
             imageProvider: { viewModel.imageAsset(for: $0) },
             onUpdate: { viewModel.updateOverlay($0) },
             onDelete: { viewModel.deleteOverlay(id: $0, pageItemID: pageItem.id) },
-            onPageSwipe: drawingModeActive || stickyNotePlacementActive ? nil : { direction in
-                navigateToAdjacentPage(direction: direction)
-            },
+            onPageSwipe: isUnifiedDocumentSurface || drawingModeActive || stickyNotePlacementActive
+                ? nil
+                : { direction in
+                    navigateToAdjacentPage(direction: direction)
+                },
             onPDFTextMenuCopy: copySelectedPDFText,
             onPDFTextHighlight: createHighlight,
             onPDFTextComment: beginTextComment,
@@ -518,9 +689,44 @@ struct PageEditorView: View {
         )
     }
 
-    private var addButtonBar: some View {
-        HStack {
+    private var pageBottomToolbar: some View {
+        HStack(spacing: 12) {
+            if isUnifiedDocumentSurface, let pageItem {
+                Button {
+                    viewModel.rotatePage(id: pageItem.id)
+                } label: {
+                    Image(systemName: "rotate.right")
+                }
+                .accessibilityLabel("Rotate Page")
+                .accessibilityIdentifier("pageToolbarRotate")
+
+                Button {
+                    let index = viewModel.pageIndex(for: pageItem.id) ?? 0
+                    viewModel.duplicatePage(id: pageItem.id)
+                    if viewModel.pages.indices.contains(index + 1) {
+                        activatePage(id: viewModel.pages[index + 1].id, scroll: true)
+                    }
+                } label: {
+                    Image(systemName: "plus.square.on.square")
+                }
+                .accessibilityLabel("Duplicate Page")
+                .accessibilityIdentifier("pageToolbarDuplicate")
+
+                Button(role: .destructive) {
+                    let index = viewModel.pageIndex(for: pageItem.id) ?? 0
+                    viewModel.deletePage(id: pageItem.id)
+                    if viewModel.pages.isEmpty { return }
+                    let nextIndex = min(index, viewModel.pages.count - 1)
+                    activatePage(id: viewModel.pages[nextIndex].id, scroll: true)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .accessibilityLabel("Delete Page")
+                .accessibilityIdentifier("pageToolbarDelete")
+            }
+
             Spacer()
+
             Button {
                 clearPDFTextSelection()
                 pageSelection = .none
@@ -532,12 +738,17 @@ struct PageEditorView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .disabled(drawingModeActive)
+            .accessibilityIdentifier("pageModeAddButton")
+
             Spacer()
         }
         .padding(.horizontal)
         .padding(.vertical, 12)
         .background(.bar)
-        .accessibilityIdentifier("pageModeAddButton")
+    }
+
+    private var addButtonBar: some View {
+        pageBottomToolbar
     }
 
     private var renderTaskKey: String {
@@ -557,8 +768,12 @@ struct PageEditorView: View {
 
     private func loadPageImage() async {
         guard let pageItem else { return }
+        let exportIndex = viewModel.pageIndex(for: pageItem.id) ?? (pageNumber - 1)
+        await loadPageImage(for: pageItem, exportIndex: exportIndex)
+    }
+
+    private func loadPageImage(for pageItem: PageItem, exportIndex: Int) async {
         let pageID = pageItem.id
-        let exportIndex = viewModel.pageIndex(for: pageID) ?? (pageNumber - 1)
         let image = await PageRenderService.shared.pageImage(
             for: pageItem,
             document: document,
@@ -568,8 +783,11 @@ struct PageEditorView: View {
             exportIndex: exportIndex,
             totalPages: viewModel.pageCount
         )
-        guard self.pageItem?.id == pageID else { return }
-        pageImage = image
+        guard let image else { return }
+        pageImages[pageID] = image
+        if self.pageItem?.id == pageID {
+            pageImage = image
+        }
     }
 
     private func importPhotoItem(_ item: PhotosPickerItem) async {
@@ -678,7 +896,11 @@ struct PageEditorView: View {
         clearTransientInteractionStateForHistoryRestore()
 
         if viewModel.pages.isEmpty {
-            dismiss()
+            if isUnifiedDocumentSurface {
+                onCloseDocument?()
+            } else {
+                dismiss()
+            }
             return
         }
 
@@ -687,7 +909,11 @@ struct PageEditorView: View {
             currentID: pageRoute.pageItemID,
             preferredIndex: preferredIndex
         ) else {
-            dismiss()
+            if isUnifiedDocumentSurface {
+                onCloseDocument?()
+            } else {
+                dismiss()
+            }
             return
         }
 
@@ -770,13 +996,12 @@ struct PageEditorView: View {
             return
         }
 
-        pageTransitionEdge = .trailing
         if animated {
             withAnimation(.easeInOut(duration: 0.25)) {
-                pageRoute = PageEditorRoute(pageItemID: match.pageItemID)
+                activatePage(id: match.pageItemID, scroll: true)
             }
         } else {
-            pageRoute = PageEditorRoute(pageItemID: match.pageItemID)
+            activatePage(id: match.pageItemID, scroll: true)
         }
     }
 
@@ -787,6 +1012,7 @@ struct PageEditorView: View {
     }
 
     private func navigateToAdjacentPage(direction: PageModeNavigationDirection) {
+        guard !isUnifiedDocumentSurface else { return }
         let now = ProcessInfo.processInfo.systemUptime
         guard now - lastPageNavigationUptime > 0.35 else { return }
 

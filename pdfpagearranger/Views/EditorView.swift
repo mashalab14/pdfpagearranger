@@ -10,16 +10,10 @@ struct EditorView: View {
     @State private var showCompression = false
     @State private var showPageNumbers = false
     @State private var showWatermark = false
-    @State private var showDocumentSearch = false
+    @State private var showPagesOrganizer = false
     @State private var exportURL: URL?
     @State private var exportError: String?
-    @State private var draggedPageID: UUID?
-    @State private var dragUndoRecorded = false
-    @State private var selectedPageRoute: PageEditorRoute?
-
-    private let gridColumns = [
-        GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)
-    ]
+    @State private var activePageRoute: PageEditorRoute?
 
     var body: some View {
         Group {
@@ -29,75 +23,23 @@ struct EditorView: View {
                     systemImage: "doc",
                     description: Text("All pages were removed. Tap New PDF to import another document.")
                 )
-            } else {
-                ScrollView {
-                    LazyVGrid(columns: gridColumns, spacing: 16) {
-                        ForEach(Array(viewModel.pages.enumerated()), id: \.element.id) { index, item in
-                            if let document = viewModel.sourceDocument {
-                                pageCard(item: item, index: index, document: document)
-                            }
-                        }
-                    }
-                    .padding()
-                }
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("documentPageGrid")
+                .toolbar { emptyDocumentToolbar }
+            } else if let document = viewModel.sourceDocument {
+                PageEditorView(
+                    viewModel: viewModel,
+                    pageRoute: activePageBinding(document: document),
+                    document: document,
+                    isUnifiedDocumentSurface: true,
+                    onCloseDocument: closeEditor,
+                    onDocumentAction: handleDocumentAction
+                )
             }
         }
-        .navigationTitle(viewModel.documentName)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarLeading) {
-                Button {
-                    closeEditor()
-                } label: {
-                    Image(systemName: "doc.badge.plus")
-                }
-                .accessibilityLabel("New PDF")
-                .accessibilityIdentifier("newPDFButton")
-
-                Button {
-                    withAnimation { viewModel.undo() }
-                } label: {
-                    Image(systemName: "arrow.uturn.backward")
-                }
-                .disabled(!viewModel.canUndo)
-                .accessibilityLabel("Undo")
-                .accessibilityIdentifier("undoButton")
-
-                Button {
-                    withAnimation { viewModel.redo() }
-                } label: {
-                    Image(systemName: "arrow.uturn.forward")
-                }
-                .disabled(!viewModel.canRedo)
-                .accessibilityLabel("Redo")
-                .accessibilityIdentifier("redoButton")
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showDocumentSearch = true
-                } label: {
-                    Image(systemName: "magnifyingglass")
-                }
-                .disabled(viewModel.pages.isEmpty)
-                .accessibilityLabel("Search")
-                .accessibilityIdentifier("documentModeSearchButton")
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                DocumentActionsMenu(isEnabled: !viewModel.pages.isEmpty) { action in
-                    switch action {
-                    case .compress:
-                        showCompression = true
-                    case .pageNumbers:
-                        showPageNumbers = true
-                    case .watermark:
-                        showWatermark = true
-                    case .export:
-                        handleExportTap()
-                    }
-                }
-            }
+        .onAppear {
+            ensureActivePageRoute()
+        }
+        .onChange(of: viewModel.pages.map(\.id)) { _, _ in
+            ensureActivePageRoute()
         }
         .sheet(isPresented: $showCompression) {
             CompressionView(viewModel: viewModel)
@@ -108,10 +50,16 @@ struct EditorView: View {
         .sheet(isPresented: $showWatermark) {
             WatermarkView(viewModel: viewModel)
         }
-        .sheet(isPresented: $showDocumentSearch) {
-            DocumentSearchSheet(viewModel: viewModel) { match in
-                showDocumentSearch = false
-                selectedPageRoute = PageEditorRoute(pageItemID: match.pageItemID)
+        .sheet(isPresented: $showPagesOrganizer) {
+            if let document = viewModel.sourceDocument {
+                DocumentPagesOrganizerSheet(
+                    viewModel: viewModel,
+                    document: document,
+                    onSelectPage: { pageID in
+                        activePageRoute = PageEditorRoute(pageItemID: pageID)
+                    },
+                    onDismiss: { showPagesOrganizer = false }
+                )
             }
         }
         .sheet(isPresented: $showPaywall) {
@@ -140,57 +88,62 @@ struct EditorView: View {
                     .accessibilityIdentifier("exportShareSheet")
             }
         }
-        .navigationDestination(item: $selectedPageRoute) { route in
-            if let document = viewModel.sourceDocument {
-                PageEditorView(
-                    viewModel: viewModel,
-                    pageRoute: Binding(
-                        get: { selectedPageRoute ?? route },
-                        set: { selectedPageRoute = $0 }
-                    ),
-                    document: document
-                )
+    }
+
+    @ToolbarContentBuilder
+    private var emptyDocumentToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button {
+                closeEditor()
+            } label: {
+                Image(systemName: "doc.badge.plus")
             }
+            .accessibilityLabel("New PDF")
+            .accessibilityIdentifier("newPDFButton")
         }
     }
 
-    @ViewBuilder
-    private func pageCard(item: PageItem, index: Int, document: PDFDocument) -> some View {
-        PageThumbnailView(
-            item: item,
-            pageNumber: index + 1,
-            document: document,
-            overlays: viewModel.overlayObjects(for: item.id),
-            overlayImages: viewModel.overlayImages(for: item.id),
-            annotations: viewModel.annotations(for: item.id),
-            overlayRevision: viewModel.overlayRevision(for: item.id),
-            pageNumberSettings: viewModel.pageNumberSettings,
-            watermarkSettings: viewModel.watermarkSettings,
-            watermarkImage: viewModel.watermarkImage,
-            exportIndex: index,
-            totalPages: viewModel.pageCount,
-            onRotate: { viewModel.rotatePage(id: item.id) },
-            onDuplicate: { viewModel.duplicatePage(id: item.id) },
-            onDelete: { viewModel.deletePage(id: item.id) },
-            onTap: {
-                selectedPageRoute = PageEditorRoute(pageItemID: item.id)
+    private func activePageBinding(document: PDFDocument) -> Binding<PageEditorRoute> {
+        Binding(
+            get: {
+                if let activePageRoute {
+                    return activePageRoute
+                }
+                let fallback = viewModel.pages.first.map { PageEditorRoute(pageItemID: $0.id) }
+                    ?? PageEditorRoute(pageItemID: UUID())
+                return fallback
+            },
+            set: { activePageRoute = $0 }
+        )
+    }
+
+    private func ensureActivePageRoute() {
+        let resolved = DocumentScrollNavigationEngine.resolvedActivePageID(
+            preferredID: activePageRoute?.pageItemID,
+            pages: viewModel.pages
+        )
+        if let resolved {
+            if activePageRoute?.pageItemID != resolved {
+                activePageRoute = PageEditorRoute(pageItemID: resolved)
             }
-        )
-        .opacity(draggedPageID == item.id ? 0.5 : 1)
-        .onDrag {
-            draggedPageID = item.id
-            dragUndoRecorded = false
-            return NSItemProvider(object: item.id.uuidString as NSString)
+        } else {
+            activePageRoute = nil
         }
-        .onDrop(
-            of: [UTType.text],
-            delegate: PageDropDelegate(
-                destinationIndex: index,
-                viewModel: viewModel,
-                draggedPageID: $draggedPageID,
-                dragUndoRecorded: $dragUndoRecorded
-            )
-        )
+    }
+
+    private func handleDocumentAction(_ action: DocumentAction) {
+        switch action {
+        case .compress:
+            showCompression = true
+        case .pageNumbers:
+            showPageNumbers = true
+        case .watermark:
+            showWatermark = true
+        case .organizePages:
+            showPagesOrganizer = true
+        case .export:
+            handleExportTap()
+        }
     }
 
     private func closeEditor() {
@@ -198,8 +151,7 @@ struct EditorView: View {
         showPaywall = false
         showShareSheet = false
         exportError = nil
-        draggedPageID = nil
-        dragUndoRecorded = false
+        activePageRoute = nil
         Task {
             await viewModel.closeSession()
         }
