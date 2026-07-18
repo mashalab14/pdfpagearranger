@@ -79,20 +79,23 @@ final class TextOverlayCompactFormatBarRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("textIndentIncrease"))
         XCTAssertTrue(source.contains("textIndentDecrease"))
         XCTAssertTrue(source.contains("textFormatMorePanel"))
-        XCTAssertTrue(source.contains("insertTodayButton"))
-        XCTAssertTrue(source.contains("textRecentTextsButton"))
+        XCTAssertTrue(source.contains("insertDateButton"))
+        XCTAssertTrue(source.contains("textInsertDatePicker"))
         XCTAssertTrue(source.contains("textFormatDuplicateButton"))
         XCTAssertTrue(source.contains("textFormatResetButton"))
         XCTAssertTrue(source.contains("recentTextsSection"))
+        XCTAssertFalse(source.contains("insertTodayButton"))
+        XCTAssertFalse(source.contains("Insert Today"))
     }
 
     func testMenusAreExclusiveSingleOpenMenuState() throws {
         let source = try formatBarSource()
         XCTAssertTrue(source.contains("@State private var openMenu: TextOverlayFormatMenu?"))
-        XCTAssertTrue(source.contains("openMenu = isOpen ? nil : menu"))
-        // Opening a non-more menu dismisses the Recent Texts sheet path.
-        XCTAssertTrue(source.contains("if menu != .more"))
-        XCTAssertTrue(source.contains("showRecentTexts = false"))
+        XCTAssertTrue(source.contains("openMenu = menu"))
+        XCTAssertTrue(source.contains("textFormatBackButton"))
+        // Single toolbar surface morphs; no stacked detached panel cards.
+        XCTAssertFalse(source.contains("RoundedRectangle(cornerRadius: 14"))
+        XCTAssertTrue(source.contains("contextualToolbar(for:"))
     }
 
     func testMenusDismissWhenEditingEnds() throws {
@@ -116,7 +119,9 @@ final class TextOverlayCompactFormatBarRegressionTests: XCTestCase {
     func testDoesNotRestoreObsoleteFullWidthToolbarOrAddTextSheet() throws {
         let formatBar = try formatBarSource()
         let editor = try pageEditorSource()
-        XCTAssertFalse(formatBar.contains("ScrollView(.horizontal"))
+        // Appearance mode may scroll horizontally inside the same toolbar; root toolbar must not be a full-width strip of every control.
+        XCTAssertTrue(formatBar.contains("textOverlayCompactToolbar"))
+        XCTAssertTrue(formatBar.contains("contextualToolbar(for:"))
         XCTAssertFalse(formatBar.contains("ToolbarItemGroup(placement: .keyboard)"))
         XCTAssertFalse(editor.contains("TextOverlayEditorSheet"))
         XCTAssertFalse(editor.contains("showTextOverlayEditor"))
@@ -210,7 +215,7 @@ final class TextOverlayCompactFormatBarRegressionTests: XCTestCase {
         XCTAssertEqual(draft.listMode, .dashed)
         XCTAssertEqual(draft.listIndent, 1)
 
-        let withToday = TextOverlayFormattingEngine.appendToday(
+        let withToday = TextOverlayFormattingEngine.appendDate(
             to: draft.text,
             date: Date(timeIntervalSince1970: 1_735_689_600),
             locale: Locale(identifier: "en_US")

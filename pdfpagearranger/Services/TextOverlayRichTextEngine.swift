@@ -245,6 +245,16 @@ enum TextOverlayRichTextEngine {
     ) -> NSAttributedString {
         let plain = plainText(from: spans)
         if plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if listMode != .plain || listIndent > 0 {
+                return applyListMarkers(
+                    to: NSAttributedString(string: ""),
+                    listMode: listMode,
+                    listIndent: listIndent,
+                    defaults: defaults,
+                    alignment: alignment,
+                    renderScale: renderScale
+                )
+            }
             if placeholderWhenEmpty {
                 return TextOverlayLayoutEngine.attributedString(
                     for: TextOverlayDraft(
@@ -319,14 +329,6 @@ enum TextOverlayRichTextEngine {
             }
 
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty {
-                if lineIndex < lines.count - 1 {
-                    result.append(NSAttributedString(string: "\n"))
-                }
-                utf16Cursor += lineUTF16Length + (lineIndex < lines.count - 1 ? 1 : 0)
-                continue
-            }
-
             let indent = String(repeating: "    ", count: min(max(listIndent, 0), TextOverlayDraft.maxListIndent))
             let marker: String
             switch listMode {
@@ -342,6 +344,26 @@ enum TextOverlayRichTextEngine {
             }
 
             let prefix = indent + marker
+            if trimmed.isEmpty {
+                // Empty list rows still show their marker while editing and in export.
+                if !prefix.isEmpty {
+                    let emptyAttrs = attributes(
+                        for: " ",
+                        span: TextOverlayTextSpan(text: " "),
+                        defaults: defaults,
+                        alignment: alignment,
+                        renderScale: renderScale,
+                        placeholderStyle: false
+                    ).attributes(at: 0, effectiveRange: nil)
+                    result.append(NSAttributedString(string: prefix, attributes: emptyAttrs))
+                }
+                if lineIndex < lines.count - 1 {
+                    result.append(NSAttributedString(string: "\n"))
+                }
+                utf16Cursor += lineUTF16Length + (lineIndex < lines.count - 1 ? 1 : 0)
+                continue
+            }
+
             if !prefix.isEmpty {
                 let firstAttrs = lineAttr.length > 0
                     ? lineAttr.attributes(at: 0, effectiveRange: nil)

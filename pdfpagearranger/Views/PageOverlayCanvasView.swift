@@ -188,10 +188,7 @@ struct PageOverlayCanvasView: View {
                 pageStack(fitSize: displaySize)
                     .frame(width: displaySize.width, height: displaySize.height)
                     .scaleEffect(scale)
-                    .offset(
-                        x: offset.width,
-                        y: offset.height - (textEditingActive ? min(max(keyboardBottomInset - 40, 0) * 0.55, 260) : 0)
-                    )
+                    .offset(x: offset.width, y: offset.height)
                     .contentShape(Rectangle())
                     .onTapGesture(coordinateSpace: .local) { location in
                         handlePageTap(at: location, displaySize: displaySize)

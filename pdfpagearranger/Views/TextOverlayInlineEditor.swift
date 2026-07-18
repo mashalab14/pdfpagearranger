@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// On-page UITextView editor with selection-aware rich text and never-committed placeholder text.
+/// On-page UITextView editor with selection-aware rich text, visible list markers, and never-committed placeholder text.
 struct TextOverlayInlineEditor: UIViewRepresentable {
     @Binding var draft: TextOverlayDraft
     var renderScale: CGFloat
@@ -54,28 +54,41 @@ struct TextOverlayInlineEditor: UIViewRepresentable {
             self.parent = parent
         }
 
+        private var usesListMarkers: Bool {
+            parent.draft.listMode != .plain || parent.draft.listIndent > 0
+        }
+
         func applyAttributedText(to textView: UITextView, force: Bool) {
             let signature = draftSignature(parent.draft, scale: parent.renderScale)
             guard force || signature != lastAppliedSignature else { return }
 
-            // Editor shows rich plain body without list markers so range formatting stays stable.
+            // Keep list markers visible while editing so edit/display/export match.
             let attributed = TextOverlayLayoutEngine.attributedString(
                 for: parent.draft,
                 renderScale: parent.renderScale,
-                placeholderWhenEmpty: true,
-                includeListMarkers: false
+                placeholderWhenEmpty: parent.draft.listMode == .plain && parent.draft.listIndent == 0,
+                includeListMarkers: true
             )
-            let selected = textView.selectedRange
+            let plainSelection = NSRange(
+                location: parent.draft.selectedUTF16Location,
+                length: parent.draft.selectedUTF16Length
+            )
             isUpdatingFromUI = true
             textView.attributedText = attributed
             textView.alpha = CGFloat(parent.draft.opacity)
-            if !parent.draft.isEmpty {
-                let maxLocation = attributed.length
-                let location = min(selected.location, maxLocation)
-                let length = min(selected.length, max(0, maxLocation - location))
-                textView.selectedRange = NSRange(location: location, length: length)
-            } else {
+            if parent.draft.isEmpty, !usesListMarkers {
                 textView.selectedRange = NSRange(location: 0, length: 0)
+            } else {
+                let displaySelection = TextOverlayListEditingEngine.displayRange(
+                    plainRange: plainSelection,
+                    plainText: parent.draft.text,
+                    listMode: parent.draft.listMode,
+                    listIndent: parent.draft.listIndent
+                )
+                let maxLocation = attributed.length
+                let location = min(displaySelection.location, maxLocation)
+                let length = min(displaySelection.length, max(0, maxLocation - location))
+                textView.selectedRange = NSRange(location: location, length: length)
             }
             isUpdatingFromUI = false
             lastAppliedSignature = signature
@@ -99,17 +112,54 @@ struct TextOverlayInlineEditor: UIViewRepresentable {
         func textViewDidChange(_ textView: UITextView) {
             guard !isUpdatingFromUI else { return }
             isUpdatingFromUI = true
+
+            let displaySelection = textView.selectedRange
             let raw = textView.text ?? ""
-            if raw == TextOverlayDraft.placeholderHint, parent.draft.isEmpty {
+
+            if raw == TextOverlayDraft.placeholderHint, parent.draft.isEmpty, !usesListMarkers {
                 parent.draft.text = ""
                 parent.draft.spans = []
             } else {
+                let bodyAttributed = TextOverlayListEditingEngine.attributedBodyStrippingMarkers(
+                    from: textView.attributedText,
+                    listMode: parent.draft.listMode,
+                    listIndent: parent.draft.listIndent
+                )
                 let defaults = TextOverlayRichTextEngine.StyleDefaults(from: parent.draft)
-                let spans = TextOverlayRichTextEngine.spans(from: textView.attributedText, defaults: defaults)
+                let spans = TextOverlayRichTextEngine.spans(from: bodyAttributed, defaults: defaults)
                 parent.draft.spans = spans
                 parent.draft.text = TextOverlayRichTextEngine.plainText(from: spans)
             }
-            syncSelection(from: textView)
+
+            let plainSelection = TextOverlayListEditingEngine.plainRange(
+                displayRange: displaySelection,
+                plainText: parent.draft.text,
+                listMode: parent.draft.listMode,
+                listIndent: parent.draft.listIndent
+            )
+            parent.draft.selectedUTF16Location = plainSelection.location
+            parent.draft.selectedUTF16Length = plainSelection.length
+
+            // Re-apply markers so they never disappear after typing/deleting.
+            let refreshed = TextOverlayLayoutEngine.attributedString(
+                for: parent.draft,
+                renderScale: parent.renderScale,
+                placeholderWhenEmpty: parent.draft.listMode == .plain && parent.draft.listIndent == 0,
+                includeListMarkers: true
+            )
+            textView.attributedText = refreshed
+            let restored = TextOverlayListEditingEngine.displayRange(
+                plainRange: plainSelection,
+                plainText: parent.draft.text,
+                listMode: parent.draft.listMode,
+                listIndent: parent.draft.listIndent
+            )
+            let maxLocation = refreshed.length
+            let location = min(restored.location, maxLocation)
+            let length = min(restored.length, max(0, maxLocation - location))
+            textView.selectedRange = NSRange(location: location, length: length)
+            updateTypingAttributes(on: textView)
+
             lastAppliedSignature = draftSignature(parent.draft, scale: parent.renderScale)
             parent.onEditingChanged()
             isUpdatingFromUI = false
@@ -121,8 +171,17 @@ struct TextOverlayInlineEditor: UIViewRepresentable {
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {
-            if parent.draft.isEmpty {
+            if parent.draft.isEmpty, !usesListMarkers {
                 textView.selectedRange = NSRange(location: 0, length: textView.attributedText.length)
+            } else if parent.draft.isEmpty, usesListMarkers {
+                // Place caret after the visible marker on an empty list row.
+                let display = TextOverlayListEditingEngine.displayUTF16Location(
+                    plainLocation: 0,
+                    plainText: "",
+                    listMode: parent.draft.listMode,
+                    listIndent: parent.draft.listIndent
+                )
+                textView.selectedRange = NSRange(location: min(display, textView.attributedText.length), length: 0)
             }
             updateTypingAttributes(on: textView)
         }
@@ -133,17 +192,85 @@ struct TextOverlayInlineEditor: UIViewRepresentable {
             replacementText text: String
         ) -> Bool {
             if parent.draft.isEmpty,
+               !usesListMarkers,
                textView.attributedText.string == TextOverlayDraft.placeholderHint {
                 textView.text = ""
                 parent.draft.text = ""
                 parent.draft.spans = []
             }
+
+            guard usesListMarkers else { return true }
+
+            let markerRanges = TextOverlayListEditingEngine.markerRanges(
+                plainText: parent.draft.text,
+                listMode: parent.draft.listMode,
+                listIndent: parent.draft.listIndent
+            )
+
+            // Block direct edits inside marker prefixes; handle backspace at body start as item removal.
+            if markerRanges.contains(where: { TextOverlayListEditingEngine.rangesIntersect(range, $0) }) {
+                if text.isEmpty {
+                    return handleListBackspace(textView: textView, requestedRange: range)
+                }
+                // Redirect insertions that land in a marker to the body start of that line.
+                if let marker = markerRanges.first(where: { TextOverlayListEditingEngine.rangesIntersect(range, $0) }) {
+                    let bodyStart = marker.location + marker.length
+                    textView.selectedRange = NSRange(location: bodyStart, length: 0)
+                    if !text.isEmpty {
+                        textView.insertText(text)
+                    }
+                    return false
+                }
+                return false
+            }
+
+            // Backspace at the very start of a list body deletes the previous line break.
+            if text.isEmpty,
+               range.length == 1,
+               markerRanges.contains(where: { $0.location + $0.length == range.location }) {
+                return handleListBackspace(textView: textView, requestedRange: range)
+            }
+
+            return true
+        }
+
+        private func handleListBackspace(textView: UITextView, requestedRange: NSRange) -> Bool {
+            let plainRange = TextOverlayListEditingEngine.plainRange(
+                displayRange: requestedRange,
+                plainText: parent.draft.text,
+                listMode: parent.draft.listMode,
+                listIndent: parent.draft.listIndent
+            )
+            let ns = parent.draft.text as NSString
+            // At start of a non-first line: remove the preceding newline (drops empty list item).
+            if plainRange.location > 0,
+               plainRange.length <= 1,
+               ns.substring(with: NSRange(location: plainRange.location - 1, length: 1)) == "\n" {
+                let deletion = NSRange(location: plainRange.location - 1, length: 1)
+                parent.draft.text = ns.replacingCharacters(in: deletion, with: "")
+                parent.draft.synchronizeSpansWithTextIfNeeded()
+                parent.draft.selectedUTF16Location = deletion.location
+                parent.draft.selectedUTF16Length = 0
+                applyAttributedText(to: textView, force: true)
+                parent.onEditingChanged()
+                return false
+            }
+            // At start of first line: ignore marker deletion.
+            if plainRange.location == 0, requestedRange.length > 0 {
+                return false
+            }
             return true
         }
 
         private func syncSelection(from textView: UITextView) {
-            parent.draft.selectedUTF16Location = textView.selectedRange.location
-            parent.draft.selectedUTF16Length = textView.selectedRange.length
+            let plain = TextOverlayListEditingEngine.plainRange(
+                displayRange: textView.selectedRange,
+                plainText: parent.draft.text,
+                listMode: parent.draft.listMode,
+                listIndent: parent.draft.listIndent
+            )
+            parent.draft.selectedUTF16Location = plain.location
+            parent.draft.selectedUTF16Length = plain.length
         }
 
         private func draftSignature(_ draft: TextOverlayDraft, scale: CGFloat) -> String {

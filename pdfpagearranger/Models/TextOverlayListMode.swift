@@ -231,6 +231,82 @@ struct TextOverlayDraft: Equatable, Sendable {
         selectedUTF16Location = min(selectedUTF16Location, (body as NSString).length)
         selectedUTF16Length = 0
     }
+
+    /// Inserts text at the caret, or replaces the selected range, using current typing attributes.
+    mutating func insertTextAtSelection(_ insertion: String) {
+        guard !insertion.isEmpty else { return }
+        synchronizeSpansWithTextIfNeeded()
+        let ns = text as NSString
+        let location = min(max(selectedUTF16Location, 0), ns.length)
+        let length = min(max(selectedUTF16Length, 0), ns.length - location)
+        let selectionEnd = location + length
+        let defaults = TextOverlayRichTextEngine.StyleDefaults(from: self)
+
+        var leading: [TextOverlayTextSpan] = []
+        var trailing: [TextOverlayTextSpan] = []
+        var cursor = 0
+        for span in spans {
+            let spanLength = (span.text as NSString).length
+            let spanStart = cursor
+            let spanEnd = cursor + spanLength
+            defer { cursor = spanEnd }
+            let nsSpan = span.text as NSString
+
+            if spanEnd <= location {
+                leading.append(span)
+                continue
+            }
+            if spanStart >= selectionEnd {
+                trailing.append(span)
+                continue
+            }
+            if spanStart < location {
+                leading.append(
+                    TextOverlayTextSpan(
+                        text: nsSpan.substring(with: NSRange(location: 0, length: location - spanStart)),
+                        fontSizePoints: span.fontSizePoints,
+                        colorRGBA: span.colorRGBA,
+                        isBold: span.isBold,
+                        isItalic: span.isItalic,
+                        isUnderline: span.isUnderline,
+                        isStrikethrough: span.isStrikethrough,
+                        fontFamily: span.fontFamily
+                    )
+                )
+            }
+            if spanEnd > selectionEnd {
+                trailing.append(
+                    TextOverlayTextSpan(
+                        text: nsSpan.substring(from: selectionEnd - spanStart),
+                        fontSizePoints: span.fontSizePoints,
+                        colorRGBA: span.colorRGBA,
+                        isBold: span.isBold,
+                        isItalic: span.isItalic,
+                        isUnderline: span.isUnderline,
+                        isStrikethrough: span.isStrikethrough,
+                        fontFamily: span.fontFamily
+                    )
+                )
+            }
+        }
+
+        let inserted = TextOverlayTextSpan(
+            text: insertion,
+            fontSizePoints: defaults.fontSizePoints,
+            colorRGBA: defaults.colorRGBA,
+            isBold: defaults.isBold,
+            isItalic: defaults.isItalic,
+            isUnderline: defaults.isUnderline,
+            isStrikethrough: defaults.isStrikethrough,
+            fontFamily: defaults.fontFamily
+        )
+        spans = TextOverlayRichTextEngine.mergeAdjacent(
+            (leading + [inserted] + trailing).filter { !$0.text.isEmpty }
+        )
+        text = TextOverlayRichTextEngine.plainText(from: spans)
+        selectedUTF16Location = location + (insertion as NSString).length
+        selectedUTF16Length = 0
+    }
 }
 
 extension TextOverlayRichTextEngine.StyleDefaults {

@@ -174,9 +174,10 @@ Reopen Recent → resolve bookmark / app file → importPDF (working temp) → b
 | **`OverlayPDFExporter`** | Draws image and text overlays into a PDF `CGContext` using `OverlayGeometryEngine` and `TextOverlayRenderer`. |
 | **`TextOverlayRenderer`** | Vector text drawing for Page Mode compositing, thumbnails, and PDF export. |
 | **`TextOverlayLayoutEngine`** | Font sizing, measured bounds, attributed string layout for text overlays. |
-| **`TextOverlayFormattingEngine`** | List prefixes (bulleted/numbered/dashed), indentation, Insert Today, list-mode switching. |
+| **`TextOverlayFormattingEngine`** | List prefixes (bulleted/numbered/dashed), indentation, Insert Date, list-mode switching. |
 | **`TextOverlayRichTextEngine`** | Contiguous rich-text spans, selection apply/merge, attributed-string build for edit/render/export. |
-| **`TextOverlayInlineEditor` / `TextOverlayFormatBar`** | On-page UITextView editing and Freeform-style compact formatting bar with progressive disclosure menus (Aa / BIU / alignment / lists / more), including opacity and range formatting. Object chrome stays outside the typing toolbar. |
+| **`TextOverlayListEditingEngine`** | Plain↔display list-marker mapping for inline editing so markers stay visible while typing. |
+| **`TextOverlayInlineEditor` / `TextOverlayFormatBar`** | On-page UITextView editing and a single morphing formatting toolbar (Aa / BIU / alignment / lists / more / Insert Date), including opacity and range formatting. Object chrome stays outside the typing toolbar. |
 | **`RecentDocumentsStore`** | Files-first recent **index** under Application Support (`RecentDocuments/`). Externally owned: security-scoped bookmark + metadata + optional thumbnail (no PDF library copy). App-owned (`appOwned/`): Create Document and Scan/Photo outputs. Identity by stable path / app id — **not** content hash. Schema v2; legacy `files/` removed on migrate; non-v2 index ignored. Drafts can share the index via `kind: draft` later. Max 50 entries (eviction deletes app-owned PDFs + thumbnails). |
 | **`ActiveDocumentOrigin`** | Session tag on `PDFEditorViewModel`: `.external` vs `.appOwned` for export write-back and compression adopt. |
 | **`handleIncomingDocumentURL`** | Open In… / future Share Extension entry → `importPDF(..., ownership: .external)`. |

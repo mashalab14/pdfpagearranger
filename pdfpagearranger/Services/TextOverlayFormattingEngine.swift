@@ -1,7 +1,8 @@
 import Foundation
 
 enum TextOverlayFormattingEngine {
-    static func localizedTodayString(date: Date = Date(), locale: Locale = .current) -> String {
+    /// Application-supported editable date presentation (medium date, no time).
+    static func localizedDateString(date: Date = Date(), locale: Locale = .current) -> String {
         let formatter = DateFormatter()
         formatter.locale = locale
         formatter.dateStyle = .medium
@@ -9,15 +10,36 @@ enum TextOverlayFormattingEngine {
         return formatter.string(from: date)
     }
 
+    static func localizedTodayString(date: Date = Date(), locale: Locale = .current) -> String {
+        localizedDateString(date: date, locale: locale)
+    }
+
     static func appendToday(to text: String, date: Date = Date(), locale: Locale = .current) -> String {
-        let today = localizedTodayString(date: date, locale: locale)
+        appendDate(to: text, date: date, locale: locale)
+    }
+
+    static func appendDate(to text: String, date: Date = Date(), locale: Locale = .current) -> String {
+        let value = localizedDateString(date: date, locale: locale)
         if text.isEmpty {
-            return today
+            return value
         }
         if text.hasSuffix("\n") {
-            return text + today
+            return text + value
         }
-        return text + " " + today
+        return text + " " + value
+    }
+
+    /// Inserts or replaces text at a UTF-16 range. Returns the new string and caret location after the insertion.
+    static func inserting(
+        _ insertion: String,
+        into text: String,
+        range: NSRange
+    ) -> (text: String, caretLocation: Int) {
+        let ns = text as NSString
+        let location = min(max(range.location, 0), ns.length)
+        let length = min(max(range.length, 0), ns.length - location)
+        let updated = ns.replacingCharacters(in: NSRange(location: location, length: length), with: insertion)
+        return (updated, location + (insertion as NSString).length)
     }
 
     static func displayText(
@@ -46,7 +68,9 @@ enum TextOverlayFormattingEngine {
             .components(separatedBy: .newlines)
             .map { line in
                 let trimmedLeading = line.trimmingCharacters(in: .whitespaces)
-                guard !trimmedLeading.isEmpty else { return "" }
+                if trimmedLeading.isEmpty {
+                    return prefix
+                }
                 return prefix + trimmedLeading
             }
             .joined(separator: "\n")
@@ -65,9 +89,12 @@ enum TextOverlayFormattingEngine {
         var number = 1
         return lines.map { line in
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.isEmpty else { return "" }
-            if let match = trimmed.range(of: #"^\d+\.\s"#, options: .regularExpression) {
-                _ = match
+            if trimmed.isEmpty {
+                defer { number += 1 }
+                return "\(number). "
+            }
+            if trimmed.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
+                defer { number += 1 }
                 return trimmed
             }
             defer { number += 1 }
@@ -125,7 +152,10 @@ enum TextOverlayFormattingEngine {
         let lines = text.components(separatedBy: .newlines)
         return lines.map { line in
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.isEmpty else { return "" }
+            if trimmed.isEmpty {
+                // Keep markers on empty rows so list editing never loses visible bullets.
+                return marker
+            }
             if trimmed.hasPrefix(marker) {
                 return trimmed
             }
