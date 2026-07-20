@@ -1,4 +1,5 @@
 import CoreGraphics
+import SwiftUI
 import XCTest
 @testable import pdfpagearranger
 
@@ -124,6 +125,61 @@ final class DocumentZoomEngineRegressionTests: XCTestCase {
         XCTAssertEqual(atZoomDisplay.width / fittedPage.width, 2.5, accuracy: 0.001)
         XCTAssertEqual(DocumentZoomEngine.clampedScale(2.5), 2.5, accuracy: 0.001)
     }
+
+    func testUntrustedOriginOffsetDetectedForMidDocumentPages() {
+        XCTAssertTrue(
+            DocumentZoomEngine.isUntrustedContentOffset(.zero, pageIndex: 4)
+        )
+        XCTAssertFalse(
+            DocumentZoomEngine.isUntrustedContentOffset(CGPoint(x: 0, y: 1200), pageIndex: 4)
+        )
+        XCTAssertFalse(
+            DocumentZoomEngine.isUntrustedContentOffset(.zero, pageIndex: 0)
+        )
+    }
+
+    func testNavigationFrozenDuringPinchAndPositionRestore() {
+        XCTAssertTrue(
+            DocumentZoomEngine.shouldFreezeNavigationDuringZoom(
+                isPinching: true,
+                positionRestoreSuppressed: false
+            )
+        )
+        XCTAssertTrue(
+            DocumentZoomEngine.shouldFreezeNavigationDuringZoom(
+                isPinching: false,
+                positionRestoreSuppressed: true
+            )
+        )
+        XCTAssertFalse(
+            DocumentZoomEngine.shouldFreezeNavigationDuringZoom(
+                isPinching: false,
+                positionRestoreSuppressed: false
+            )
+        )
+    }
+
+    func testPageScrollAnchorMapsFocalPointIntoUnitSquare() {
+        let anchor = DocumentZoomEngine.pageScrollAnchor(
+            focalPointInViewport: CGPoint(x: 100, y: 200),
+            viewportSize: CGSize(width: 400, height: 800)
+        )
+        XCTAssertEqual(anchor.x, 0.25, accuracy: 0.001)
+        XCTAssertEqual(anchor.y, 0.25, accuracy: 0.001)
+    }
+
+    func testFocalPointOffsetFromMidDocumentDoesNotCollapseToOrigin() {
+        let start = CGPoint(x: 20, y: 2400) // page ~5 territory
+        let focal = CGPoint(x: 180, y: 320)
+        let zoomed = DocumentZoomEngine.contentOffsetPreservingFocalPoint(
+            previousScale: 1,
+            newScale: 2,
+            focalPointInViewport: focal,
+            contentOffset: start
+        )
+        XCTAssertGreaterThan(zoomed.y, 2000)
+        XCTAssertNotEqual(zoomed.y, 0, accuracy: 0.001)
+    }
 }
 
 final class DocumentZoomSourceRegressionTests: XCTestCase {
@@ -158,6 +214,28 @@ final class DocumentZoomSourceRegressionTests: XCTestCase {
         XCTAssertTrue(pageEditor.contains("scaledPageSpacing(fittedSpacing:"))
         XCTAssertTrue(pageEditor.contains("zoomScale: zoomScale"))
         XCTAssertTrue(pageEditor.contains("contentOffsetPreservingFocalPoint"))
+    }
+
+    func testZoomPreservesAnchoredPageInsteadOfDocumentOrigin() throws {
+        let pageEditor = try source(named: "PageEditorView.swift")
+        let engine = try source(named: "DocumentZoomEngine.swift", subdirectory: "Services")
+        XCTAssertTrue(pageEditor.contains("pinchAnchoredPageID"))
+        XCTAssertTrue(pageEditor.contains("trackedDocumentContentOffset"))
+        XCTAssertTrue(pageEditor.contains("DocumentScrollContentOffsetKey"))
+        XCTAssertTrue(pageEditor.contains("restoreZoomAnchoredScroll"))
+        XCTAssertTrue(pageEditor.contains("zoomPositionRestoreSuppressed"))
+        XCTAssertTrue(pageEditor.contains("shouldFreezeNavigationDuringZoom"))
+        // Must not use ScrollPosition.point ?? .zero as the sole pinch origin (that resets to page 1).
+        XCTAssertFalse(pageEditor.contains("documentScrollPosition.point ?? .zero"))
+        XCTAssertTrue(engine.contains("isUntrustedContentOffset"))
+        XCTAssertTrue(pageEditor.contains("scrollTo(anchoredPageID, anchor: pinchViewportAnchor)"))
+    }
+
+    func testFittedWidthResetKeepsCurrentPage() throws {
+        let pageEditor = try source(named: "PageEditorView.swift")
+        XCTAssertTrue(pageEditor.contains("onDocumentZoomReset"))
+        XCTAssertTrue(pageEditor.contains("documentZoom.resetToFittedWidth()"))
+        XCTAssertTrue(pageEditor.contains("scrollTo(id: pageID, anchor: DocumentScrollNavigationEngine.pageRestAnchor)"))
     }
 
     func testActivePageSwitchDoesNotResetZoom() throws {

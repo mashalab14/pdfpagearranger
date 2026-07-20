@@ -978,7 +978,9 @@ On the **unified vertical document**, magnification is owned by the document sur
 - Every page frame and inter-page gap scales together so pages never overlap
 - Range: **1×** (fitted width) to **4×**
 - Pinch ends at ≤1× (+ small tolerance): returns to fitted-width layout
-- Focal point under the pinch is preserved; switching the active page does **not** reset zoom
+- **Position is preserved:** zoom keeps the user on the same page (never jumps to page 1). The content under the pinch centroid is re-anchored after each scale update; settle-snap and active-page changes are frozen during the pinch and briefly afterward
+- Switching the active page does **not** reset zoom; zoom does **not** change the active page
+- Returning to fitted width (pinch end or double-tap) keeps the same page visible
 - Stored overlay/annotation coordinates stay page-normalized; zoom is display-only
 
 ### Pan while magnified

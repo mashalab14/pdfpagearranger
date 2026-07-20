@@ -71,6 +71,11 @@ struct PageEditorView: View {
     @State private var isPinchingDocument = false
     @State private var pinchStartContentOffset: CGPoint = .zero
     @State private var pinchStartScale: CGFloat = DocumentZoomState.minScale
+    @State private var pinchAnchoredPageID: UUID?
+    @State private var pinchViewportAnchor: UnitPoint = UnitPoint(x: 0.5, y: 0.3)
+    @State private var trackedDocumentContentOffset: CGPoint = .zero
+    @State private var zoomPositionRestoreSuppressed = false
+    @State private var isApplyingZoomScrollRestore = false
 
     private let signatureLibraryStore: SignatureLibraryStore
 
@@ -514,6 +519,15 @@ struct PageEditorView: View {
                     .padding(.horizontal, PageModeLayoutSizing.horizontalMargin)
                     .padding(.vertical, 6)
                     .frame(width: contentWidth, alignment: .top)
+                    .background {
+                        GeometryReader { geo in
+                            let frame = geo.frame(in: .named("documentScroll"))
+                            Color.clear.preference(
+                                key: DocumentScrollContentOffsetKey.self,
+                                value: CGPoint(x: -frame.origin.x, y: -frame.origin.y)
+                            )
+                        }
+                    }
                 }
                 .scrollPosition($documentScrollPosition)
                 .coordinateSpace(name: "documentScroll")
@@ -521,7 +535,11 @@ struct PageEditorView: View {
                 .scrollBounceBehavior(.basedOnSize)
                 .accessibilityIdentifier("unifiedDocumentScroll")
                 .accessibilityValue(String(format: "zoom %.2f", zoomScale))
-                .simultaneousGesture(documentMagnifyGesture())
+                .simultaneousGesture(documentMagnifyGesture(proxy: proxy, viewportSize: outer.size))
+                .onPreferenceChange(DocumentScrollContentOffsetKey.self) { offset in
+                    guard !isApplyingZoomScrollRestore else { return }
+                    trackedDocumentContentOffset = offset
+                }
                 .onScrollPhaseChange { _, newPhase in
                     documentScrollPhase = newPhase
                     handleDocumentScrollPhase(newPhase)
@@ -530,7 +548,7 @@ struct PageEditorView: View {
                             pendingUserScrollSettle = false
                             settleDocumentScroll(proxy: proxy)
                         }
-                    } else if !isPinchingDocument {
+                    } else if !isPinchingDocument && !zoomPositionRestoreSuppressed {
                         pendingUserScrollSettle = true
                     }
                 }
@@ -538,10 +556,16 @@ struct PageEditorView: View {
                     latestDocumentVisibility = visibility
                 }
                 .onChange(of: pageRoute.pageItemID) { _, newID in
+                    guard !isPinchingDocument, !zoomPositionRestoreSuppressed else { return }
                     scrollDocument(to: newID, proxy: proxy, animated: preferAnimatedDocumentScroll)
                 }
                 .onChange(of: scrollToPageToken) { _, _ in
+                    guard !isPinchingDocument else { return }
                     scrollDocument(to: pageRoute.pageItemID, proxy: proxy, animated: preferAnimatedDocumentScroll)
+                }
+                .onChange(of: documentZoom.scale) { _, _ in
+                    guard isPinchingDocument || zoomPositionRestoreSuppressed else { return }
+                    restoreZoomAnchoredScroll(proxy: proxy)
                 }
                 .onAppear {
                     preferAnimatedDocumentScroll = false
@@ -556,42 +580,102 @@ struct PageEditorView: View {
                 }
                 .onChange(of: pageImages.count) { _, _ in
                     // Re-pin after lazy rasterization so placeholder→page swap does not leave a mid-page offset.
-                    guard scrollActivationSuppressed, pageImages[pageRoute.pageItemID] != nil else { return }
+                    guard scrollActivationSuppressed, !isPinchingDocument, pageImages[pageRoute.pageItemID] != nil else { return }
                     scrollDocument(to: pageRoute.pageItemID, proxy: proxy, animated: false)
                 }
             }
         }
     }
 
-    private func documentMagnifyGesture() -> some Gesture {
+    private func documentMagnifyGesture(proxy: ScrollViewProxy, viewportSize: CGSize) -> some Gesture {
         MagnifyGesture()
             .onChanged { value in
                 if !isPinchingDocument {
                     isPinchingDocument = true
                     pendingUserScrollSettle = false
-                    pinchStartContentOffset = documentScrollPosition.point ?? .zero
+                    zoomPositionRestoreSuppressed = true
+                    pinchAnchoredPageID = pageRoute.pageItemID
+                    pinchViewportAnchor = DocumentZoomEngine.pageScrollAnchor(
+                        focalPointInViewport: value.startLocation,
+                        viewportSize: viewportSize
+                    )
+                    // Prefer live content-offset tracking. ScrollPosition.point is often nil for ID-based scrolls
+                    // and would incorrectly treat mid-document zoom as originating at page 1.
+                    pinchStartContentOffset = trackedDocumentContentOffset
                     pinchStartScale = documentZoom.steadyScale
+                    beginScrollActivationSuppression(durationNanoseconds: 2_000_000_000)
                 }
                 documentZoom.applyMagnification(value.magnification)
-                let newOffset = DocumentZoomEngine.contentOffsetPreservingFocalPoint(
-                    previousScale: pinchStartScale,
-                    newScale: documentZoom.scale,
-                    focalPointInViewport: value.startLocation,
-                    contentOffset: pinchStartContentOffset
+                restoreZoomAnchoredScroll(
+                    proxy: proxy,
+                    focalPointInViewport: value.startLocation
                 )
+            }
+            .onEnded { _ in
+                let anchoredPageID = pinchAnchoredPageID ?? pageRoute.pageItemID
+                documentZoom.endMagnification()
+                isPinchingDocument = false
+                pendingUserScrollSettle = false
+                restoreZoomAnchoredScroll(proxy: proxy)
+                // Keep the same page after layout settles at the final scale (including fitted width).
+                isApplyingZoomScrollRestore = true
                 var transaction = Transaction()
                 transaction.disablesAnimations = true
                 withTransaction(transaction) {
-                    documentScrollPosition.scrollTo(point: newOffset)
+                    proxy.scrollTo(anchoredPageID, anchor: pinchViewportAnchor)
+                    documentScrollPosition.scrollTo(id: anchoredPageID, anchor: pinchViewportAnchor)
+                }
+                isApplyingZoomScrollRestore = false
+                pinchAnchoredPageID = anchoredPageID
+                beginScrollActivationSuppression(durationNanoseconds: 2_000_000_000)
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                    guard !Task.isCancelled else { return }
+                    // Final reinforce after LazyVStack finishes resizing.
+                    isApplyingZoomScrollRestore = true
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        proxy.scrollTo(anchoredPageID, anchor: pinchViewportAnchor)
+                        documentScrollPosition.scrollTo(id: anchoredPageID, anchor: pinchViewportAnchor)
+                    }
+                    isApplyingZoomScrollRestore = false
+                    pinchAnchoredPageID = nil
+                    zoomPositionRestoreSuppressed = false
                 }
             }
-            .onEnded { _ in
-                documentZoom.endMagnification()
-                isPinchingDocument = false
-                beginScrollActivationSuppression(
-                    durationNanoseconds: DocumentScrollNavigationEngine.programmaticNavigationSuppressionNanoseconds
+    }
+
+    private func restoreZoomAnchoredScroll(
+        proxy: ScrollViewProxy,
+        focalPointInViewport: CGPoint? = nil
+    ) {
+        let pageID = pinchAnchoredPageID ?? pageRoute.pageItemID
+        let pageIndex = viewModel.pageIndex(for: pageID) ?? 0
+        let untrustedOffset = DocumentZoomEngine.isUntrustedContentOffset(
+            pinchStartContentOffset,
+            pageIndex: pageIndex
+        )
+
+        isApplyingZoomScrollRestore = true
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            // Always re-assert the anchored page so layout rescale cannot leave the viewport at page 1.
+            proxy.scrollTo(pageID, anchor: pinchViewportAnchor)
+            documentScrollPosition.scrollTo(id: pageID, anchor: pinchViewportAnchor)
+
+            if !untrustedOffset, let focalPointInViewport {
+                let newOffset = DocumentZoomEngine.contentOffsetPreservingFocalPoint(
+                    previousScale: pinchStartScale,
+                    newScale: documentZoom.scale,
+                    focalPointInViewport: focalPointInViewport,
+                    contentOffset: pinchStartContentOffset
                 )
+                documentScrollPosition.scrollTo(point: newOffset)
             }
+        }
+        isApplyingZoomScrollRestore = false
     }
 
     @ViewBuilder
@@ -731,6 +815,12 @@ struct PageEditorView: View {
 
     private func settleDocumentScroll(proxy: ScrollViewProxy) {
         guard isUnifiedDocumentSurface else { return }
+        if DocumentZoomEngine.shouldFreezeNavigationDuringZoom(
+            isPinching: isPinchingDocument,
+            positionRestoreSuppressed: zoomPositionRestoreSuppressed
+        ) {
+            return
+        }
         guard DocumentScrollNavigationEngine.shouldApplyVisibilityActivation(
             scrollPhaseIsIdle: documentScrollPhase == .idle,
             scrollActivationSuppressed: scrollActivationSuppressed || isPinchingDocument,
@@ -902,8 +992,23 @@ struct PageEditorView: View {
             constrainedPageSize: constrainedPageSize,
             pageLocalZoomEnabled: pageLocalZoomEnabled,
             onDocumentZoomReset: {
+                let pageID = pageRoute.pageItemID
+                zoomPositionRestoreSuppressed = true
+                pendingUserScrollSettle = false
+                beginScrollActivationSuppression(durationNanoseconds: 2_000_000_000)
                 withAnimation(.easeInOut(duration: 0.2)) {
                     documentZoom.resetToFittedWidth()
+                }
+                // Fitted-width reset must keep the current page, not jump to the document origin.
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 50_000_000)
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        documentScrollPosition.scrollTo(id: pageID, anchor: DocumentScrollNavigationEngine.pageRestAnchor)
+                    }
+                    try? await Task.sleep(nanoseconds: 900_000_000)
+                    zoomPositionRestoreSuppressed = false
                 }
             }
         )

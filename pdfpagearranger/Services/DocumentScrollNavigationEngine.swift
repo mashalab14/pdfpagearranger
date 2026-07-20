@@ -121,3 +121,12 @@ struct DocumentPageVisibilityKey: PreferenceKey {
         }
     }
 }
+
+/// Live content offset of the unified document stack inside `documentScroll` space.
+struct DocumentScrollContentOffsetKey: PreferenceKey {
+    static var defaultValue: CGPoint = .zero
+
+    static func reduce(value: inout CGPoint, nextValue: () -> CGPoint) {
+        value = nextValue()
+    }
+}
