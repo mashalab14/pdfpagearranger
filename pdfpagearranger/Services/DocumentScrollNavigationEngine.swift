@@ -4,8 +4,12 @@ import SwiftUI
 
 /// Navigation helpers for the unified vertically scrolling document surface.
 enum DocumentScrollNavigationEngine {
-    /// Fraction of the viewport a page's frame must cover (by mid-Y proximity) to become active while scrolling.
+    /// Fraction of the viewport a page's frame must cover (by mid-Y proximity) to become active while settling.
     static let activationMidYNormalizedRange: ClosedRange<CGFloat> = 0.28...0.72
+
+    /// Resting scroll position: top of the active page aligned to the top of the viewport.
+    /// Used for open, snap-after-scroll, search, Pages organizer, and programmatic activation.
+    static let pageRestAnchor = UnitPoint(x: 0.5, y: 0)
 
     /// Chooses the page whose vertical center is closest to the viewport center.
     /// Prefers pages whose mid-Y falls in `activationMidYNormalizedRange`; if none qualify, falls back to the closest overall.
@@ -24,6 +28,35 @@ enum DocumentScrollNavigationEngine {
             abs(lhs.value - viewportCenter) < abs(rhs.value - viewportCenter)
         }
         return ranked?.key ?? fallback
+    }
+
+    /// Page that should become active when a drag/deceleration ends.
+    static func settleTargetPageID(
+        visibilityCenters: [UUID: CGFloat],
+        viewportHeight: CGFloat,
+        fallback: UUID?
+    ) -> UUID? {
+        primaryPageID(
+            visibilityCenters: visibilityCenters,
+            viewportHeight: viewportHeight,
+            fallback: fallback
+        )
+    }
+
+    /// Multi-page documents snap after scrolling ends; single-page documents stay put.
+    static func shouldPerformSettleSnap(pageCount: Int) -> Bool {
+        pageCount > 1
+    }
+
+    /// Visibility-driven activation is deferred until scroll settles; programmatic navigation suppresses it.
+    static func shouldApplyVisibilityActivation(
+        scrollPhaseIsIdle: Bool,
+        scrollActivationSuppressed: Bool,
+        interactionBlockingScroll: Bool
+    ) -> Bool {
+        scrollPhaseIsIdle
+            && !scrollActivationSuppressed
+            && !interactionBlockingScroll
     }
 
     static func shouldUpdateActivePage(
@@ -55,12 +88,20 @@ enum DocumentScrollNavigationEngine {
         return pages.first?.id
     }
 
+    /// Default active page for a newly opened document (page 1).
+    static func initialActivePageID(pages: [PageItem]) -> UUID? {
+        pages.first?.id
+    }
+
     static func pageSpacing(forContainerWidth width: CGFloat) -> CGFloat {
         DocumentPageSheetStyle.pageSpacing(forContainerWidth: width)
     }
 
     /// Delay before floating chrome fades back in after scroll settles.
     static let floatingChromeRevealDelayNanoseconds: UInt64 = 280_000_000
+
+    /// Suppression window so lazy layout / preview→canvas swaps cannot override programmatic navigation.
+    static let programmaticNavigationSuppressionNanoseconds: UInt64 = 900_000_000
 }
 
 /// Preference payload for scroll-based active-page detection.

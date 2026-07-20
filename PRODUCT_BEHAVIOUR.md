@@ -439,13 +439,17 @@ Floating page controls sit above the document (not attached to a bottom bar), re
 ### Vertical document (paper stack)
 
 - Pages appear **top to bottom** as equally scaled paper sheets in one continuous stack
-- **Tight vertical gap** separates sheet boundaries without isolating pages as cards
-- Active and inactive pages share the **same scale and layout footprint**; activation never resizes a page
+- Active and inactive pages share the **same scale and layout footprint** (one shared slot-size calculation); activation never resizes a page
 - Every sheet uses a consistent base shadow; the **active** sheet adds only a soft blue-tinted halo (no thick selection border for ordinary navigation)
 - Workspace uses a consistent document background; pages are not framed as independent feed cards
-- Tap a page to activate it; scrolling updates the active page when another page becomes primary
+- **Initial position:** opening a document scrolls to the **top** of the active page (page 1 for a new session, or the restored active page when the session already has one). The first frame is pinned without a post-launch corrective jump; lazy page loads re-pin while suppressed
+- **Vertical snapping:** free scrolling while dragging; when the gesture/deceleration ends, the document settles to the top of the page chosen by the activation band / nearest-center rule. Search, Pages-organizer, tap activation, and other programmatic navigation use the same resting anchor
+- Active page (and the page-position indicator) update as part of that settled navigation state — not from mid-scroll visibility flicker
+- Programmatic navigation suppresses stale scroll-visibility callbacks so they cannot immediately override the intended page
+- Single-page documents stay stable and do not run unnecessary settle snaps
 - Document scrolling is prioritized over page gestures except when interacting with an editable object or when the page is zoomed
-- Search matches and Pages-organizer selection scroll to / activate the target page
+- Search matches and Pages-organizer selection scroll to / activate the target page at the shared resting position
+- Rotation, duplication, deletion, insertion, and reordering keep a sensible active page (delete activates the nearest remaining neighbour)
 
 ### Page-level vs document-level actions
 

@@ -118,8 +118,10 @@ struct EditorView: View {
     }
 
     private func ensureActivePageRoute() {
+        let preferred = activePageRoute?.pageItemID
+            ?? DocumentScrollNavigationEngine.initialActivePageID(pages: viewModel.pages)
         let resolved = DocumentScrollNavigationEngine.resolvedActivePageID(
-            preferredID: activePageRoute?.pageItemID,
+            preferredID: preferred,
             pages: viewModel.pages
         )
         if let resolved {

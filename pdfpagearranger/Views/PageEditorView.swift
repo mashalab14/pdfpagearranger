@@ -63,6 +63,9 @@ struct PageEditorView: View {
     @State private var interactionBlockingScroll = false
     @State private var floatingChromeVisible = true
     @State private var floatingChromeRevealTask: Task<Void, Never>?
+    @State private var documentScrollPhase: ScrollPhase = .idle
+    @State private var pendingUserScrollSettle = false
+    @State private var preferAnimatedDocumentScroll = false
 
     private let signatureLibraryStore: SignatureLibraryStore
 
@@ -497,26 +500,41 @@ struct PageEditorView: View {
                 .scrollBounceBehavior(.basedOnSize)
                 .accessibilityIdentifier("unifiedDocumentScroll")
                 .onScrollPhaseChange { _, newPhase in
+                    documentScrollPhase = newPhase
                     handleDocumentScrollPhase(newPhase)
+                    if newPhase == .idle {
+                        if pendingUserScrollSettle {
+                            pendingUserScrollSettle = false
+                            settleDocumentScroll(proxy: proxy)
+                        }
+                    } else {
+                        pendingUserScrollSettle = true
+                    }
                 }
                 .onPreferenceChange(DocumentPageVisibilityKey.self) { visibility in
                     latestDocumentVisibility = visibility
-                    applyDocumentVisibility(visibility)
                 }
                 .onChange(of: pageRoute.pageItemID) { _, newID in
-                    beginScrollActivationSuppression()
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        proxy.scrollTo(newID, anchor: .center)
-                    }
+                    scrollDocument(to: newID, proxy: proxy, animated: preferAnimatedDocumentScroll)
                 }
                 .onChange(of: scrollToPageToken) { _, _ in
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        proxy.scrollTo(pageRoute.pageItemID, anchor: .center)
-                    }
+                    scrollDocument(to: pageRoute.pageItemID, proxy: proxy, animated: preferAnimatedDocumentScroll)
                 }
                 .onAppear {
-                    beginScrollActivationSuppression()
-                    proxy.scrollTo(pageRoute.pageItemID, anchor: .center)
+                    preferAnimatedDocumentScroll = false
+                    beginScrollActivationSuppression(
+                        durationNanoseconds: DocumentScrollNavigationEngine.programmaticNavigationSuppressionNanoseconds
+                    )
+                    scrollDocument(to: pageRoute.pageItemID, proxy: proxy, animated: false)
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        preferAnimatedDocumentScroll = true
+                    }
+                }
+                .onChange(of: pageImages.count) { _, _ in
+                    // Re-pin after lazy rasterization so placeholder→page swap does not leave a mid-page offset.
+                    guard scrollActivationSuppressed, pageImages[pageRoute.pageItemID] != nil else { return }
+                    scrollDocument(to: pageRoute.pageItemID, proxy: proxy, animated: false)
                 }
             }
         }
@@ -528,11 +546,18 @@ struct PageEditorView: View {
         let image = pageImages[item.id] ?? (isActive ? pageImage : nil)
         Group {
             if let image, let pdfPage = document.page(at: item.originalPageIndex) {
-                let displayWidth = max(0, containerWidth - PageModeLayoutSizing.horizontalMargin * 2)
-                let displaySize = PageModeLayoutSizing.displaySize(imageSize: image.size, availableWidth: displayWidth)
+                let displaySize = PageModeLayoutSizing.unifiedSlotDisplaySize(
+                    imageSize: image.size,
+                    containerWidth: containerWidth
+                )
                 Group {
                     if isActive {
-                        pageCanvas(pageItem: item, pdfPage: pdfPage, pageImage: image)
+                        pageCanvas(
+                            pageItem: item,
+                            pdfPage: pdfPage,
+                            pageImage: image,
+                            constrainedPageSize: displaySize
+                        )
                     } else {
                         DocumentInactivePagePreview(
                             pageImage: image,
@@ -560,9 +585,14 @@ struct PageEditorView: View {
                     await loadPageImage(for: item, exportIndex: index)
                 }
             } else {
+                let estimated = PageModeLayoutSizing.estimatedUnifiedSlotDisplaySize(
+                    pdfPage: document.page(at: item.originalPageIndex),
+                    pageRotation: item.rotation,
+                    containerWidth: containerWidth
+                )
                 ProgressView("Loading page…")
+                    .frame(width: estimated.width, height: estimated.height)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 240)
                     .task(id: pageRenderKey(for: item, index: index)) {
                         await loadPageImage(for: item, exportIndex: index)
                     }
@@ -577,7 +607,10 @@ struct PageEditorView: View {
     private func activatePage(id: UUID, scroll: Bool) {
         guard id != pageRoute.pageItemID else {
             if scroll {
-                beginScrollActivationSuppression()
+                preferAnimatedDocumentScroll = true
+                beginScrollActivationSuppression(
+                    durationNanoseconds: DocumentScrollNavigationEngine.programmaticNavigationSuppressionNanoseconds
+                )
                 scrollToPageToken = UUID()
             }
             return
@@ -592,7 +625,10 @@ struct PageEditorView: View {
         signatureEditOverlayID = nil
         clearPDFTextSelection()
         if scroll {
-            beginScrollActivationSuppression()
+            preferAnimatedDocumentScroll = true
+            beginScrollActivationSuppression(
+                durationNanoseconds: DocumentScrollNavigationEngine.programmaticNavigationSuppressionNanoseconds
+            )
         }
         pageRoute = PageEditorRoute(pageItemID: id)
         if scroll {
@@ -600,38 +636,76 @@ struct PageEditorView: View {
         }
     }
 
-    private func beginScrollActivationSuppression(durationNanoseconds: UInt64 = 750_000_000) {
+    private func beginScrollActivationSuppression(
+        durationNanoseconds: UInt64 = DocumentScrollNavigationEngine.programmaticNavigationSuppressionNanoseconds
+    ) {
         scrollActivationSuppressed = true
         scrollActivationResumeTask?.cancel()
         scrollActivationResumeTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: durationNanoseconds)
             guard !Task.isCancelled else { return }
             scrollActivationSuppressed = false
-            // Apply any scroll movement that happened while programmatic activation was settling.
-            applyDocumentVisibility(latestDocumentVisibility)
+            // Do not re-apply stale visibility here — that can override programmatic navigation.
         }
     }
 
-    private func applyDocumentVisibility(_ visibility: DocumentPageVisibility) {
-        guard isUnifiedDocumentSurface else { return }
-        let proposed = DocumentScrollNavigationEngine.primaryPageID(
-            visibilityCenters: visibility.centersInViewport,
-            viewportHeight: visibility.viewportHeight,
-            fallback: pageRoute.pageItemID
+    private func scrollDocument(to pageID: UUID, proxy: ScrollViewProxy, animated: Bool) {
+        beginScrollActivationSuppression(
+            durationNanoseconds: DocumentScrollNavigationEngine.programmaticNavigationSuppressionNanoseconds
         )
-        if DocumentScrollNavigationEngine.shouldUpdateActivePage(
-            proposedID: proposed,
-            currentID: pageRoute.pageItemID,
+        let anchor = DocumentScrollNavigationEngine.pageRestAnchor
+        if animated {
+            withAnimation(.easeInOut(duration: 0.28)) {
+                proxy.scrollTo(pageID, anchor: anchor)
+            }
+        } else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                proxy.scrollTo(pageID, anchor: anchor)
+            }
+        }
+    }
+
+    private func settleDocumentScroll(proxy: ScrollViewProxy) {
+        guard isUnifiedDocumentSurface else { return }
+        guard DocumentScrollNavigationEngine.shouldApplyVisibilityActivation(
+            scrollPhaseIsIdle: documentScrollPhase == .idle,
+            scrollActivationSuppressed: scrollActivationSuppressed,
             interactionBlockingScroll: interactionBlockingScroll
                 || textEditingActive
                 || drawingModeActive
-                || scrollActivationSuppressed
-        ), let proposed {
-            activatePage(id: proposed, scroll: false)
+                || stickyNotePlacementActive
+                || signaturePlacementActive
+        ) else {
+            return
+        }
+
+        guard DocumentScrollNavigationEngine.shouldPerformSettleSnap(pageCount: viewModel.pageCount) else {
+            return
+        }
+
+        let target = DocumentScrollNavigationEngine.settleTargetPageID(
+            visibilityCenters: latestDocumentVisibility.centersInViewport,
+            viewportHeight: latestDocumentVisibility.viewportHeight,
+            fallback: pageRoute.pageItemID
+        )
+        guard let target else { return }
+
+        preferAnimatedDocumentScroll = true
+        if target != pageRoute.pageItemID {
+            activatePage(id: target, scroll: true)
+        } else {
+            scrollDocument(to: target, proxy: proxy, animated: true)
         }
     }
 
-    private func pageCanvas(pageItem: PageItem, pdfPage: PDFPage, pageImage: UIImage) -> PageOverlayCanvasView {
+    private func pageCanvas(
+        pageItem: PageItem,
+        pdfPage: PDFPage,
+        pageImage: UIImage,
+        constrainedPageSize: CGSize? = nil
+    ) -> PageOverlayCanvasView {
         PageOverlayCanvasView(
             pageImage: pageImage,
             pdfPage: pdfPage,
@@ -741,7 +815,8 @@ struct PageEditorView: View {
             keyboardBottomInset: keyboardBottomInset,
             onCanvasScrollBlockingChange: { blocking in
                 interactionBlockingScroll = blocking
-            }
+            },
+            constrainedPageSize: constrainedPageSize
         )
     }
 

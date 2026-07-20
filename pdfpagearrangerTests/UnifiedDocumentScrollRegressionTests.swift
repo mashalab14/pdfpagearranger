@@ -186,11 +186,17 @@ final class UnifiedDocumentScrollRegressionTests: XCTestCase {
         let pageEditor = try source(named: "PageEditorView.swift")
         let sheetStyle = try source(named: "DocumentPageSheetStyle.swift", subdirectory: "Services")
         let inactive = try source(named: "DocumentInactivePagePreview.swift")
+        let sizing = try source(named: "PageModeLayoutSizing.swift", subdirectory: "Services")
+        let canvas = try source(named: "PageOverlayCanvasView.swift")
 
         // Shared display size frame applied once for both active canvas and inactive preview.
         XCTAssertTrue(pageEditor.contains(".frame(width: displaySize.width, height: displaySize.height)"))
+        XCTAssertTrue(pageEditor.contains("unifiedSlotDisplaySize"))
+        XCTAssertTrue(pageEditor.contains("constrainedPageSize: displaySize"))
         XCTAssertTrue(pageEditor.contains("documentPageSheetChrome(isActive: isActive)"))
         XCTAssertTrue(pageEditor.contains("animation(.easeInOut(duration: 0.2), value: isActive)"))
+        XCTAssertTrue(sizing.contains("unifiedSlotDisplaySize"))
+        XCTAssertTrue(canvas.contains("constrainedPageSize"))
         // Activation must not introduce a scale transform on the page sheet.
         XCTAssertFalse(pageEditor.contains("scaleEffect(isActive"))
         XCTAssertFalse(pageEditor.contains("scaleEffect(isActive ?"))
@@ -199,6 +205,17 @@ final class UnifiedDocumentScrollRegressionTests: XCTestCase {
         XCTAssertFalse(inactive.contains("strokeBorder"))
         XCTAssertTrue(sheetStyle.contains("baseShadowOpacity"))
         XCTAssertTrue(sheetStyle.contains("activeHaloRadius"))
+    }
+
+    func testSettleSnapAndTopRestAnchorSourceGuards() throws {
+        let pageEditor = try source(named: "PageEditorView.swift")
+        let engine = try source(named: "DocumentScrollNavigationEngine.swift", subdirectory: "Services")
+        XCTAssertTrue(engine.contains("pageRestAnchor"))
+        XCTAssertTrue(engine.contains("settleTargetPageID"))
+        XCTAssertTrue(engine.contains("shouldPerformSettleSnap"))
+        XCTAssertTrue(pageEditor.contains("settleDocumentScroll"))
+        XCTAssertTrue(pageEditor.contains("pendingUserScrollSettle"))
+        XCTAssertFalse(pageEditor.contains("anchor: .center"))
     }
 
     func testBottomToolbarMaterialMatchesTopBarTranslucency() throws {

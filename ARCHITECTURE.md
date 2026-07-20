@@ -158,8 +158,9 @@ Reopen Recent → resolve bookmark / app file → importPDF (working temp) → b
 | **`PDFService`** | Import (copy to temp `PDFImports/`), export (assemble new PDF to temp share URL), initial `PageItem` list. `createBlankPDF` exists but Create Document uses `RecentDocumentsStore.createAppOwnedBlankDocument` instead. |
 | **`PDFPreviewRenderer`** | On-screen PDF page rasterization via `PDFPage.thumbnail` (correct orientation). |
 | **`PageRenderService`** | High-resolution page image for Page Mode. |
-| **`DocumentScrollNavigationEngine`** | Active-page detection and scroll targets for the unified vertical document surface. |
+| **`DocumentScrollNavigationEngine`** | Active-page detection, settle-snap targets, shared page-rest anchor (top), and programmatic-navigation suppression for the unified vertical document surface. |
 | **`DocumentPageSheetStyle`** | Paper-stack spacing, shared sheet chrome, and active-page halo tokens (equal scale for active/inactive). |
+| **`PageModeLayoutSizing`** | Shared unified-slot display size for active canvas and inactive previews (identical width/height/aspect). |
 | **`WatermarkType`** | Extensible watermark payload kind (V1: text, image; future: QR code, PDF page, stamp). |
 | **`WatermarkSettings`** | Document-level watermark configuration (`watermarkType`, text, `imageAssetID`, opacity, normalized scale, color, rotation, position, layer, apply scope). |
 | **`WatermarkGeometryEngine`** | Single source of truth for watermark normalized position, scale, rotation, and bounds across all watermark types; derives text font size or image content size from render target width. |
@@ -335,7 +336,7 @@ UITests treat an imported document as ready when the **unified vertical editor**
 
 - `documentModeReady` + `unifiedDocumentScroll` + `pageModeView` + `documentPageSlot_1` + `pageModeAddButton`
 
-Floating page chrome (`pageBottomToolbar` / `floatingPageToolbar` / circular `pageModeAddButton`) uses ultra-thin material consistent with the top bar, fades while scrolling, and returns after scroll settles. Pages share equal scale with a soft active-page halo (`documentPageSheetChrome`). Thumbnails (`pageThumbnail_N` / `documentPageGrid`) appear only after **⋯ → Pages**. Tests that need the grid call `openPagesOrganizer()`. Page editing runs on the active canvas; vertical scroll / organizer / search activate pages. There is no Document Mode → Page Mode push.
+Floating page chrome (`pageBottomToolbar` / `floatingPageToolbar` / circular `pageModeAddButton`) uses ultra-thin material consistent with the top bar, fades while scrolling, and returns after scroll settles. Pages share equal scale with a soft active-page halo (`documentPageSheetChrome`). Vertical scrolling is free while dragging; on idle the surface snaps to `DocumentScrollNavigationEngine.pageRestAnchor` (top of page). Thumbnails (`pageThumbnail_N` / `documentPageGrid`) appear only after **⋯ → Pages**. Tests that need the grid call `openPagesOrganizer()`. Page editing runs on the active canvas; vertical scroll settle / organizer / search activate pages. There is no Document Mode → Page Mode push.
 
 ### Testing workflow
 

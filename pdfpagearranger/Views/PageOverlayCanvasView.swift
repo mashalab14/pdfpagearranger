@@ -63,6 +63,8 @@ struct PageOverlayCanvasView: View {
     var onCanvasScrollBlockingChange: ((Bool) -> Void)? = nil
     /// Called when an overlay is being dragged/resized (for emphasized page chrome).
     var onOverlayManipulationActiveChange: ((Bool) -> Void)? = nil
+    /// When set, the canvas fills this exact frame (unified document slot). Must match inactive previews.
+    var constrainedPageSize: CGSize? = nil
 
     @State private var scale: CGFloat = 1
     @State private var steadyScale: CGFloat = 1
@@ -173,99 +175,112 @@ struct PageOverlayCanvasView: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            let displaySize = PageModeLayoutSizing.displaySize(
-                imageSize: pageImage.size,
-                containerSize: geometry.size,
-                leadingSafeAreaInset: geometry.safeAreaInsets.leading,
-                trailingSafeAreaInset: geometry.safeAreaInsets.trailing
-            )
-
-            ZStack(alignment: .top) {
-                Color.clear
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        handleCanvasBackgroundTap()
-                    }
-
-                pageStack(fitSize: displaySize)
-                    .frame(width: displaySize.width, height: displaySize.height)
-                    .scaleEffect(scale)
-                    .offset(
-                        x: offset.width,
-                        y: offset.height - (textEditingActive ? min(max(keyboardBottomInset - 40, 0) * 0.55, 260) : 0)
+        Group {
+            if let constrainedPageSize {
+                // Unified document: exact shared slot size — no inset recalculation vs inactive previews.
+                canvasBody(displaySize: constrainedPageSize)
+                    .frame(width: constrainedPageSize.width, height: constrainedPageSize.height)
+            } else {
+                GeometryReader { geometry in
+                    let displaySize = PageModeLayoutSizing.displaySize(
+                        imageSize: pageImage.size,
+                        containerSize: geometry.size,
+                        leadingSafeAreaInset: geometry.safeAreaInsets.leading,
+                        trailingSafeAreaInset: geometry.safeAreaInsets.trailing
                     )
-                    .contentShape(Rectangle())
-                    .onTapGesture(coordinateSpace: .local) { location in
-                        handlePageTap(at: location, displaySize: displaySize)
-                    }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            // Pinch-zoom only; do not attach a pan DragGesture at 1× — it fights document scrolling.
-            .gesture(pageZoomEnabled ? magnificationGesture : nil)
-            .simultaneousGesture(pageZoomEnabled && isPageZoomed ? panGesture : nil)
-            .simultaneousGesture(pageSwipeEnabled ? pageSwipeGesture : nil)
-            .onLongPressGesture(minimumDuration: 0.45) {
-                guard !signaturePlacementActive,
-                      !textEditingActive,
-                      !stickyNotePlacementActive,
-                      !drawingModeActive else { return }
-                pdfTextSelectionLayerActive = true
-            }
-            .onChange(of: overlayManipulationState.isActive) { _, isActive in
-                onOverlayManipulationActiveChange?(isActive)
-                reportCanvasScrollBlocking()
-            }
-            .onChange(of: scale) { _, _ in
-                reportCanvasScrollBlocking()
-            }
-            .onChange(of: stickyNoteDragOrigin) { _, _ in
-                reportCanvasScrollBlocking()
-            }
-            .onChange(of: signaturePlacementActive) { _, isActive in
-                if isActive {
-                    deactivatePDFTextSelectionLayer()
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        resetZoom()
-                    }
+                    canvasBody(displaySize: displaySize)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
+                .ignoresSafeArea(edges: .horizontal)
             }
-            .onChange(of: textEditingActive) { _, isActive in
-                if isActive {
-                    deactivatePDFTextSelectionLayer()
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        resetZoom()
-                    }
+        }
+    }
+
+    @ViewBuilder
+    private func canvasBody(displaySize: CGSize) -> some View {
+        ZStack(alignment: .top) {
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    handleCanvasBackgroundTap()
                 }
-            }
-            .onChange(of: pageLoadKey) { _, _ in
+
+            pageStack(fitSize: displaySize)
+                .frame(width: displaySize.width, height: displaySize.height)
+                .scaleEffect(scale)
+                .offset(
+                    x: offset.width,
+                    y: offset.height - (textEditingActive ? min(max(keyboardBottomInset - 40, 0) * 0.55, 260) : 0)
+                )
+                .contentShape(Rectangle())
+                .onTapGesture(coordinateSpace: .local) { location in
+                    handlePageTap(at: location, displaySize: displaySize)
+                }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // Pinch-zoom only; do not attach a pan DragGesture at 1× — it fights document scrolling.
+        .gesture(pageZoomEnabled ? magnificationGesture : nil)
+        .simultaneousGesture(pageZoomEnabled && isPageZoomed ? panGesture : nil)
+        .simultaneousGesture(pageSwipeEnabled ? pageSwipeGesture : nil)
+        .onLongPressGesture(minimumDuration: 0.45) {
+            guard !signaturePlacementActive,
+                  !textEditingActive,
+                  !stickyNotePlacementActive,
+                  !drawingModeActive else { return }
+            pdfTextSelectionLayerActive = true
+        }
+        .onChange(of: overlayManipulationState.isActive) { _, isActive in
+            onOverlayManipulationActiveChange?(isActive)
+            reportCanvasScrollBlocking()
+        }
+        .onChange(of: scale) { _, _ in
+            reportCanvasScrollBlocking()
+        }
+        .onChange(of: stickyNoteDragOrigin) { _, _ in
+            reportCanvasScrollBlocking()
+        }
+        .onChange(of: signaturePlacementActive) { _, isActive in
+            if isActive {
                 deactivatePDFTextSelectionLayer()
                 withAnimation(.easeInOut(duration: 0.2)) {
                     resetZoom()
                 }
             }
-            .onChange(of: pageSelection) { _, newValue in
-                if newValue.pdfTextSelection == nil {
-                    pdfTextSelectionLayerActive = false
-                }
-                if newValue.selectedOverlayID != signatureEditOverlayID {
-                    signatureEditOverlayID = nil
-                }
-            }
-            .onChange(of: signatureEditOverlayID) { _, newValue in
-                if newValue != nil {
-                    deactivatePDFTextSelectionLayer()
-                }
-            }
-            .onTapGesture(count: 2) {
-                guard pageZoomEnabled else { return }
+        }
+        .onChange(of: textEditingActive) { _, isActive in
+            if isActive {
+                deactivatePDFTextSelectionLayer()
                 withAnimation(.easeInOut(duration: 0.2)) {
                     resetZoom()
                 }
             }
         }
-        .ignoresSafeArea(edges: .horizontal)
+        .onChange(of: pageLoadKey) { _, _ in
+            deactivatePDFTextSelectionLayer()
+            withAnimation(.easeInOut(duration: 0.2)) {
+                resetZoom()
+            }
+        }
+        .onChange(of: pageSelection) { _, newValue in
+            if newValue.pdfTextSelection == nil {
+                pdfTextSelectionLayerActive = false
+            }
+            if newValue.selectedOverlayID != signatureEditOverlayID {
+                signatureEditOverlayID = nil
+            }
+        }
+        .onChange(of: signatureEditOverlayID) { _, newValue in
+            if newValue != nil {
+                deactivatePDFTextSelectionLayer()
+            }
+        }
+        .onTapGesture(count: 2) {
+            guard pageZoomEnabled else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                resetZoom()
+            }
+        }
     }
 
     @ViewBuilder

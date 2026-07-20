@@ -1,4 +1,5 @@
 import CoreGraphics
+import PDFKit
 
 /// Page Mode document sizing: maximize horizontal width while preserving aspect ratio.
 enum PageModeLayoutSizing {
@@ -17,6 +18,37 @@ enum PageModeLayoutSizing {
                 - trailingSafeAreaInset
                 - horizontalMargin * 2
         )
+    }
+
+    /// Shared slot width for active canvas and inactive preview in the unified vertical document.
+    static func unifiedSlotDisplayWidth(containerWidth: CGFloat) -> CGFloat {
+        availableContentWidth(containerWidth: containerWidth)
+    }
+
+    /// Shared slot size for active and inactive pages — one calculation for both.
+    static func unifiedSlotDisplaySize(imageSize: CGSize, containerWidth: CGFloat) -> CGSize {
+        displaySize(
+            imageSize: imageSize,
+            availableWidth: unifiedSlotDisplayWidth(containerWidth: containerWidth)
+        )
+    }
+
+    /// Placeholder size before rasterization so lazy load does not shift scroll position.
+    static func estimatedUnifiedSlotDisplaySize(
+        pdfPage: PDFPage?,
+        pageRotation: Int,
+        containerWidth: CGFloat
+    ) -> CGSize {
+        let imageSize: CGSize
+        if let pdfPage {
+            imageSize = OverlayGeometryEngine.displayRenderSize(
+                for: pageRotation,
+                mediaBox: pdfPage.bounds(for: .mediaBox)
+            )
+        } else {
+            imageSize = CGSize(width: 612, height: 792)
+        }
+        return unifiedSlotDisplaySize(imageSize: imageSize, containerWidth: containerWidth)
     }
 
     static func displaySize(

@@ -11,27 +11,25 @@ final class DocumentPageSheetStyleRegressionTests: XCTestCase {
         XCTAssertLessThanOrEqual(DocumentPageSheetStyle.pageSpacing(forContainerWidth: 390), 6)
     }
 
-    func testActiveAndInactivePagesShareIdenticalDisplaySize() {
+    func testActiveAndInactivePagesShareIdenticalDisplaySize() throws {
         let imageSize = CGSize(width: 612, height: 792)
-        let width = PageModeLayoutSizing.availableContentWidth(containerWidth: 393)
-        let activeSize = PageModeLayoutSizing.displaySize(imageSize: imageSize, availableWidth: width)
-        let inactiveSize = PageModeLayoutSizing.displaySize(imageSize: imageSize, availableWidth: width)
+        let activeSize = PageModeLayoutSizing.unifiedSlotDisplaySize(imageSize: imageSize, containerWidth: 393)
+        let inactiveSize = PageModeLayoutSizing.unifiedSlotDisplaySize(imageSize: imageSize, containerWidth: 393)
 
         XCTAssertEqual(activeSize.width, inactiveSize.width, accuracy: 0.001)
         XCTAssertEqual(activeSize.height, inactiveSize.height, accuracy: 0.001)
         XCTAssertEqual(PageModeLayoutSizing.horizontalMargin, DocumentPageSheetStyle.stackHorizontalMargin)
     }
 
-    func testActivationDoesNotChangeLayoutFootprint() {
+    func testActivationDoesNotChangeLayoutFootprint() throws {
         let imageSize = CGSize(width: 792, height: 612)
-        let before = PageModeLayoutSizing.displaySize(
+        let before = PageModeLayoutSizing.unifiedSlotDisplaySize(
             imageSize: imageSize,
-            containerSize: CGSize(width: 430, height: 700)
+            containerWidth: 430
         )
-        // Halo is a shadow-only chrome; sizing API has no isActive parameter.
-        let after = PageModeLayoutSizing.displaySize(
+        let after = PageModeLayoutSizing.unifiedSlotDisplaySize(
             imageSize: imageSize,
-            containerSize: CGSize(width: 430, height: 700)
+            containerWidth: 430
         )
         XCTAssertEqual(before.width, after.width, accuracy: 0.001)
         XCTAssertEqual(before.height, after.height, accuracy: 0.001)
