@@ -447,8 +447,11 @@ Floating page controls sit above the document (not attached to a bottom bar), re
 - Active page (and the page-position indicator) update as part of that settled navigation state — not from mid-scroll visibility flicker
 - Programmatic navigation suppresses stale scroll-visibility callbacks so they cannot immediately override the intended page
 - Single-page documents stay stable and do not run unnecessary settle snaps
-- Document scrolling is prioritized over page gestures except when interacting with an editable object or when the page is zoomed
-- Search matches and Pages-organizer selection scroll to / activate the target page at the shared resting position
+- **Document zoom:** one shared magnification (1×–4×) owned by the document surface. Pinching anywhere zooms every page uniformly via scaled layout frames and scaled page gaps (pages never overlap). Double-tap resets to fitted width. Switching the active page does not reset zoom
+- **Zoom navigation:** at fitted width, vertical page snapping works as above. While magnified, the document allows free horizontal and vertical panning; vertical page snaps are suppressed (active page still tracks the viewport). Returning to fitted width resumes snapping
+- Overlay and annotation coordinates stay **page-normalized**; document zoom is display-only and does not change export geometry
+- Document scrolling is prioritized over page gestures except when interacting with an editable object
+- Search matches and Pages-organizer selection scroll to / activate the target page at the shared resting position without resetting document zoom
 - Rotation, duplication, deletion, insertion, and reordering keep a sensible active page (delete activates the nearest remaining neighbour)
 
 ### Page-level vs document-level actions

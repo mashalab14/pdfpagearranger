@@ -66,6 +66,11 @@ struct PageEditorView: View {
     @State private var documentScrollPhase: ScrollPhase = .idle
     @State private var pendingUserScrollSettle = false
     @State private var preferAnimatedDocumentScroll = false
+    @State private var documentZoom = DocumentZoomState()
+    @State private var documentScrollPosition = ScrollPosition(idType: UUID.self)
+    @State private var isPinchingDocument = false
+    @State private var pinchStartContentOffset: CGPoint = .zero
+    @State private var pinchStartScale: CGFloat = DocumentZoomState.minScale
 
     private let signatureLibraryStore: SignatureLibraryStore
 
@@ -471,34 +476,52 @@ struct PageEditorView: View {
 
     private var unifiedDocumentScroll: some View {
         GeometryReader { outer in
+            let fittedSpacing = DocumentScrollNavigationEngine.pageSpacing(forContainerWidth: outer.size.width)
+            let zoomScale = documentZoom.scale
+            let stackSpacing = DocumentZoomEngine.scaledPageSpacing(fittedSpacing: fittedSpacing, scale: zoomScale)
+            let contentWidth = DocumentZoomEngine.scaledContentWidth(
+                containerWidth: outer.size.width,
+                horizontalMargin: PageModeLayoutSizing.horizontalMargin,
+                scale: zoomScale
+            )
+
             ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: DocumentScrollNavigationEngine.pageSpacing(forContainerWidth: outer.size.width)) {
+                ScrollView([.horizontal, .vertical]) {
+                    LazyVStack(spacing: stackSpacing) {
                         ForEach(Array(viewModel.pages.enumerated()), id: \.element.id) { index, item in
-                            documentPageSlot(item: item, index: index, containerWidth: outer.size.width)
-                                .id(item.id)
-                                .background {
-                                    GeometryReader { geo in
-                                        Color.clear.preference(
-                                            key: DocumentPageVisibilityKey.self,
-                                            value: DocumentPageVisibility(
-                                                centersInViewport: [
-                                                    item.id: geo.frame(in: .named("documentScroll")).midY
-                                                ],
-                                                viewportHeight: outer.size.height
-                                            )
+                            documentPageSlot(
+                                item: item,
+                                index: index,
+                                containerWidth: outer.size.width,
+                                zoomScale: zoomScale
+                            )
+                            .id(item.id)
+                            .background {
+                                GeometryReader { geo in
+                                    Color.clear.preference(
+                                        key: DocumentPageVisibilityKey.self,
+                                        value: DocumentPageVisibility(
+                                            centersInViewport: [
+                                                item.id: geo.frame(in: .named("documentScroll")).midY
+                                            ],
+                                            viewportHeight: outer.size.height
                                         )
-                                    }
+                                    )
                                 }
+                            }
                         }
                     }
                     .padding(.horizontal, PageModeLayoutSizing.horizontalMargin)
                     .padding(.vertical, 6)
+                    .frame(width: contentWidth, alignment: .top)
                 }
+                .scrollPosition($documentScrollPosition)
                 .coordinateSpace(name: "documentScroll")
                 .scrollDisabled(interactionBlockingScroll || textEditingActive || drawingModeActive || stickyNotePlacementActive || signaturePlacementActive)
                 .scrollBounceBehavior(.basedOnSize)
                 .accessibilityIdentifier("unifiedDocumentScroll")
+                .accessibilityValue(String(format: "zoom %.2f", zoomScale))
+                .simultaneousGesture(documentMagnifyGesture())
                 .onScrollPhaseChange { _, newPhase in
                     documentScrollPhase = newPhase
                     handleDocumentScrollPhase(newPhase)
@@ -507,7 +530,7 @@ struct PageEditorView: View {
                             pendingUserScrollSettle = false
                             settleDocumentScroll(proxy: proxy)
                         }
-                    } else {
+                    } else if !isPinchingDocument {
                         pendingUserScrollSettle = true
                     }
                 }
@@ -540,23 +563,61 @@ struct PageEditorView: View {
         }
     }
 
+    private func documentMagnifyGesture() -> some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                if !isPinchingDocument {
+                    isPinchingDocument = true
+                    pendingUserScrollSettle = false
+                    pinchStartContentOffset = documentScrollPosition.point ?? .zero
+                    pinchStartScale = documentZoom.steadyScale
+                }
+                documentZoom.applyMagnification(value.magnification)
+                let newOffset = DocumentZoomEngine.contentOffsetPreservingFocalPoint(
+                    previousScale: pinchStartScale,
+                    newScale: documentZoom.scale,
+                    focalPointInViewport: value.startLocation,
+                    contentOffset: pinchStartContentOffset
+                )
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    documentScrollPosition.scrollTo(point: newOffset)
+                }
+            }
+            .onEnded { _ in
+                documentZoom.endMagnification()
+                isPinchingDocument = false
+                beginScrollActivationSuppression(
+                    durationNanoseconds: DocumentScrollNavigationEngine.programmaticNavigationSuppressionNanoseconds
+                )
+            }
+    }
+
     @ViewBuilder
-    private func documentPageSlot(item: PageItem, index: Int, containerWidth: CGFloat) -> some View {
+    private func documentPageSlot(
+        item: PageItem,
+        index: Int,
+        containerWidth: CGFloat,
+        zoomScale: CGFloat
+    ) -> some View {
         let isActive = item.id == pageRoute.pageItemID
         let image = pageImages[item.id] ?? (isActive ? pageImage : nil)
         Group {
             if let image, let pdfPage = document.page(at: item.originalPageIndex) {
-                let displaySize = PageModeLayoutSizing.unifiedSlotDisplaySize(
+                let fittedSize = PageModeLayoutSizing.unifiedSlotDisplaySize(
                     imageSize: image.size,
                     containerWidth: containerWidth
                 )
+                let displaySize = DocumentZoomEngine.scaledPageSize(fittedSize: fittedSize, scale: zoomScale)
                 Group {
                     if isActive {
                         pageCanvas(
                             pageItem: item,
                             pdfPage: pdfPage,
                             pageImage: image,
-                            constrainedPageSize: displaySize
+                            constrainedPageSize: displaySize,
+                            pageLocalZoomEnabled: false
                         )
                     } else {
                         DocumentInactivePagePreview(
@@ -585,11 +646,12 @@ struct PageEditorView: View {
                     await loadPageImage(for: item, exportIndex: index)
                 }
             } else {
-                let estimated = PageModeLayoutSizing.estimatedUnifiedSlotDisplaySize(
+                let fittedEstimate = PageModeLayoutSizing.estimatedUnifiedSlotDisplaySize(
                     pdfPage: document.page(at: item.originalPageIndex),
                     pageRotation: item.rotation,
                     containerWidth: containerWidth
                 )
+                let estimated = DocumentZoomEngine.scaledPageSize(fittedSize: fittedEstimate, scale: zoomScale)
                 ProgressView("Loading page…")
                     .frame(width: estimated.width, height: estimated.height)
                     .frame(maxWidth: .infinity)
@@ -671,12 +733,32 @@ struct PageEditorView: View {
         guard isUnifiedDocumentSurface else { return }
         guard DocumentScrollNavigationEngine.shouldApplyVisibilityActivation(
             scrollPhaseIsIdle: documentScrollPhase == .idle,
-            scrollActivationSuppressed: scrollActivationSuppressed,
+            scrollActivationSuppressed: scrollActivationSuppressed || isPinchingDocument,
             interactionBlockingScroll: interactionBlockingScroll
                 || textEditingActive
                 || drawingModeActive
                 || stickyNotePlacementActive
                 || signaturePlacementActive
+        ) else {
+            return
+        }
+
+        // While magnified, update the active page from the viewport but do not force vertical page snaps.
+        if documentZoom.isMagnified {
+            let target = DocumentScrollNavigationEngine.settleTargetPageID(
+                visibilityCenters: latestDocumentVisibility.centersInViewport,
+                viewportHeight: latestDocumentVisibility.viewportHeight,
+                fallback: pageRoute.pageItemID
+            )
+            if let target, target != pageRoute.pageItemID {
+                activatePage(id: target, scroll: false)
+            }
+            return
+        }
+
+        guard DocumentZoomEngine.shouldPerformSettleSnap(
+            pageCount: viewModel.pageCount,
+            scale: documentZoom.scale
         ) else {
             return
         }
@@ -704,7 +786,8 @@ struct PageEditorView: View {
         pageItem: PageItem,
         pdfPage: PDFPage,
         pageImage: UIImage,
-        constrainedPageSize: CGSize? = nil
+        constrainedPageSize: CGSize? = nil,
+        pageLocalZoomEnabled: Bool = true
     ) -> PageOverlayCanvasView {
         PageOverlayCanvasView(
             pageImage: pageImage,
@@ -816,7 +899,13 @@ struct PageEditorView: View {
             onCanvasScrollBlockingChange: { blocking in
                 interactionBlockingScroll = blocking
             },
-            constrainedPageSize: constrainedPageSize
+            constrainedPageSize: constrainedPageSize,
+            pageLocalZoomEnabled: pageLocalZoomEnabled,
+            onDocumentZoomReset: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    documentZoom.resetToFittedWidth()
+                }
+            }
         )
     }
 

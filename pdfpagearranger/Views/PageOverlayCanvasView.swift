@@ -65,6 +65,10 @@ struct PageOverlayCanvasView: View {
     var onOverlayManipulationActiveChange: ((Bool) -> Void)? = nil
     /// When set, the canvas fills this exact frame (unified document slot). Must match inactive previews.
     var constrainedPageSize: CGSize? = nil
+    /// When false (unified document), pinch zoom is owned by the document surface — not this canvas.
+    var pageLocalZoomEnabled: Bool = true
+    /// Double-tap reset when page-local zoom is disabled (forwards to document zoom).
+    var onDocumentZoomReset: (() -> Void)? = nil
 
     @State private var scale: CGFloat = 1
     @State private var steadyScale: CGFloat = 1
@@ -83,12 +87,17 @@ struct PageOverlayCanvasView: View {
     }
 
     private var pageZoomEnabled: Bool {
-        pageSelection.selectedOverlayID == nil
+        pageLocalZoomEnabled
+            && pageSelection.selectedOverlayID == nil
             && pageSelection.selectedAnnotationID == nil
             && !signaturePlacementActive
             && !textEditingActive
             && !stickyNotePlacementActive
             && !drawingModeActive
+    }
+
+    private var effectiveCanvasScale: CGFloat {
+        pageLocalZoomEnabled ? scale : 1
     }
 
     private var pageSwipeEnabled: Bool {
@@ -125,7 +134,7 @@ struct PageOverlayCanvasView: View {
     }
 
     private var isPageZoomed: Bool {
-        scale > minScale + 0.01 || offset != .zero
+        pageLocalZoomEnabled && (scale > minScale + 0.01 || offset != .zero)
     }
 
     private var annotationInteractionEnabled: Bool {
@@ -208,10 +217,11 @@ struct PageOverlayCanvasView: View {
 
             pageStack(fitSize: displaySize)
                 .frame(width: displaySize.width, height: displaySize.height)
-                .scaleEffect(scale)
+                .scaleEffect(pageLocalZoomEnabled ? scale : 1)
                 .offset(
-                    x: offset.width,
-                    y: offset.height - (textEditingActive ? min(max(keyboardBottomInset - 40, 0) * 0.55, 260) : 0)
+                    x: pageLocalZoomEnabled ? offset.width : 0,
+                    y: (pageLocalZoomEnabled ? offset.height : 0)
+                        - (textEditingActive ? min(max(keyboardBottomInset - 40, 0) * 0.55, 260) : 0)
                 )
                 .contentShape(Rectangle())
                 .onTapGesture(coordinateSpace: .local) { location in
@@ -276,9 +286,13 @@ struct PageOverlayCanvasView: View {
             }
         }
         .onTapGesture(count: 2) {
-            guard pageZoomEnabled else { return }
-            withAnimation(.easeInOut(duration: 0.2)) {
-                resetZoom()
+            if pageLocalZoomEnabled {
+                guard pageZoomEnabled else { return }
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    resetZoom()
+                }
+            } else {
+                onDocumentZoomReset?()
             }
         }
     }
@@ -391,7 +405,7 @@ struct PageOverlayCanvasView: View {
                             object: object,
                             pageRotation: pageRotation,
                             pageSize: fitSize,
-                            canvasScale: scale,
+                            canvasScale: effectiveCanvasScale,
                             isSelected: pageSelection.selectedOverlayID == object.id || isEditingThis,
                             isEditing: isEditingThis,
                             editingDraft: isEditingThis ? $textEditingDraft : nil,
@@ -425,7 +439,7 @@ struct PageOverlayCanvasView: View {
                             pageRotation: pageRotation,
                             image: overlayImage,
                             pageSize: fitSize,
-                            canvasScale: scale,
+                            canvasScale: effectiveCanvasScale,
                             isSelected: pageSelection.selectedOverlayID == object.id,
                             isInteractionEnabled: !signaturePlacementActive
                                 && !textEditingActive

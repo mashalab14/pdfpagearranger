@@ -230,6 +230,15 @@ final class UnifiedDocumentScrollRegressionTests: XCTestCase {
         let canvas = try source(named: "PageOverlayCanvasView.swift")
         XCTAssertTrue(canvas.contains("pageZoomEnabled && isPageZoomed ? panGesture : nil"))
         XCTAssertTrue(canvas.contains("onCanvasScrollBlockingChange"))
+        XCTAssertTrue(canvas.contains("pageLocalZoomEnabled"))
+    }
+
+    func testDocumentLevelZoomSourceGuards() throws {
+        let pageEditor = try source(named: "PageEditorView.swift")
+        XCTAssertTrue(pageEditor.contains("documentZoom"))
+        XCTAssertTrue(pageEditor.contains("pageLocalZoomEnabled: false"))
+        XCTAssertTrue(pageEditor.contains("DocumentZoomEngine.scaledPageSize"))
+        XCTAssertTrue(pageEditor.contains("ScrollView([.horizontal, .vertical])"))
     }
 
     private func source(named fileName: String, subdirectory: String = "Views") throws -> String {
