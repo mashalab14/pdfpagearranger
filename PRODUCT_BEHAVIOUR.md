@@ -431,18 +431,19 @@ There is **no separate Document Mode vs Page Mode navigation push**. The editor 
 |-----------|----------|
 | **Leading** | New PDF, Search, Undo, Redo |
 | **Trailing** | Document Actions **…** menu (Compress, Page Numbers, Watermark, Pages, Export) |
-| **Floating page capsule** (bottom-leading) | Rotate / Duplicate / Delete **active page** |
-| **Floating Add** (bottom-trailing circular button) | Opens Add content for the active page |
+| **Floating page capsule** (bottom-leading) | Rotate / Duplicate / Delete **active page** — **ultra-thin material** matching top-bar translucency |
+| **Floating Add** (bottom-trailing) | Compact circular Add control (material + muted accent), not a dominant filled FAB |
 
-Floating page controls sit above the document (not attached to a bottom bar), respect the Home Indicator safe area, and **fade out while scrolling**, then fade back in shortly after scrolling stops. Inline text editing still replaces this chrome with the Freeform format bar.
+Floating page controls sit above the document (not attached to a bottom bar), respect the Home Indicator safe area, and **fade out while scrolling**, then fade back in shortly after scrolling stops. Inline text editing still replaces this chrome with the Freeform format bar. The **top toolbar** layout and interaction model are unchanged.
 
-### Vertical document
+### Vertical document (paper stack)
 
-- Pages appear **top to bottom** in document order with **tight spacing** so the surface reads as one continuous document
-- Neighbouring pages may remain partially visible
+- Pages appear **top to bottom** as equally scaled paper sheets in one continuous stack
+- **Tight vertical gap** separates sheet boundaries without isolating pages as cards
+- Active and inactive pages share the **same scale and layout footprint**; activation never resizes a page
+- Every sheet uses a consistent base shadow; the **active** sheet adds only a soft blue-tinted halo (no thick selection border for ordinary navigation)
+- Workspace uses a consistent document background; pages are not framed as independent feed cards
 - Tap a page to activate it; scrolling updates the active page when another page becomes primary
-- Active page uses a **subtle** outline by default; stronger accent chrome appears during selection, drag/resize, or active editing
-- Horizontal swipe is **not** the primary page-navigation behaviour on this surface
 - Document scrolling is prioritized over page gestures except when interacting with an editable object or when the page is zoomed
 - Search matches and Pages-organizer selection scroll to / activate the target page
 
@@ -452,7 +453,7 @@ Floating page controls sit above the document (not attached to a bottom bar), re
 |-------|--------|
 | **Document** | Top-right **…** menu |
 | **Active page** | Floating page capsule (rotate, duplicate, delete) and overlay editing on the active canvas |
-| **Add content** | Floating circular Add button |
+| **Add content** | Compact floating circular Add button |
 
 ## 7. Page thumbnails (Pages organizer)
 

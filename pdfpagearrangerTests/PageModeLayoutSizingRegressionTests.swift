@@ -12,7 +12,7 @@ final class PageModeLayoutSizingTests: XCTestCase {
                 leadingSafeAreaInset: 0,
                 trailingSafeAreaInset: 0
             ),
-            361,
+            369,
             accuracy: 0.001
         )
 
@@ -22,7 +22,7 @@ final class PageModeLayoutSizingTests: XCTestCase {
                 leadingSafeAreaInset: 47,
                 trailingSafeAreaInset: 47
             ),
-            718,
+            726,
             accuracy: 0.001
         )
     }
@@ -30,10 +30,10 @@ final class PageModeLayoutSizingTests: XCTestCase {
     func testDisplaySizeFillsAvailableWidthExactly() {
         let size = PageModeLayoutSizing.displaySize(
             imageSize: portraitPageImage,
-            availableWidth: 361
+            availableWidth: 369
         )
 
-        XCTAssertEqual(size.width, 361, accuracy: 0.001)
+        XCTAssertEqual(size.width, 369, accuracy: 0.001)
     }
 
     func testDisplaySizePreservesAspectRatio() {
@@ -44,7 +44,7 @@ final class PageModeLayoutSizingTests: XCTestCase {
         )
 
         XCTAssertTrue(PageModeLayoutSizing.preservesAspectRatio(imageSize: portraitPageImage, displaySize: size))
-        XCTAssertEqual(size.height, 361 * (792.0 / 612.0), accuracy: 0.01)
+        XCTAssertEqual(size.height, 369 * (792.0 / 612.0), accuracy: 0.01)
     }
 
     func testPortraitPageUsesFullWidthOnCompactPhone() {
@@ -53,7 +53,7 @@ final class PageModeLayoutSizingTests: XCTestCase {
             containerSize: CGSize(width: 375, height: 520)
         )
 
-        XCTAssertEqual(size.width, 343, accuracy: 0.001)
+        XCTAssertEqual(size.width, 351, accuracy: 0.001)
         XCTAssertLessThanOrEqual(size.height, 520)
         XCTAssertTrue(PageModeLayoutSizing.preservesAspectRatio(imageSize: portraitPageImage, displaySize: size))
     }
@@ -64,7 +64,7 @@ final class PageModeLayoutSizingTests: XCTestCase {
             containerSize: CGSize(width: 430, height: 700)
         )
 
-        XCTAssertEqual(size.width, 398, accuracy: 0.001)
+        XCTAssertEqual(size.width, 406, accuracy: 0.001)
         XCTAssertTrue(PageModeLayoutSizing.preservesAspectRatio(imageSize: portraitPageImage, displaySize: size))
     }
 
@@ -74,8 +74,8 @@ final class PageModeLayoutSizingTests: XCTestCase {
             containerSize: CGSize(width: 393, height: 500)
         )
 
-        XCTAssertEqual(size.width, 361, accuracy: 0.001)
-        XCTAssertEqual(size.height, 361 * (612.0 / 792.0), accuracy: 0.01)
+        XCTAssertEqual(size.width, 369, accuracy: 0.001)
+        XCTAssertEqual(size.height, 369 * (612.0 / 792.0), accuracy: 0.01)
         XCTAssertTrue(PageModeLayoutSizing.preservesAspectRatio(imageSize: landscapePageImage, displaySize: size))
     }
 
@@ -95,7 +95,7 @@ final class PageModeLayoutSizingTests: XCTestCase {
         )
 
         XCTAssertGreaterThan(widthFill.width, aspectFit.width)
-        XCTAssertEqual(widthFill.width, 361, accuracy: 0.001)
+        XCTAssertEqual(widthFill.width, 369, accuracy: 0.001)
     }
 
     func testDisplaySizeReturnsZeroForInvalidInput() {

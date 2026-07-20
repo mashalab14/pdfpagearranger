@@ -61,7 +61,6 @@ struct PageEditorView: View {
     @State private var scrollActivationResumeTask: Task<Void, Never>?
     @State private var latestDocumentVisibility = DocumentPageVisibility()
     @State private var interactionBlockingScroll = false
-    @State private var overlayManipulationActive = false
     @State private var floatingChromeVisible = true
     @State private var floatingChromeRevealTask: Task<Void, Never>?
 
@@ -200,7 +199,7 @@ struct PageEditorView: View {
 
     private var pageWithNavigation: some View {
         pageModeStack
-            .background(Color(.systemGroupedBackground))
+            .background(Color(.secondarySystemBackground))
             .navigationTitle(isUnifiedDocumentSurface ? viewModel.documentName : "Page \(pageNumber)")
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(isUnifiedDocumentSurface)
@@ -491,7 +490,7 @@ struct PageEditorView: View {
                         }
                     }
                     .padding(.horizontal, PageModeLayoutSizing.horizontalMargin)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 6)
                 }
                 .coordinateSpace(name: "documentScroll")
                 .scrollDisabled(interactionBlockingScroll || textEditingActive || drawingModeActive || stickyNotePlacementActive || signaturePlacementActive)
@@ -531,24 +530,9 @@ struct PageEditorView: View {
             if let image, let pdfPage = document.page(at: item.originalPageIndex) {
                 let displayWidth = max(0, containerWidth - PageModeLayoutSizing.horizontalMargin * 2)
                 let displaySize = PageModeLayoutSizing.displaySize(imageSize: image.size, availableWidth: displayWidth)
-                ZStack {
+                Group {
                     if isActive {
                         pageCanvas(pageItem: item, pdfPage: pdfPage, pageImage: image)
-                            .frame(width: displaySize.width, height: displaySize.height)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                    .strokeBorder(
-                                        emphasizesActivePageChrome
-                                            ? Color.accentColor.opacity(0.7)
-                                            : Color.primary.opacity(0.06),
-                                        lineWidth: emphasizesActivePageChrome ? 1.5 : 0.5
-                                    )
-                            }
-                            .shadow(
-                                color: .black.opacity(emphasizesActivePageChrome ? 0.12 : 0.06),
-                                radius: emphasizesActivePageChrome ? 6 : 3,
-                                y: emphasizesActivePageChrome ? 3 : 1
-                            )
                     } else {
                         DocumentInactivePagePreview(
                             pageImage: image,
@@ -557,13 +541,16 @@ struct PageEditorView: View {
                             pageRotation: item.rotation,
                             isActiveChrome: false
                         )
-                        .frame(width: displaySize.width, height: displaySize.height)
                         .contentShape(Rectangle())
                         .onTapGesture {
                             activatePage(id: item.id, scroll: true)
                         }
                     }
                 }
+                // Identical footprint for active canvas and inactive preview — activation only changes halo.
+                .frame(width: displaySize.width, height: displaySize.height)
+                .documentPageSheetChrome(isActive: isActive)
+                .animation(.easeInOut(duration: 0.2), value: isActive)
                 .frame(maxWidth: .infinity)
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("documentPageSlot_\(index + 1)")
@@ -754,21 +741,8 @@ struct PageEditorView: View {
             keyboardBottomInset: keyboardBottomInset,
             onCanvasScrollBlockingChange: { blocking in
                 interactionBlockingScroll = blocking
-            },
-            onOverlayManipulationActiveChange: { active in
-                overlayManipulationActive = active
             }
         )
-    }
-
-    private var emphasizesActivePageChrome: Bool {
-        pageSelection != .none
-            || textEditingActive
-            || signaturePlacementActive
-            || stickyNotePlacementActive
-            || drawingModeActive
-            || signatureEditOverlayID != nil
-            || overlayManipulationActive
     }
 
     private var pageBottomToolbar: some View {
@@ -834,8 +808,9 @@ struct PageEditorView: View {
         .foregroundStyle(.primary)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(.regularMaterial, in: Capsule(style: .continuous))
-        .shadow(color: .black.opacity(0.14), radius: 12, y: 4)
+        // Match system top-bar translucency (ultra-thin material, light elevation).
+        .background(.ultraThinMaterial, in: Capsule(style: .continuous))
+        .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("floatingPageToolbar")
     }
@@ -847,11 +822,15 @@ struct PageEditorView: View {
             showAddSheet = true
         } label: {
             Image(systemName: "plus")
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(width: 56, height: 56)
-                .background(Color.accentColor, in: Circle())
-                .shadow(color: .black.opacity(0.22), radius: 10, y: 4)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 44, height: 44)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay {
+                    Circle()
+                        .strokeBorder(Color.accentColor.opacity(0.35), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
         }
         .buttonStyle(.plain)
         .disabled(drawingModeActive)

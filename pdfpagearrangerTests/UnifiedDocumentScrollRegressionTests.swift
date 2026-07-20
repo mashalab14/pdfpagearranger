@@ -165,6 +165,7 @@ final class UnifiedDocumentScrollRegressionTests: XCTestCase {
     func testFloatingChromeAndTightPageSpacing() throws {
         let pageEditor = try source(named: "PageEditorView.swift")
         let engine = try source(named: "DocumentScrollNavigationEngine.swift", subdirectory: "Services")
+        let sheetStyle = try source(named: "DocumentPageSheetStyle.swift", subdirectory: "Services")
 
         XCTAssertTrue(pageEditor.contains("floatingAddButton"))
         XCTAssertTrue(pageEditor.contains("floatingPageActionsCapsule"))
@@ -172,8 +173,40 @@ final class UnifiedDocumentScrollRegressionTests: XCTestCase {
         XCTAssertTrue(pageEditor.contains("onScrollPhaseChange"))
         XCTAssertTrue(pageEditor.contains("floatingChromeVisible"))
         XCTAssertTrue(pageEditor.contains("pageModeAddButton"))
-        XCTAssertTrue(engine.contains("max(4, min(8,"))
-        XCTAssertTrue(engine.contains("floatingChromeRevealDelayNanoseconds"))
+        XCTAssertTrue(pageEditor.contains("documentPageSheetChrome(isActive:"))
+        XCTAssertTrue(pageEditor.contains(".background(.ultraThinMaterial, in: Capsule"))
+        XCTAssertTrue(engine.contains("DocumentPageSheetStyle.pageSpacing"))
+        XCTAssertTrue(sheetStyle.contains("max(2, min(6,"))
+        XCTAssertTrue(sheetStyle.contains("activeHaloOpacity"))
+        XCTAssertFalse(pageEditor.contains("Color.accentColor, in: Circle()"))
+        XCTAssertFalse(pageEditor.contains(".scaleEffect("))
+    }
+
+    func testActiveAndInactivePagesShareIdenticalLayoutFootprint() throws {
+        let pageEditor = try source(named: "PageEditorView.swift")
+        let sheetStyle = try source(named: "DocumentPageSheetStyle.swift", subdirectory: "Services")
+        let inactive = try source(named: "DocumentInactivePagePreview.swift")
+
+        // Shared display size frame applied once for both active canvas and inactive preview.
+        XCTAssertTrue(pageEditor.contains(".frame(width: displaySize.width, height: displaySize.height)"))
+        XCTAssertTrue(pageEditor.contains("documentPageSheetChrome(isActive: isActive)"))
+        XCTAssertTrue(pageEditor.contains("animation(.easeInOut(duration: 0.2), value: isActive)"))
+        // Activation must not introduce a scale transform on the page sheet.
+        XCTAssertFalse(pageEditor.contains("scaleEffect(isActive"))
+        XCTAssertFalse(pageEditor.contains("scaleEffect(isActive ?"))
+        // Inactive preview must not apply its own competing card chrome.
+        XCTAssertFalse(inactive.contains(".shadow("))
+        XCTAssertFalse(inactive.contains("strokeBorder"))
+        XCTAssertTrue(sheetStyle.contains("baseShadowOpacity"))
+        XCTAssertTrue(sheetStyle.contains("activeHaloRadius"))
+    }
+
+    func testBottomToolbarMaterialMatchesTopBarTranslucency() throws {
+        let pageEditor = try source(named: "PageEditorView.swift")
+        XCTAssertTrue(pageEditor.contains(".background(.ultraThinMaterial, in: Capsule(style: .continuous))"))
+        XCTAssertFalse(pageEditor.contains(".background(.regularMaterial, in: Capsule"))
+        XCTAssertTrue(pageEditor.contains("floatingAddButton"))
+        XCTAssertTrue(pageEditor.contains(".background(.ultraThinMaterial, in: Circle())"))
     }
 
     func testCanvasPanDoesNotCompeteWithDocumentScrollAtUnityZoom() throws {

@@ -2,7 +2,7 @@ import CoreGraphics
 
 /// Page Mode document sizing: maximize horizontal width while preserving aspect ratio.
 enum PageModeLayoutSizing {
-    static let horizontalMargin: CGFloat = 16
+    static let horizontalMargin: CGFloat = DocumentPageSheetStyle.stackHorizontalMargin
 
     static func availableContentWidth(
         containerWidth: CGFloat,
