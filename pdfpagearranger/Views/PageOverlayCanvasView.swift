@@ -201,8 +201,6 @@ struct PageOverlayCanvasView: View {
             .gesture(pageZoomEnabled ? magnificationGesture : nil)
             .simultaneousGesture(pageZoomEnabled ? panGesture : nil)
             .simultaneousGesture(pageSwipeEnabled ? pageSwipeGesture : nil)
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("pageModeCanvas")
             .onLongPressGesture(minimumDuration: 0.35) {
                 guard !signaturePlacementActive,
                       !textEditingActive,

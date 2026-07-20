@@ -1,9 +1,8 @@
 import XCTest
 
 final class DocumentActionsRegressionUITests: PDFPagesUITestCase {
-    func testDocumentActionsButtonAppearsInDocumentMode() throws {
+    func testDocumentActionsButtonAppearsInUnifiedEditor() throws {
         try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
 
         XCTAssertTrue(documentActionsButton.exists)
         XCTAssertTrue(documentActionsButton.isEnabled)
@@ -11,17 +10,16 @@ final class DocumentActionsRegressionUITests: PDFPagesUITestCase {
 
     func testDocumentActionsMenuOpensOnTap() throws {
         try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
 
         openDocumentActionsMenu()
 
         XCTAssertTrue(documentActionButton(named: "Compress").exists)
+        XCTAssertTrue(documentActionButton(named: "Pages").exists)
         XCTAssertTrue(documentActionButton(named: "Export").exists)
     }
 
     func testCompressIsAccessibleFromDocumentActionsMenu() throws {
         try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
 
         tapDocumentAction("Compress")
 
@@ -30,7 +28,6 @@ final class DocumentActionsRegressionUITests: PDFPagesUITestCase {
 
     func testExportIsAccessibleFromDocumentActionsMenu() throws {
         try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
 
         tapDocumentAction("Export")
         assertExportShareSheetIsPresented()
@@ -38,7 +35,6 @@ final class DocumentActionsRegressionUITests: PDFPagesUITestCase {
 
     func testCompressFlowStillWorksFromDocumentActionsMenu() throws {
         try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
 
         tapDocumentAction("Compress")
 
@@ -48,59 +44,72 @@ final class DocumentActionsRegressionUITests: PDFPagesUITestCase {
         app.buttons["Close"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].waitForExistence(timeout: 5))
         XCTAssertTrue(documentActionsButton.exists)
+        XCTAssertTrue(unifiedDocumentScroll.exists)
     }
 
     func testExportFlowStillWorksFromDocumentActionsMenu() throws {
         try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
 
         tapDocumentAction("Export")
         assertExportShareSheetIsPresented()
 
         dismissExportShareSheetIfPresent()
         XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].waitForExistence(timeout: 5))
+        XCTAssertTrue(unifiedDocumentScroll.exists)
     }
 
     func testRotateEnablesUndo() throws {
         try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
 
         let undoButton = app.buttons["undoButton"]
         XCTAssertFalse(undoButton.isEnabled)
 
-        app.buttons["rotatePage_1"].tap()
+        app.buttons["pageToolbarRotate"].tap()
         XCTAssertTrue(undoButton.waitForExistence(timeout: 3))
         XCTAssertTrue(undoButton.isEnabled)
     }
 
-    func testDuplicateIncreasesThumbnailCount() throws {
+    func testDuplicateIncreasesPageCount() throws {
         try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
+        ensureFirstPageActive(of: 2)
 
-        app.buttons["duplicatePage_1"].tap()
+        app.buttons["pageToolbarDuplicate"].tap()
+        assertActivePage(pageNumber: 2, of: 3)
 
-        XCTAssertTrue(app.descendants(matching: .any)["pageThumbnail_3"].waitForExistence(timeout: 5))
+        openPagesOrganizer()
+        waitForThumbnail(pageNumber: 3)
+        dismissPagesOrganizer()
     }
 
-    func testDeleteReducesThumbnailCount() throws {
+    func testDeleteReducesPageCount() throws {
         try launchWithImportedPDF(pageCount: 3)
-        waitForThumbnail(pageNumber: 1)
+        ensureFirstPageActive(of: 3)
 
-        app.buttons["deletePage_2"].tap()
+        activatePageViaOrganizer(2)
+        assertActivePage(pageNumber: 2, of: 3)
 
-        XCTAssertFalse(app.descendants(matching: .any)["pageThumbnail_3"].waitForExistence(timeout: 2))
-        XCTAssertTrue(app.descendants(matching: .any)["pageThumbnail_1"].exists)
+        app.buttons["pageToolbarDelete"].tap()
+        assertActivePage(pageNumber: 2, of: 2)
+
+        openPagesOrganizer()
+        XCTAssertTrue(app.descendants(matching: .any)["pageThumbnail_1"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.descendants(matching: .any)["pageThumbnail_2"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["pageThumbnail_3"].exists)
+        dismissPagesOrganizer()
     }
 
-    func testUndoAfterDeleteRestoresThumbnail() throws {
+    func testUndoAfterDeleteRestoresPage() throws {
         try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
+        ensureFirstPageActive(of: 2)
 
-        app.buttons["deletePage_1"].tap()
-        XCTAssertFalse(app.descendants(matching: .any)["pageThumbnail_2"].waitForExistence(timeout: 2))
+        app.buttons["pageToolbarDelete"].tap()
+        assertActivePage(pageNumber: 1, of: 1)
 
         app.buttons["undoButton"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["pageThumbnail_2"].waitForExistence(timeout: 5))
+        assertActivePage(pageNumber: 1, of: 2)
+
+        openPagesOrganizer()
+        waitForThumbnail(pageNumber: 2)
+        dismissPagesOrganizer()
     }
 }

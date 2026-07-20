@@ -6,9 +6,9 @@ This folder holds **manual and regression test fixtures** for PDF Pages. These f
 
 Use PDFs here to exercise:
 
-- Import / Open Document and Document Mode
+- Import / Open Document into the unified vertical document editor
 - Recent Documents reopen (external Files-backed documents)
-- Thumbnail rendering
+- Pages organizer thumbnail grid (⋯ → Pages)
 - Page operations (reorder, rotate, delete, duplicate, undo)
 - Image / text / signature overlays and page annotations
 - Document search (native and OCR-embedded text layers)

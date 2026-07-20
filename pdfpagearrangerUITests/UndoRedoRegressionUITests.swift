@@ -1,9 +1,8 @@
 import XCTest
 
 final class UndoRedoRegressionUITests: PDFPagesUITestCase {
-    func testDocumentModeUndoAndRedoButtonsExist() throws {
+    func testUnifiedEditorUndoAndRedoButtonsExist() throws {
         try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
 
         let undoButton = app.buttons["undoButton"]
         let redoButton = app.buttons["redoButton"]
@@ -13,14 +12,13 @@ final class UndoRedoRegressionUITests: PDFPagesUITestCase {
         XCTAssertFalse(redoButton.isEnabled)
     }
 
-    func testDocumentModeRotateUndoRedo() throws {
+    func testUnifiedEditorRotateUndoRedo() throws {
         try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
 
         let undoButton = app.buttons["undoButton"]
         let redoButton = app.buttons["redoButton"]
 
-        app.buttons["rotatePage_1"].tap()
+        app.buttons["pageToolbarRotate"].tap()
         XCTAssertTrue(undoButton.isEnabled)
         XCTAssertFalse(redoButton.isEnabled)
 
@@ -33,75 +31,48 @@ final class UndoRedoRegressionUITests: PDFPagesUITestCase {
         XCTAssertFalse(redoButton.isEnabled)
     }
 
-    func testDocumentModeUndoAfterDeleteRestoresThumbnail() throws {
+    func testUndoAfterDeleteRestoresPageInOrganizer() throws {
         try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
 
-        app.buttons["deletePage_1"].tap()
+        app.buttons["pageToolbarDelete"].tap()
+        assertActivePage(pageNumber: 1, of: 1)
+
+        openPagesOrganizer()
         XCTAssertFalse(app.descendants(matching: .any)["pageThumbnail_2"].waitForExistence(timeout: 2))
+        dismissPagesOrganizer()
 
         app.buttons["undoButton"].tap()
+        assertActivePage(pageNumber: 1, of: 2)
+
+        openPagesOrganizer()
         XCTAssertTrue(app.descendants(matching: .any)["pageThumbnail_2"].waitForExistence(timeout: 5))
 
+        dismissPagesOrganizer()
         app.buttons["redoButton"].tap()
+        assertActivePage(pageNumber: 1, of: 1)
+
+        openPagesOrganizer()
         XCTAssertFalse(app.descendants(matching: .any)["pageThumbnail_2"].waitForExistence(timeout: 2))
+        dismissPagesOrganizer()
     }
 
-    func testPageModeUndoAndRedoButtonsExist() throws {
+    func testPageToolbarActionsShareDocumentHistory() throws {
         try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
 
-        openPageMode(pageNumber: 1)
+        let undoButton = app.buttons["undoButton"]
+        let redoButton = app.buttons["redoButton"]
 
-        let undoButton = app.buttons["pageModeUndoButton"]
-        let redoButton = app.buttons["pageModeRedoButton"]
-        XCTAssertTrue(undoButton.exists)
-        XCTAssertTrue(redoButton.exists)
-        XCTAssertFalse(undoButton.isEnabled)
-        XCTAssertFalse(redoButton.isEnabled)
-    }
-
-    func testPageModeUndoRedoUsesSharedHistoryWithDocumentMode() throws {
-        try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
-
-        app.buttons["rotatePage_1"].tap()
-        openPageMode(pageNumber: 1)
-
-        let undoButton = app.buttons["pageModeUndoButton"]
-        let redoButton = app.buttons["pageModeRedoButton"]
+        app.buttons["pageToolbarRotate"].tap()
         XCTAssertTrue(undoButton.isEnabled)
 
         undoButton.tap()
         XCTAssertTrue(redoButton.isEnabled)
 
-        app.navigationBars.buttons["Done"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["redoButton"].isEnabled)
+        // Remain on the unified surface — there is no separate Page Mode push to leave.
+        XCTAssertTrue(unifiedDocumentScroll.exists)
+        XCTAssertTrue(app.buttons["pageModeAddButton"].exists)
 
-        openPageMode(pageNumber: 1)
         redoButton.tap()
         XCTAssertTrue(undoButton.isEnabled)
-    }
-
-    func testDocumentModeRedoAfterPageModeUndo() throws {
-        try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
-
-        app.buttons["rotatePage_1"].tap()
-        openPageMode(pageNumber: 1)
-        app.buttons["pageModeUndoButton"].tap()
-
-        app.navigationBars.buttons["Done"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].waitForExistence(timeout: 10))
-
-        XCTAssertTrue(app.buttons["redoButton"].isEnabled)
-        app.buttons["redoButton"].tap()
-        XCTAssertTrue(app.buttons["undoButton"].isEnabled)
-    }
-
-    private func openPageMode(pageNumber: Int) {
-        app.descendants(matching: .any)["pageThumbnail_\(pageNumber)"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["pageModeView"].waitForExistence(timeout: 10))
     }
 }

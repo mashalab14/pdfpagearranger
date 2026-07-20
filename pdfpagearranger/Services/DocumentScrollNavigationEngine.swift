@@ -8,6 +8,7 @@ enum DocumentScrollNavigationEngine {
     static let activationMidYNormalizedRange: ClosedRange<CGFloat> = 0.28...0.72
 
     /// Chooses the page whose vertical center is closest to the viewport center.
+    /// Prefers pages whose mid-Y falls in `activationMidYNormalizedRange`; if none qualify, falls back to the closest overall.
     static func primaryPageID(
         visibilityCenters: [UUID: CGFloat],
         viewportHeight: CGFloat,
@@ -15,7 +16,11 @@ enum DocumentScrollNavigationEngine {
     ) -> UUID? {
         guard viewportHeight > 0, !visibilityCenters.isEmpty else { return fallback }
         let viewportCenter = viewportHeight / 2
-        let ranked = visibilityCenters.min { lhs, rhs in
+        let inActivationBand = visibilityCenters.filter { _, midY in
+            activationMidYNormalizedRange.contains(midY / viewportHeight)
+        }
+        let candidates = inActivationBand.isEmpty ? visibilityCenters : inActivationBand
+        let ranked = candidates.min { lhs, rhs in
             abs(lhs.value - viewportCenter) < abs(rhs.value - viewportCenter)
         }
         return ranked?.key ?? fallback

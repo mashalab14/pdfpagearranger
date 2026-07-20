@@ -304,9 +304,14 @@ final class PDFEditorViewModel {
 
             if UITestLaunchConfiguration.shouldSeedOverlay,
                let firstPage = pages.first {
+                let renderer = UIGraphicsImageRenderer(size: CGSize(width: 160, height: 160))
+                let seedImage = renderer.image { context in
+                    UIColor.systemBlue.setFill()
+                    context.fill(CGRect(origin: .zero, size: CGSize(width: 160, height: 160)))
+                }
                 addImageOverlay(
                     to: firstPage.id,
-                    image: UIImage(systemName: "star.fill") ?? UIImage(),
+                    image: seedImage,
                     pageAspectRatio: 612.0 / 792.0
                 )
             }

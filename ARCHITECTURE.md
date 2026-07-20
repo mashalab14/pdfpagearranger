@@ -227,7 +227,7 @@ Reopen Recent → resolve bookmark / app file → importPDF (working temp) → b
 
 ## 5. Undo and Redo (shared document session)
 
-**Rule:** Document Mode and Page Mode share **one** document-session history. There is no separate Page Mode stack, annotation stack, or per-page history.
+**Rule:** The unified document editor shares **one** document-session history. There is no separate page-editor stack, annotation stack, or per-page history.
 
 ### Stacks
 
@@ -328,6 +328,14 @@ Quality is guarded by an automated regression suite (`PDFPagesTests`, `PDFPagesU
 3. **Before release or major architecture changes** (rendering, coordinates, export, undo, document model), run the **full regression suite** manually.
 4. **New features should update the regression checklist** (and `Golden PDFs/` fixtures when manual PDFs are relevant).
 
+### UITest navigation model
+
+UITests treat an imported document as ready when the **unified vertical editor** is loaded (`waitForUnifiedEditorReady` in `PDFPagesUITestCase`):
+
+- `documentModeReady` + `unifiedDocumentScroll` + `pageModeView` + `documentPageSlot_1` + `pageModeAddButton`
+
+Thumbnails (`pageThumbnail_N` / `documentPageGrid`) appear only after **⋯ → Pages**. Tests that need the grid call `openPagesOrganizer()`. Page editing runs on the active canvas; vertical scroll / organizer / search activate pages. There is no Document Mode → Page Mode push.
+
 ### Testing workflow
 
 | When | What to run |
@@ -340,7 +348,7 @@ Quality is guarded by an automated regression suite (`PDFPagesTests`, `PDFPagesU
 
 The pre-commit hook (`scripts/pre-commit`, symlinked from `.git/hooks/pre-commit`) must **not** run the full simulator regression suite by default.
 
-Test helpers live under `pdfpagearrangerTests/Helpers/` (e.g. `PDFTestFactory`, `OverlayTestFactory`, `ExportAssertions`, `CompressionAssertions`, `ScanDraftTestFactory`, `ScanOCRTestDoubles`, `SignatureAssetTestFactory`). Prefer extending these over one-off test setup.
+Test helpers live under `pdfpagearrangerTests/Helpers/` (e.g. `PDFTestFactory`, `OverlayTestFactory`, `ExportAssertions`, `CompressionAssertions`, `ScanDraftTestFactory`, `ScanOCRTestDoubles`, `SignatureAssetTestFactory`). Prefer extending these over one-off test setup. Shared UITest setup lives in `pdfpagearrangerUITests/PDFPagesUITestCase.swift`.
 
 ---
 

@@ -33,9 +33,12 @@ struct DocumentPagesOrganizerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done", action: onDismiss)
+                        .accessibilityIdentifier("documentPagesOrganizerDone")
                 }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("documentPagesOrganizer")
     }
 
     @ViewBuilder

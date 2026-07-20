@@ -1,34 +1,29 @@
 import XCTest
 
 final class PageModeRegressionUITests: PDFPagesUITestCase {
-    func testPageModeOpensFromThumbnailTap() throws {
+    func testUnifiedEditorOpensAfterImport() throws {
         try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
 
-        app.descendants(matching: .any)["pageThumbnail_1"].tap()
-
-        XCTAssertTrue(app.descendants(matching: .any)["pageModeView"].waitForExistence(timeout: 10))
+        XCTAssertTrue(pageModeView.exists)
         XCTAssertTrue(app.buttons["pageModeAddButton"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["pageBottomToolbar"].exists)
+        ensureFirstPageActive(of: 2)
     }
 
-    func testReturnToDocumentModeFromPageMode() throws {
+    func testPagesOrganizerDismissesBackToUnifiedEditor() throws {
         try launchWithImportedPDF(pageCount: 2)
+
+        openPagesOrganizer()
         waitForThumbnail(pageNumber: 1)
+        dismissPagesOrganizer()
 
-        app.otherElements["pageThumbnail_1"].tap()
-        XCTAssertTrue(app.otherElements["pageModeView"].waitForExistence(timeout: 10))
-
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-
-        XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].exists)
+        XCTAssertTrue(unifiedDocumentScroll.exists)
+        XCTAssertTrue(app.buttons["pageModeAddButton"].exists)
     }
 
     func testPageModeAddSignatureOpensSignatureLibrary() throws {
         try launchWithImportedPDF(pageCount: 1, isolatedSignatureLibrary: true)
-        waitForThumbnail(pageNumber: 1)
-
-        app.descendants(matching: .any)["pageThumbnail_1"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["pageModeView"].waitForExistence(timeout: 10))
 
         app.buttons["pageModeAddButton"].tap()
         XCTAssertTrue(app.buttons["addQuickSignatureOption"].waitForExistence(timeout: 5))

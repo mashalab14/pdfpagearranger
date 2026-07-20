@@ -126,6 +126,9 @@ struct ImageOverlayObjectView: View {
                 }
             }
             .contentShape(Rectangle())
+            .accessibilityIdentifier(object.type == .signature ? "signatureOverlay" : "imageOverlay")
+            .accessibilityLabel(object.type == .signature ? "Signature" : "Image overlay")
+            .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
     }
 
     private var deleteButton: some View {

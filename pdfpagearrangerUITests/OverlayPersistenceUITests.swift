@@ -1,17 +1,23 @@
 import XCTest
 
 final class OverlayPersistenceUITests: PDFPagesUITestCase {
-    func testSeededOverlayPersistsAfterReturningFromPageMode() throws {
+    func testSeededOverlayRemainsOnUnifiedEditorSurface() throws {
         try launchWithImportedPDF(pageCount: 1, seedOverlay: true)
+
+        XCTAssertTrue(pageModeView.exists)
+        XCTAssertTrue(documentPageSlot(1).waitForExistence(timeout: 10))
+        selectSeededImageOverlay()
+
+        // Clear overlay selection so chrome (⋯ menu) remains tappable.
+        documentPageSlot(1).coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.1)).tap()
+
+        openPagesOrganizer()
         waitForThumbnail(pageNumber: 1)
+        dismissPagesOrganizer()
 
-        app.descendants(matching: .any)["pageThumbnail_1"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["pageModeView"].waitForExistence(timeout: 10))
-
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].waitForExistence(timeout: 10))
-
-        waitForThumbnail(pageNumber: 1)
-        XCTAssertTrue(app.descendants(matching: .any)["pageThumbnail_1"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].exists)
+        XCTAssertTrue(unifiedDocumentScroll.exists)
+        XCTAssertTrue(documentPageSlot(1).exists)
+        selectSeededImageOverlay()
     }
 }

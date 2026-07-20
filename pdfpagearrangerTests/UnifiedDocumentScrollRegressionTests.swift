@@ -37,7 +37,7 @@ final class UnifiedDocumentScrollRegressionTests: XCTestCase {
         }
     }
 
-    func testPrimaryPageDetectionChoosesClosestViewportCenter() {
+    func testPrimaryPageDetectionPrefersActivationBandThenClosestCenter() {
         let a = UUID()
         let b = UUID()
         let c = UUID()
@@ -47,6 +47,13 @@ final class UnifiedDocumentScrollRegressionTests: XCTestCase {
             fallback: a
         )
         XCTAssertEqual(primary, b)
+
+        let onlyOutOfBand = DocumentScrollNavigationEngine.primaryPageID(
+            visibilityCenters: [a: 20, c: 390],
+            viewportHeight: 400,
+            fallback: a
+        )
+        XCTAssertEqual(onlyOutOfBand, a)
     }
 
     func testActivePageUpdateBlockedDuringEditingInteractions() {

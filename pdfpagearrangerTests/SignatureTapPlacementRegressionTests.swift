@@ -164,13 +164,13 @@ final class SignatureTapPlacementUIRegressionTests: XCTestCase {
 
     func testAddBarRemainsVisibleDuringPlacement() throws {
         let source = try pageEditorSource()
-        XCTAssertTrue(source.contains("""
-            addButtonBar
-        """))
-        XCTAssertFalse(source.contains("""
-            if !signaturePlacementActive {
-                addButtonBar
-        """))
+        // Signature placement must not hide the page bottom toolbar / Add entry point.
+        XCTAssertTrue(source.contains("pageBottomToolbar"))
+        XCTAssertTrue(source.contains("pageModeAddButton"))
+        XCTAssertFalse(source.contains("if !signaturePlacementActive {\n                pageBottomToolbar"))
+        XCTAssertFalse(source.contains("if !signaturePlacementActive {\n                addButtonBar"))
+        // Only text editing gates the toolbar; placement modes keep Add available.
+        XCTAssertTrue(source.contains("if !textEditingActive {\n                pageBottomToolbar\n            }"))
     }
 
     private func pageEditorSource() throws -> String {

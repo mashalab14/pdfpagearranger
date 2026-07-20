@@ -57,6 +57,9 @@ struct PageEditorView: View {
     @State private var showCommentEditor = false
     @State private var annotationErrorMessage: String?
     @State private var scrollToPageToken = UUID()
+    @State private var scrollActivationSuppressed = false
+    @State private var scrollActivationResumeTask: Task<Void, Never>?
+    @State private var latestDocumentVisibility = DocumentPageVisibility()
     @State private var interactionBlockingScroll = false
 
     private let signatureLibraryStore: SignatureLibraryStore
@@ -198,9 +201,6 @@ struct PageEditorView: View {
             .navigationTitle(isUnifiedDocumentSurface ? viewModel.documentName : "Page \(pageNumber)")
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(isUnifiedDocumentSurface)
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("pageModeView")
-            .accessibilityValue("page \(pageNumber) of \(viewModel.pageCount)")
             .toolbar { pageToolbarContent }
     }
 
@@ -212,6 +212,13 @@ struct PageEditorView: View {
             if !textEditingActive {
                 pageBottomToolbar
             }
+            // Dedicated leaf so XCUITest can read active page without relying on container AX identity.
+            Color.clear
+                .frame(width: 1, height: 1)
+                .accessibilityIdentifier("pageModeView")
+                .accessibilityLabel("Page editor")
+                .accessibilityValue("page \(pageNumber) of \(viewModel.pageCount)")
+                .accessibilityAddTraits(.isStaticText)
         }
     }
 
@@ -479,21 +486,11 @@ struct PageEditorView: View {
                 .scrollDisabled(interactionBlockingScroll || textEditingActive || drawingModeActive || stickyNotePlacementActive || signaturePlacementActive)
                 .accessibilityIdentifier("unifiedDocumentScroll")
                 .onPreferenceChange(DocumentPageVisibilityKey.self) { visibility in
-                    guard isUnifiedDocumentSurface else { return }
-                    let proposed = DocumentScrollNavigationEngine.primaryPageID(
-                        visibilityCenters: visibility.centersInViewport,
-                        viewportHeight: visibility.viewportHeight,
-                        fallback: pageRoute.pageItemID
-                    )
-                    if DocumentScrollNavigationEngine.shouldUpdateActivePage(
-                        proposedID: proposed,
-                        currentID: pageRoute.pageItemID,
-                        interactionBlockingScroll: interactionBlockingScroll || textEditingActive || drawingModeActive
-                    ), let proposed {
-                        activatePage(id: proposed, scroll: false)
-                    }
+                    latestDocumentVisibility = visibility
+                    applyDocumentVisibility(visibility)
                 }
                 .onChange(of: pageRoute.pageItemID) { _, newID in
+                    beginScrollActivationSuppression()
                     withAnimation(.easeInOut(duration: 0.25)) {
                         proxy.scrollTo(newID, anchor: .center)
                     }
@@ -504,6 +501,7 @@ struct PageEditorView: View {
                     }
                 }
                 .onAppear {
+                    beginScrollActivationSuppression()
                     proxy.scrollTo(pageRoute.pageItemID, anchor: .center)
                 }
             }
@@ -542,7 +540,10 @@ struct PageEditorView: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("documentPageSlot_\(index + 1)")
+                .accessibilityValue(isActive ? "active" : "inactive")
+                .accessibilityLabel(isActive ? "Active page \(index + 1)" : "Page \(index + 1)")
                 .task(id: pageRenderKey(for: item, index: index)) {
                     await loadPageImage(for: item, exportIndex: index)
                 }
@@ -562,7 +563,13 @@ struct PageEditorView: View {
     }
 
     private func activatePage(id: UUID, scroll: Bool) {
-        guard id != pageRoute.pageItemID else { return }
+        guard id != pageRoute.pageItemID else {
+            if scroll {
+                beginScrollActivationSuppression()
+                scrollToPageToken = UUID()
+            }
+            return
+        }
         endTextEditingIfNeeded()
         cancelSignaturePlacement()
         cancelStickyNotePlacement()
@@ -572,9 +579,43 @@ struct PageEditorView: View {
         pageSelection = .none
         signatureEditOverlayID = nil
         clearPDFTextSelection()
+        if scroll {
+            beginScrollActivationSuppression()
+        }
         pageRoute = PageEditorRoute(pageItemID: id)
         if scroll {
             scrollToPageToken = UUID()
+        }
+    }
+
+    private func beginScrollActivationSuppression(durationNanoseconds: UInt64 = 750_000_000) {
+        scrollActivationSuppressed = true
+        scrollActivationResumeTask?.cancel()
+        scrollActivationResumeTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: durationNanoseconds)
+            guard !Task.isCancelled else { return }
+            scrollActivationSuppressed = false
+            // Apply any scroll movement that happened while programmatic activation was settling.
+            applyDocumentVisibility(latestDocumentVisibility)
+        }
+    }
+
+    private func applyDocumentVisibility(_ visibility: DocumentPageVisibility) {
+        guard isUnifiedDocumentSurface else { return }
+        let proposed = DocumentScrollNavigationEngine.primaryPageID(
+            visibilityCenters: visibility.centersInViewport,
+            viewportHeight: visibility.viewportHeight,
+            fallback: pageRoute.pageItemID
+        )
+        if DocumentScrollNavigationEngine.shouldUpdateActivePage(
+            proposedID: proposed,
+            currentID: pageRoute.pageItemID,
+            interactionBlockingScroll: interactionBlockingScroll
+                || textEditingActive
+                || drawingModeActive
+                || scrollActivationSuppressed
+        ), let proposed {
+            activatePage(id: proposed, scroll: false)
         }
     }
 
@@ -745,6 +786,8 @@ struct PageEditorView: View {
         .padding(.horizontal)
         .padding(.vertical, 12)
         .background(.bar)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("pageBottomToolbar")
     }
 
     private var addButtonBar: some View {

@@ -9,8 +9,7 @@ final class RecentDocumentsUITests: PDFPagesUITestCase {
         XCTAssertTrue(createButton.waitForExistence(timeout: 5))
         createButton.tap()
 
-        XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.descendants(matching: .any)["pageThumbnail_1"].waitForExistence(timeout: 15))
+        waitForUnifiedEditorReady(timeout: 15)
 
         let newPDFButton = app.buttons["newPDFButton"]
         XCTAssertTrue(newPDFButton.waitForExistence(timeout: 5))
@@ -35,8 +34,7 @@ final class RecentDocumentsUITests: PDFPagesUITestCase {
         XCTAssertTrue(homeRow.waitForExistence(timeout: 5), "Home Recent row should expose Untitled label")
         homeRow.tap()
 
-        XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.descendants(matching: .any)["pageThumbnail_1"].waitForExistence(timeout: 15))
+        waitForUnifiedEditorReady(timeout: 15)
     }
 
     func testRecentMoreListOpensAndSelectsDocument() throws {
@@ -44,13 +42,13 @@ final class RecentDocumentsUITests: PDFPagesUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["emptyStateView"].waitForExistence(timeout: 5))
 
         app.buttons["createDocumentButton"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].waitForExistence(timeout: 15))
+        waitForUnifiedEditorReady(timeout: 15)
         app.buttons["newPDFButton"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["emptyStateView"].waitForExistence(timeout: 10))
 
         // Second document so More remains meaningful with a populated list.
         app.buttons["createDocumentButton"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].waitForExistence(timeout: 15))
+        waitForUnifiedEditorReady(timeout: 15)
         app.buttons["newPDFButton"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["emptyStateView"].waitForExistence(timeout: 10))
 
@@ -63,14 +61,13 @@ final class RecentDocumentsUITests: PDFPagesUITestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         row.tap()
 
-        XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].waitForExistence(timeout: 15))
+        waitForUnifiedEditorReady(timeout: 15)
     }
 }
 
 final class ExportPaywallUITests: PDFPagesUITestCase {
     func testExportOverFreeLimitPresentsPaywall() throws {
         try launchWithImportedPDF(pageCount: 21)
-        waitForThumbnail(pageNumber: 1)
 
         tapDocumentAction("Export")
 
@@ -83,12 +80,12 @@ final class ExportPaywallUITests: PDFPagesUITestCase {
 
         app.buttons["Cancel"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].waitForExistence(timeout: 5))
+        XCTAssertTrue(unifiedDocumentScroll.exists)
         XCTAssertFalse(app.descendants(matching: .any)["exportShareSheet"].exists)
     }
 
     func testContinueForNowAllowsExportShareSheet() throws {
         try launchWithImportedPDF(pageCount: 21)
-        waitForThumbnail(pageNumber: 1)
 
         tapDocumentAction("Export")
         XCTAssertTrue(app.staticTexts["Unlock PDF Pages Pro"].waitForExistence(timeout: 8))
@@ -98,29 +95,30 @@ final class ExportPaywallUITests: PDFPagesUITestCase {
 }
 
 final class DocumentSearchUITests: PDFPagesUITestCase {
-    func testDocumentModeSearchButtonOpensSearchSheet() throws {
+    func testDocumentSearchButtonOpensInlineSearchBar() throws {
         try launchWithImportedPDF(pageCount: 2)
-        waitForThumbnail(pageNumber: 1)
 
         let searchButton = app.buttons["documentModeSearchButton"]
         XCTAssertTrue(searchButton.waitForExistence(timeout: 5))
         searchButton.tap()
 
-        XCTAssertTrue(app.descendants(matching: .any)["documentSearchSheet"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.descendants(matching: .any)["documentSearchField"].exists)
+        // Unified editor uses the inline page search bar (not the old Document Mode results sheet).
+        XCTAssertTrue(
+            app.descendants(matching: .any)["pageModeSearchBar"].waitForExistence(timeout: 8),
+            "Inline document search bar should open from the unified editor search button"
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["pageModeSearchField"].exists)
 
-        app.buttons["documentSearchCloseButton"].tap()
+        app.buttons["pageModeSearchCloseButton"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].waitForExistence(timeout: 5))
+        XCTAssertTrue(unifiedDocumentScroll.exists)
+        XCTAssertFalse(app.descendants(matching: .any)["pageModeSearchBar"].exists)
     }
 }
 
 final class PageAnnotationUITests: PDFPagesUITestCase {
     func testPageModeAddSheetExposesAnnotationOptions() throws {
         try launchWithImportedPDF(pageCount: 1)
-        waitForThumbnail(pageNumber: 1)
-
-        app.descendants(matching: .any)["pageThumbnail_1"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["pageModeView"].waitForExistence(timeout: 10))
 
         app.buttons["pageModeAddButton"].tap()
         XCTAssertTrue(app.buttons["addDrawOption"].waitForExistence(timeout: 5))
@@ -128,6 +126,7 @@ final class PageAnnotationUITests: PDFPagesUITestCase {
 
         app.buttons["addDrawOption"].tap()
         // Drawing mode guidance / chrome should appear without crashing.
-        XCTAssertTrue(app.descendants(matching: .any)["pageModeView"].exists)
+        XCTAssertTrue(pageModeView.exists)
+        XCTAssertTrue(unifiedDocumentScroll.exists)
     }
 }

@@ -9,12 +9,22 @@ final class ImportRegressionUITests: PDFPagesUITestCase {
         XCTAssertTrue(app.buttons["importPhotosButton"].exists)
     }
 
-    func testImportOpensDocumentModeWithCorrectPageCount() throws {
+    func testImportOpensUnifiedEditorWithCorrectPageCount() throws {
         try launchWithImportedPDF(pageCount: 4)
 
         XCTAssertTrue(app.descendants(matching: .any)["documentModeReady"].exists)
+        XCTAssertTrue(unifiedDocumentScroll.exists)
+        ensureFirstPageActive(of: 4)
+        XCTAssertTrue(
+            documentPageSlot(1).waitForExistence(timeout: 10),
+            "First page slot should exist in the unified document"
+        )
+
+        // Full page count is verified via the Pages organizer; LazyVStack may not materialize distant slots.
+        openPagesOrganizer()
         for page in 1...4 {
-            XCTAssertTrue(app.descendants(matching: .any)["pageThumbnail_\(page)"].waitForExistence(timeout: 10))
+            waitForThumbnail(pageNumber: page)
         }
+        dismissPagesOrganizer()
     }
 }

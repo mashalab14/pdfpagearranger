@@ -159,11 +159,9 @@ struct PageModeSearchBar: View {
                     .submitLabel(.search)
                     .accessibilityIdentifier("pageModeSearchField")
 
-                if !viewModel.documentSearch.results.isEmptyQuery {
-                    Button("Close", action: onClose)
-                        .font(.subheadline)
-                        .accessibilityIdentifier("pageModeSearchCloseButton")
-                }
+                Button("Close", action: onClose)
+                    .font(.subheadline)
+                    .accessibilityIdentifier("pageModeSearchCloseButton")
             }
 
             HStack {
@@ -203,6 +201,7 @@ struct PageModeSearchBar: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(.bar)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pageModeSearchBar")
         .onAppear {
             isSearchFieldFocused = true

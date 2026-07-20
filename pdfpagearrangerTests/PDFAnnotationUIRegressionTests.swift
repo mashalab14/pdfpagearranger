@@ -14,14 +14,20 @@ final class PDFAnnotationUIRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("onMoveStickyNote"))
     }
 
-    func testDrawingModeBlocksPageSwipeWhenActive() throws {
+    func testDrawingModeBlocksDocumentScrollWhenActive() throws {
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("pdfpagearranger/Views/PageEditorView.swift")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 
-        XCTAssertTrue(source.contains("drawingModeActive || stickyNotePlacementActive ? nil"))
+        // Unified document: drawing gestures take priority; vertical scroll is disabled while drawing.
+        XCTAssertTrue(source.contains(".scrollDisabled(interactionBlockingScroll || textEditingActive || drawingModeActive"))
+        XCTAssertTrue(source.contains("isUnifiedDocumentSurface || drawingModeActive || stickyNotePlacementActive"))
+        // Horizontal page swipe remains nil on the unified surface (and while drawing / sticky placement).
+        XCTAssertTrue(source.contains("? nil"))
+        // Add is disabled during drawing so users finish the stroke session first.
+        XCTAssertTrue(source.contains(".disabled(drawingModeActive)"))
     }
 
     func testAddSheetIncludesDrawAndStickyNoteOptions() throws {

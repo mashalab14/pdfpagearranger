@@ -457,7 +457,7 @@ Opened from Document Actions **… → Pages**. Preserves the previous thumbnail
 - Reorder via drag-and-drop
 - Rotate / Duplicate / Delete per card
 - Tap a thumbnail to activate that page and dismiss the sheet
-- Accessibility identifier remains `documentPageGrid`
+- Accessibility identifiers: `documentPagesOrganizer`, `documentPageGrid`, `pageThumbnail_N`, `documentPagesOrganizerDone`
 
 ## 7.5 Document search
 
@@ -1740,13 +1740,13 @@ Temporary UI state is **not** restored: selection, search query, zoom/pan, open 
 
 ### Implemented
 
-- Many controls have `accessibilityIdentifier`s for UI testing (import button, settings, thumbnails, page mode, overlays, compression, export, etc.)
-- Page Mode view exposes `accessibilityValue`: **"page N of M"**
+- Many controls have `accessibilityIdentifier`s for UI testing (import button, settings, thumbnails, overlays, compression, export, etc.)
+- Unified document editor: `documentModeReady` (session surface), `unifiedDocumentScroll`, `documentPageSlot_N`, `pageModeView` with `accessibilityValue` **"page N of M"**, `pageModeCanvas`, `pageBottomToolbar`, `pageModeAddButton`, `pageToolbarRotate` / `pageToolbarDuplicate` / `pageToolbarDelete`
+- Pages organizer: `documentPagesOrganizer`, `documentPageGrid`, `pageThumbnail_N`, `documentPagesOrganizerDone`
 - Settings gear: accessibility label **"Settings"**
-- Document Actions: accessibility label **"More"**
-- Document Mode Undo / Redo: accessibility labels **"Undo"** / **"Redo"**; identifiers `undoButton`, `redoButton`
-- Page Mode Undo / Redo: accessibility labels **"Undo"** / **"Redo"**; identifiers `pageModeUndoButton`, `pageModeRedoButton`
-- Thumbnail action buttons: accessibility labels **"Rotate"**, **"Duplicate"**, **"Delete"**
+- Document Actions: accessibility label **"More"**; identifier `documentActionsButton`
+- Unified editor Undo / Redo: accessibility labels **"Undo"** / **"Redo"**; identifiers `undoButton`, `redoButton`
+- Thumbnail action buttons (organizer): accessibility labels **"Rotate"**, **"Duplicate"**, **"Delete"**
 - Overlay delete button: **"Delete image"** (image overlays only)
 - Signature contextual menu: **"Edit Signature"**, **"Delete Signature"**, **"More Signature Actions"**
 - Edit placed signature popover: `placedSignatureEditPopover`, `signatureEditAdvancedColorButton`, `signatureEditThicknessMinus`, `signatureEditThicknessValue`, `signatureEditThicknessPlus`, per-preset color identifiers
