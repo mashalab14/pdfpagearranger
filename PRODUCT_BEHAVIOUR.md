@@ -1808,7 +1808,7 @@ After restart: user sees **home screen** with **Recent Documents** (if any). Acq
 | Free **Export** page limit (Document Actions → Export only) | **20 pages** |
 | Undo stack depth | **50** |
 | Redo stack depth | **50** |
-| Page zoom max | **4×** |
+| Document zoom max | **4×** |
 | Overlay min size | **8%** of page |
 | Overlay max size | **95%** of page |
 | Image overlay initial width | **35%** of page width |
