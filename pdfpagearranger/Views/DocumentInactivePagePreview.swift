@@ -19,12 +19,12 @@ struct DocumentInactivePagePreview: View {
         Image(uiImage: composited)
             .resizable()
             .scaledToFit()
-            .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
+            .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
             .overlay {
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
                     .strokeBorder(
-                        isActiveChrome ? Color.accentColor.opacity(0.85) : Color.clear,
-                        lineWidth: isActiveChrome ? 2 : 0
+                        isActiveChrome ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.06),
+                        lineWidth: isActiveChrome ? 1.5 : 0.5
                     )
             }
             .accessibilityIdentifier("documentInactivePagePreview")

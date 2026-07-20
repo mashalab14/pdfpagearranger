@@ -56,8 +56,12 @@ enum DocumentScrollNavigationEngine {
     }
 
     static func pageSpacing(forContainerWidth width: CGFloat) -> CGFloat {
-        max(16, min(28, width * 0.04))
+        // Tight continuous-document gap; still scales slightly with width.
+        max(4, min(8, width * 0.012))
     }
+
+    /// Delay before floating chrome fades back in after scroll settles.
+    static let floatingChromeRevealDelayNanoseconds: UInt64 = 280_000_000
 }
 
 /// Preference payload for scroll-based active-page detection.

@@ -61,6 +61,9 @@ struct PageEditorView: View {
     @State private var scrollActivationResumeTask: Task<Void, Never>?
     @State private var latestDocumentVisibility = DocumentPageVisibility()
     @State private var interactionBlockingScroll = false
+    @State private var overlayManipulationActive = false
+    @State private var floatingChromeVisible = true
+    @State private var floatingChromeRevealTask: Task<Void, Never>?
 
     private let signatureLibraryStore: SignatureLibraryStore
 
@@ -205,13 +208,21 @@ struct PageEditorView: View {
     }
 
     private var pageModeStack: some View {
-        VStack(spacing: 0) {
-            pageModeGuidanceBar
-            pageContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ZStack(alignment: .bottom) {
+            VStack(spacing: 0) {
+                pageModeGuidanceBar
+                pageContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
             if !textEditingActive {
                 pageBottomToolbar
+                    .opacity(floatingChromeVisible ? 1 : 0)
+                    .offset(y: floatingChromeVisible ? 0 : 12)
+                    .allowsHitTesting(floatingChromeVisible && !drawingModeActive)
+                    .animation(.easeInOut(duration: 0.2), value: floatingChromeVisible)
             }
+
             // Dedicated leaf so XCUITest can read active page without relying on container AX identity.
             Color.clear
                 .frame(width: 1, height: 1)
@@ -480,11 +491,15 @@ struct PageEditorView: View {
                         }
                     }
                     .padding(.horizontal, PageModeLayoutSizing.horizontalMargin)
-                    .padding(.vertical, 16)
+                    .padding(.vertical, 8)
                 }
                 .coordinateSpace(name: "documentScroll")
                 .scrollDisabled(interactionBlockingScroll || textEditingActive || drawingModeActive || stickyNotePlacementActive || signaturePlacementActive)
+                .scrollBounceBehavior(.basedOnSize)
                 .accessibilityIdentifier("unifiedDocumentScroll")
+                .onScrollPhaseChange { _, newPhase in
+                    handleDocumentScrollPhase(newPhase)
+                }
                 .onPreferenceChange(DocumentPageVisibilityKey.self) { visibility in
                     latestDocumentVisibility = visibility
                     applyDocumentVisibility(visibility)
@@ -521,9 +536,19 @@ struct PageEditorView: View {
                         pageCanvas(pageItem: item, pdfPage: pdfPage, pageImage: image)
                             .frame(width: displaySize.width, height: displaySize.height)
                             .overlay {
-                                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                    .strokeBorder(Color.accentColor.opacity(0.85), lineWidth: 2)
+                                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                    .strokeBorder(
+                                        emphasizesActivePageChrome
+                                            ? Color.accentColor.opacity(0.7)
+                                            : Color.primary.opacity(0.06),
+                                        lineWidth: emphasizesActivePageChrome ? 1.5 : 0.5
+                                    )
                             }
+                            .shadow(
+                                color: .black.opacity(emphasizesActivePageChrome ? 0.12 : 0.06),
+                                radius: emphasizesActivePageChrome ? 6 : 3,
+                                y: emphasizesActivePageChrome ? 3 : 1
+                            )
                     } else {
                         DocumentInactivePagePreview(
                             pageImage: image,
@@ -726,72 +751,143 @@ struct PageEditorView: View {
                 }
             },
             pageTransitionEdge: pageTransitionEdge,
-            keyboardBottomInset: keyboardBottomInset
+            keyboardBottomInset: keyboardBottomInset,
+            onCanvasScrollBlockingChange: { blocking in
+                interactionBlockingScroll = blocking
+            },
+            onOverlayManipulationActiveChange: { active in
+                overlayManipulationActive = active
+            }
         )
     }
 
+    private var emphasizesActivePageChrome: Bool {
+        pageSelection != .none
+            || textEditingActive
+            || signaturePlacementActive
+            || stickyNotePlacementActive
+            || drawingModeActive
+            || signatureEditOverlayID != nil
+            || overlayManipulationActive
+    }
+
     private var pageBottomToolbar: some View {
-        HStack(spacing: 12) {
-            if isUnifiedDocumentSurface, let pageItem {
-                Button {
-                    viewModel.rotatePage(id: pageItem.id)
-                } label: {
-                    Image(systemName: "rotate.right")
-                }
-                .accessibilityLabel("Rotate Page")
-                .accessibilityIdentifier("pageToolbarRotate")
-
-                Button {
-                    let index = viewModel.pageIndex(for: pageItem.id) ?? 0
-                    viewModel.duplicatePage(id: pageItem.id)
-                    if viewModel.pages.indices.contains(index + 1) {
-                        activatePage(id: viewModel.pages[index + 1].id, scroll: true)
-                    }
-                } label: {
-                    Image(systemName: "plus.square.on.square")
-                }
-                .accessibilityLabel("Duplicate Page")
-                .accessibilityIdentifier("pageToolbarDuplicate")
-
-                Button(role: .destructive) {
-                    let index = viewModel.pageIndex(for: pageItem.id) ?? 0
-                    viewModel.deletePage(id: pageItem.id)
-                    if viewModel.pages.isEmpty { return }
-                    let nextIndex = min(index, viewModel.pages.count - 1)
-                    activatePage(id: viewModel.pages[nextIndex].id, scroll: true)
-                } label: {
-                    Image(systemName: "trash")
-                }
-                .accessibilityLabel("Delete Page")
-                .accessibilityIdentifier("pageToolbarDelete")
+        HStack(alignment: .bottom, spacing: 14) {
+            if isUnifiedDocumentSurface {
+                floatingPageActionsCapsule
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            Button {
-                clearPDFTextSelection()
-                pageSelection = .none
-                showAddSheet = true
-            } label: {
-                Label("Add", systemImage: "plus.circle.fill")
-                    .font(.headline)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(drawingModeActive)
-            .accessibilityIdentifier("pageModeAddButton")
-
-            Spacer()
+            floatingAddButton
         }
-        .padding(.horizontal)
-        .padding(.vertical, 12)
-        .background(.bar)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 10)
+        .safeAreaPadding(.bottom, 4)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pageBottomToolbar")
     }
 
+    private var floatingPageActionsCapsule: some View {
+        HStack(spacing: 4) {
+            Button {
+                guard let pageItem else { return }
+                viewModel.rotatePage(id: pageItem.id)
+            } label: {
+                Image(systemName: "rotate.right")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 40, height: 40)
+            }
+            .accessibilityLabel("Rotate Page")
+            .accessibilityIdentifier("pageToolbarRotate")
+
+            Button {
+                guard let pageItem else { return }
+                let index = viewModel.pageIndex(for: pageItem.id) ?? 0
+                viewModel.duplicatePage(id: pageItem.id)
+                if viewModel.pages.indices.contains(index + 1) {
+                    activatePage(id: viewModel.pages[index + 1].id, scroll: true)
+                }
+            } label: {
+                Image(systemName: "plus.square.on.square")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 40, height: 40)
+            }
+            .accessibilityLabel("Duplicate Page")
+            .accessibilityIdentifier("pageToolbarDuplicate")
+
+            Button(role: .destructive) {
+                guard let pageItem else { return }
+                let index = viewModel.pageIndex(for: pageItem.id) ?? 0
+                viewModel.deletePage(id: pageItem.id)
+                if viewModel.pages.isEmpty { return }
+                let nextIndex = min(index, viewModel.pages.count - 1)
+                activatePage(id: viewModel.pages[nextIndex].id, scroll: true)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 40, height: 40)
+            }
+            .accessibilityLabel("Delete Page")
+            .accessibilityIdentifier("pageToolbarDelete")
+        }
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(.regularMaterial, in: Capsule(style: .continuous))
+        .shadow(color: .black.opacity(0.14), radius: 12, y: 4)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("floatingPageToolbar")
+    }
+
+    private var floatingAddButton: some View {
+        Button {
+            clearPDFTextSelection()
+            pageSelection = .none
+            showAddSheet = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .background(Color.accentColor, in: Circle())
+                .shadow(color: .black.opacity(0.22), radius: 10, y: 4)
+        }
+        .buttonStyle(.plain)
+        .disabled(drawingModeActive)
+        .opacity(drawingModeActive ? 0.45 : 1)
+        .accessibilityLabel("Add")
+        .accessibilityIdentifier("pageModeAddButton")
+    }
+
     private var addButtonBar: some View {
         pageBottomToolbar
+    }
+
+    private func handleDocumentScrollPhase(_ phase: ScrollPhase) {
+        switch phase {
+        case .idle:
+            scheduleFloatingChromeReveal()
+        default:
+            floatingChromeRevealTask?.cancel()
+            guard floatingChromeVisible else { return }
+            withAnimation(.easeOut(duration: 0.16)) {
+                floatingChromeVisible = false
+            }
+        }
+    }
+
+    private func scheduleFloatingChromeReveal() {
+        floatingChromeRevealTask?.cancel()
+        floatingChromeRevealTask = Task { @MainActor in
+            try? await Task.sleep(
+                nanoseconds: DocumentScrollNavigationEngine.floatingChromeRevealDelayNanoseconds
+            )
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.22)) {
+                floatingChromeVisible = true
+            }
+        }
     }
 
     private var renderTaskKey: String {

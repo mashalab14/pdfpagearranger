@@ -59,6 +59,10 @@ struct PageOverlayCanvasView: View {
     let onDeleteTextOverlay: (UUID) -> Void
     let pageTransitionEdge: Edge
     var keyboardBottomInset: CGFloat = 0
+    /// Called when overlay drag/resize or page zoom should block parent document scrolling.
+    var onCanvasScrollBlockingChange: ((Bool) -> Void)? = nil
+    /// Called when an overlay is being dragged/resized (for emphasized page chrome).
+    var onOverlayManipulationActiveChange: ((Bool) -> Void)? = nil
 
     @State private var scale: CGFloat = 1
     @State private var steadyScale: CGFloat = 1
@@ -198,15 +202,26 @@ struct PageOverlayCanvasView: View {
                     }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            // Pinch-zoom only; do not attach a pan DragGesture at 1× — it fights document scrolling.
             .gesture(pageZoomEnabled ? magnificationGesture : nil)
-            .simultaneousGesture(pageZoomEnabled ? panGesture : nil)
+            .simultaneousGesture(pageZoomEnabled && isPageZoomed ? panGesture : nil)
             .simultaneousGesture(pageSwipeEnabled ? pageSwipeGesture : nil)
-            .onLongPressGesture(minimumDuration: 0.35) {
+            .onLongPressGesture(minimumDuration: 0.45) {
                 guard !signaturePlacementActive,
                       !textEditingActive,
                       !stickyNotePlacementActive,
                       !drawingModeActive else { return }
                 pdfTextSelectionLayerActive = true
+            }
+            .onChange(of: overlayManipulationState.isActive) { _, isActive in
+                onOverlayManipulationActiveChange?(isActive)
+                reportCanvasScrollBlocking()
+            }
+            .onChange(of: scale) { _, _ in
+                reportCanvasScrollBlocking()
+            }
+            .onChange(of: stickyNoteDragOrigin) { _, _ in
+                reportCanvasScrollBlocking()
             }
             .onChange(of: signaturePlacementActive) { _, isActive in
                 if isActive {
@@ -668,7 +683,7 @@ struct PageOverlayCanvasView: View {
     }
 
     private var panGesture: some Gesture {
-        DragGesture()
+        DragGesture(minimumDistance: 8)
             .onChanged { value in
                 guard scale > minScale else { return }
                 offset = CGSize(
@@ -679,6 +694,13 @@ struct PageOverlayCanvasView: View {
             .onEnded { _ in
                 steadyOffset = offset
             }
+    }
+
+    private func reportCanvasScrollBlocking() {
+        let blocking = overlayManipulationState.isActive
+            || isPageZoomed
+            || stickyNoteDragOrigin != nil
+        onCanvasScrollBlockingChange?(blocking)
     }
 
     private func handlePageTap(at location: CGPoint, displaySize: CGSize) {

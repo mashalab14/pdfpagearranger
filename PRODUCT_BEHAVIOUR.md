@@ -431,16 +431,19 @@ There is **no separate Document Mode vs Page Mode navigation push**. The editor 
 |-----------|----------|
 | **Leading** | New PDF, Search, Undo, Redo |
 | **Trailing** | Document Actions **…** menu (Compress, Page Numbers, Watermark, Pages, Export) |
-| **Bottom page toolbar** | Rotate / Duplicate / Delete **active page**; **Add** content for the active page |
+| **Floating page capsule** (bottom-leading) | Rotate / Duplicate / Delete **active page** |
+| **Floating Add** (bottom-trailing circular button) | Opens Add content for the active page |
+
+Floating page controls sit above the document (not attached to a bottom bar), respect the Home Indicator safe area, and **fade out while scrolling**, then fade back in shortly after scrolling stops. Inline text editing still replaces this chrome with the Freeform format bar.
 
 ### Vertical document
 
-- Pages appear **top to bottom** in document order
+- Pages appear **top to bottom** in document order with **tight spacing** so the surface reads as one continuous document
 - Neighbouring pages may remain partially visible
 - Tap a page to activate it; scrolling updates the active page when another page becomes primary
-- Active page shows a subtle accent border
-- Inactive pages show full-size composited previews (not a thumbnail grid)
+- Active page uses a **subtle** outline by default; stronger accent chrome appears during selection, drag/resize, or active editing
 - Horizontal swipe is **not** the primary page-navigation behaviour on this surface
+- Document scrolling is prioritized over page gestures except when interacting with an editable object or when the page is zoomed
 - Search matches and Pages-organizer selection scroll to / activate the target page
 
 ### Page-level vs document-level actions
@@ -448,7 +451,8 @@ There is **no separate Document Mode vs Page Mode navigation push**. The editor 
 | Scope | Where |
 |-------|--------|
 | **Document** | Top-right **…** menu |
-| **Active page** | Bottom page toolbar (Add, rotate, duplicate, delete page) and overlay editing on the active canvas |
+| **Active page** | Floating page capsule (rotate, duplicate, delete) and overlay editing on the active canvas |
+| **Add content** | Floating circular Add button |
 
 ## 7. Page thumbnails (Pages organizer)
 
@@ -1158,7 +1162,7 @@ Editable text boxes placed on individual pages in Page Mode. Text is stored as o
 
 ### Formatting bar (above keyboard)
 
-While editing, a **Freeform-style compact bar** sits above the keyboard. It keeps the active text and caret visible and does **not** expose every formatting control at once. The large Page Mode **Add** button is hidden for the duration of text editing. Object chrome (move, resize, rotate, duplicate, delete) stays outside this typing toolbar.
+While editing, a **Freeform-style compact bar** sits above the keyboard. It keeps the active text and caret visible and does **not** expose every formatting control at once. The floating page chrome (capsule toolbar and circular **Add** button) is hidden for the duration of text editing. Object chrome (move, resize, rotate, duplicate, delete) stays outside this typing toolbar.
 
 The compact bar shows five progressive-disclosure controls plus **Done**. Tapping a control opens a **focused menu panel** above the bar (only one at a time):
 
@@ -1741,7 +1745,7 @@ Temporary UI state is **not** restored: selection, search query, zoom/pan, open 
 ### Implemented
 
 - Many controls have `accessibilityIdentifier`s for UI testing (import button, settings, thumbnails, overlays, compression, export, etc.)
-- Unified document editor: `documentModeReady` (session surface), `unifiedDocumentScroll`, `documentPageSlot_N`, `pageModeView` with `accessibilityValue` **"page N of M"**, `pageModeCanvas`, `pageBottomToolbar`, `pageModeAddButton`, `pageToolbarRotate` / `pageToolbarDuplicate` / `pageToolbarDelete`
+- Unified document editor: `documentModeReady` (session surface), `unifiedDocumentScroll`, `documentPageSlot_N`, `pageModeView` with `accessibilityValue` **"page N of M"**, `pageBottomToolbar` (floating chrome container), `floatingPageToolbar`, `pageModeAddButton`, `pageToolbarRotate` / `pageToolbarDuplicate` / `pageToolbarDelete`
 - Pages organizer: `documentPagesOrganizer`, `documentPageGrid`, `pageThumbnail_N`, `documentPagesOrganizerDone`
 - Settings gear: accessibility label **"Settings"**
 - Document Actions: accessibility label **"More"**; identifier `documentActionsButton`

@@ -162,6 +162,26 @@ final class UnifiedDocumentScrollRegressionTests: XCTestCase {
         XCTAssertTrue(pageEditor.contains("keyboardBottomInset"))
     }
 
+    func testFloatingChromeAndTightPageSpacing() throws {
+        let pageEditor = try source(named: "PageEditorView.swift")
+        let engine = try source(named: "DocumentScrollNavigationEngine.swift", subdirectory: "Services")
+
+        XCTAssertTrue(pageEditor.contains("floatingAddButton"))
+        XCTAssertTrue(pageEditor.contains("floatingPageActionsCapsule"))
+        XCTAssertTrue(pageEditor.contains("floatingPageToolbar"))
+        XCTAssertTrue(pageEditor.contains("onScrollPhaseChange"))
+        XCTAssertTrue(pageEditor.contains("floatingChromeVisible"))
+        XCTAssertTrue(pageEditor.contains("pageModeAddButton"))
+        XCTAssertTrue(engine.contains("max(4, min(8,"))
+        XCTAssertTrue(engine.contains("floatingChromeRevealDelayNanoseconds"))
+    }
+
+    func testCanvasPanDoesNotCompeteWithDocumentScrollAtUnityZoom() throws {
+        let canvas = try source(named: "PageOverlayCanvasView.swift")
+        XCTAssertTrue(canvas.contains("pageZoomEnabled && isPageZoomed ? panGesture : nil"))
+        XCTAssertTrue(canvas.contains("onCanvasScrollBlockingChange"))
+    }
+
     private func source(named fileName: String, subdirectory: String = "Views") throws -> String {
         let projectRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

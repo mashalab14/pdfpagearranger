@@ -334,7 +334,7 @@ UITests treat an imported document as ready when the **unified vertical editor**
 
 - `documentModeReady` + `unifiedDocumentScroll` + `pageModeView` + `documentPageSlot_1` + `pageModeAddButton`
 
-Thumbnails (`pageThumbnail_N` / `documentPageGrid`) appear only after **⋯ → Pages**. Tests that need the grid call `openPagesOrganizer()`. Page editing runs on the active canvas; vertical scroll / organizer / search activate pages. There is no Document Mode → Page Mode push.
+Floating page chrome (`pageBottomToolbar` / `floatingPageToolbar` / circular `pageModeAddButton`) fades while scrolling and returns after scroll settles. Thumbnails (`pageThumbnail_N` / `documentPageGrid`) appear only after **⋯ → Pages**. Tests that need the grid call `openPagesOrganizer()`. Page editing runs on the active canvas; vertical scroll / organizer / search activate pages. There is no Document Mode → Page Mode push.
 
 ### Testing workflow
 

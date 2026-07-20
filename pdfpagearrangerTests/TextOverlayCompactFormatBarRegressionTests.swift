@@ -111,9 +111,10 @@ final class TextOverlayCompactFormatBarRegressionTests: XCTestCase {
 
     func testAddButtonHiddenWhileTextEditingActive() throws {
         let source = try pageEditorSource()
-        // Page-level Add / rotate / duplicate / delete toolbar hides while inline text editing is active.
-        XCTAssertTrue(source.contains("if !textEditingActive {\n                pageBottomToolbar\n            }"))
+        // Floating page chrome (capsule + Add FAB) hides while inline text editing is active.
+        XCTAssertTrue(source.contains("if !textEditingActive {\n                pageBottomToolbar\n"))
         XCTAssertTrue(source.contains("pageModeAddButton"))
+        XCTAssertTrue(source.contains("floatingAddButton"))
         XCTAssertTrue(source.contains("onDuplicate:"))
         XCTAssertTrue(source.contains("onResetFormatting:"))
         XCTAssertTrue(source.contains("resetFormattingPreservingText()"))
