@@ -28,7 +28,7 @@ This document describes **exactly how the app behaves today** from the user's pe
 14.5. [Document Watermark](#145-document-watermark)
 15. [Active page editing](#15-active-page-editing)
 16. [Vertical page navigation](#16-vertical-page-navigation)
-17. [Page Mode zoom and pan](#17-page-mode-zoom-and-pan)
+17. [Document zoom and pan](#17-document-zoom-and-pan)
 18. [Adding content in Page Mode](#18-adding-content-in-page-mode)
 19.4. [Page annotations (V1)](#194-page-annotations-v1)
 19. [Image overlays](#19-image-overlays)
@@ -968,35 +968,34 @@ Primary navigation is **vertical scrolling**.
 | Search / Pages sheet | Programmatically scrolls to and activates the target page |
 | Horizontal swipe | Disabled on the unified surface (retained only in non-unified canvas paths) |
 
-## 17. Page Mode zoom and pan
+## 17. Document zoom and pan
 
-### When available
-
-- Only when **no overlay is selected**
+On the **unified vertical document**, magnification is owned by the document surface (`DocumentZoomState`), not by individual pages.
 
 ### Pinch zoom
 
-- **Pinch out:** zoom in up to **4×**
-- **Pinch in:** zoom out down to **1×**
-- If user ends pinch at ≤1×: zoom **animates back** to 1× (0.2 s ease-in-out)
+- Pinching **anywhere** on the document (active or inactive page) updates one shared scale
+- Every page frame and inter-page gap scales together so pages never overlap
+- Range: **1×** (fitted width) to **4×**
+- Pinch ends at ≤1× (+ small tolerance): returns to fitted-width layout
+- Focal point under the pinch is preserved; switching the active page does **not** reset zoom
+- Stored overlay/annotation coordinates stay page-normalized; zoom is display-only
 
-### Pan (drag)
+### Pan while magnified
 
-- Only when zoomed **above 1×**
-- Drag to move the zoomed page around the viewport
+- Above fitted width, the document scrolls freely **horizontally and vertically**
+- Vertical page snapping is suppressed while magnified; active-page tracking still follows the viewport
+- Returning to fitted width resumes normal settle-snap
 
 ### Double tap
 
-- When no overlay selected: **resets zoom and pan** to default (animated 0.2 s)
+- Resets document zoom to fitted width (animated)
 
-### Single tap on canvas (empty area)
+### When overlay is selected / editing
 
-- **Deselects** any selected overlay
-
-### When overlay is selected
-
-- Page pinch/pan/double-tap zoom are **disabled**
-- User can still pinch the **selected overlay** to resize it (see [Overlays](#21-overlay-selection-and-manipulation))
+- Document pinch still applies to the whole stack unless scroll is blocked by an active editing mode
+- User can still pinch a **selected image/signature overlay** to resize it (see [Overlays](#21-overlay-selection-and-manipulation))
+- Page-local canvas zoom (`scaleEffect` on one page) is **disabled** on the unified surface
 
 ---
 
@@ -1527,16 +1526,16 @@ All create **undo** entries.
 | **Drag** | Thumbnail | Reorder pages |
 | **Scroll** | Grid | Scroll document |
 
-### Page Mode — canvas
+### Unified document — canvas
 
 | Gesture | Target | Effect |
 |---------|--------|--------|
 | **Tap** | Empty canvas | Deselect overlay |
-| **Double tap** | Canvas (no overlay selected) | Reset zoom |
-| **Pinch** | Canvas (no overlay selected) | Zoom page 1×–4× |
-| **Drag** | Canvas (zoomed, no overlay selected) | Pan zoomed page |
-| **Swipe left/right** | Canvas (conditions met) | Next/previous page |
-| **Scroll** | — | No scroll in page view (fixed layout) |
+| **Double tap** | Document | Reset document zoom to fitted width |
+| **Pinch** | Document (any page) | Zoom entire document 1×–4× |
+| **Drag / scroll** | Document (magnified) | Pan horizontally and vertically |
+| **Vertical scroll** | Document (fitted width) | Free scroll; settle-snap on idle |
+| **Swipe left/right** | — | Disabled on the unified surface |
 
 ### Page Mode — overlay (selected)
 
@@ -1597,24 +1596,24 @@ All create **undo** entries.
 5. **Overlay drag / pinch** (when selected) — blocks page navigation while active
 6. **Overlay tap** — select
 7. **Native PDF text selection** (long-press to mount layer)
-8. **Page pinch/pan** (when no overlay or annotation selected, not in Drawing Mode)
-9. **Page swipe navigation** (when not zoomed, not manipulating overlay, not in Drawing Mode)
+8. **Document pinch zoom** (unified surface; not blocked solely by idle overlay selection)
+9. **Document scroll / settle-snap** (snap only at fitted-width zoom)
 10. **Canvas tap** — deselect
 
 **Specific rules:**
 
-| Situation | Page swipe | Page zoom | Overlay edit |
-|-----------|------------|-----------|--------------|
-| Drawing Mode active | ❌ Blocked | ❌ Blocked | ❌ Disabled |
-| Sticky-note placement armed | ❌ Blocked | ❌ Disabled | ❌ Disabled |
-| Selected sticky note being dragged | ❌ Blocked | ❌ Disabled | ❌ Disabled |
+| Situation | Page swipe | Document zoom | Overlay edit |
+|-----------|------------|---------------|--------------|
+| Drawing Mode active | ❌ Blocked | ❌ Scroll blocked | ❌ Disabled |
+| Sticky-note placement armed | ❌ Blocked | ❌ Scroll blocked | ❌ Disabled |
+| Selected sticky note being dragged | ❌ Blocked | ❌ Scroll blocked | ❌ Disabled |
 | Overlay being dragged | ❌ Blocked | N/A | ✅ Active |
 | Overlay being resized (handle or pinch) | ❌ Blocked | N/A | ✅ Active |
-| Overlay selected, idle | ✅ On empty canvas | ❌ Disabled | ✅ Tap to edit |
-| Page zoomed | ❌ Blocked | ✅ Pan/pinch | ❌ Select only |
-| Nothing selected, default zoom | ✅ | ✅ | — |
+| Overlay selected, idle | ❌ (unified) | ✅ Document pinch | ✅ Tap to edit |
+| Document magnified | ❌ (unified) | ✅ Pan via scroll | ✅ Select / edit |
+| Nothing selected, fitted width | ❌ (unified) | ✅ Pinch | — |
 
-**Intentional design:** Overlay editing always takes precedence over page navigation during active manipulation. Page navigation and page zoom are mutually exclusive (zoom blocks swipe).
+**Intentional design:** Overlay editing takes precedence during active manipulation. On the unified surface, magnification is document-owned; horizontal page swipe is not used for navigation.
 
 ---
 
