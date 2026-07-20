@@ -297,7 +297,7 @@ Stored on `PageAnnotation` relative to the **unrotated** page media box:
 
 ### SwiftUI / Page Mode *(top-left origin)*
 
-`PageEditorView` sizes the canvas with `PageModeLayoutSizing` (width fills safe area minus 16 pt margins; height from aspect ratio). `ImageOverlayObjectView` uses `OverlayGeometryEngine.pageModeLayout` to convert normalized storage → pixel center, size, and rotation on the fitted page canvas.
+`PageEditorView` sizes the canvas with `PageModeLayoutSizing` (width fills safe area minus `stackHorizontalMargin` / 12 pt margins; height from aspect ratio). On the unified surface, active and inactive pages share `unifiedSlotDisplaySize` so activation does not change frame. `ImageOverlayObjectView` uses `OverlayGeometryEngine.pageModeLayout` to convert normalized storage → pixel center, size, and rotation on the fitted page canvas.
 
 ### Thumbnail coordinates *(top-left origin)*
 
