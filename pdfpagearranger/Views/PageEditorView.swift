@@ -62,10 +62,13 @@ struct PageEditorView: View {
     @State private var interactionBlockingScroll = false
     @State private var floatingChromeVisible = true
     @State private var floatingChromeRevealTask: Task<Void, Never>?
+    @State private var documentScrollPhase: ScrollPhase = .idle
     @State private var preferAnimatedDocumentScroll = false
     /// When true, the next `pageRoute` change scrolls the document (search / organizer / tap / open).
     /// Visibility-driven active-page updates clear this so free scrolling never jumps.
     @State private var scrollDocumentOnNextRouteChange = true
+    @State private var pendingIntentionalEdit: PageModeSelection?
+    @State private var intentionalSnapTask: Task<Void, Never>?
     @State private var documentZoom = DocumentZoomState()
     @State private var documentScrollPosition = ScrollPosition(idType: UUID.self)
     @State private var isPinchingDocument = false
@@ -541,6 +544,7 @@ struct PageEditorView: View {
                     trackedDocumentContentOffset = offset
                 }
                 .onScrollPhaseChange { _, newPhase in
+                    documentScrollPhase = newPhase
                     handleDocumentScrollPhase(newPhase)
                 }
                 .onPreferenceChange(DocumentPageVisibilityKey.self) { visibility in
@@ -708,8 +712,13 @@ struct PageEditorView: View {
                             isActiveChrome: false
                         )
                         .contentShape(Rectangle())
-                        .onTapGesture {
-                            activatePage(id: item.id, scroll: true)
+                        .onTapGesture(coordinateSpace: .local) { location in
+                            let pendingEdit = intentionalEditSelection(
+                                at: location,
+                                displaySize: displaySize,
+                                pageItem: item
+                            )
+                            intentionallyActivatePage(id: item.id, pendingEdit: pendingEdit)
                         }
                     }
                 }
@@ -778,6 +787,91 @@ struct PageEditorView: View {
         if scroll {
             scrollToPageToken = UUID()
         }
+    }
+
+    /// Tap-to-activate / tap-to-edit: snap into the preferred editing position only when the scroll is idle.
+    private func intentionallyActivatePage(id: UUID, pendingEdit: PageModeSelection? = nil) {
+        guard DocumentScrollNavigationEngine.shouldAcceptIntentionalPageActivation(
+            scrollPhaseIsIdle: documentScrollPhase == .idle,
+            isPinching: isPinchingDocument
+        ) else {
+            return
+        }
+
+        intentionalSnapTask?.cancel()
+        // Clear selection until the page rests in the editing position.
+        if pendingEdit != nil {
+            pageSelection = .none
+        }
+        pendingIntentionalEdit = pendingEdit
+        activatePage(id: id, scroll: true)
+
+        guard pendingEdit != nil else { return }
+        intentionalSnapTask = Task { @MainActor in
+            try? await Task.sleep(
+                nanoseconds: DocumentScrollNavigationEngine.intentionalActivationSnapNanoseconds
+            )
+            guard !Task.isCancelled else { return }
+            applyPendingIntentionalEdit()
+        }
+    }
+
+    private func applyPendingIntentionalEdit() {
+        guard let pending = pendingIntentionalEdit else { return }
+        pendingIntentionalEdit = nil
+        pageSelection = pending
+        if case .overlay(let overlayID) = pending,
+           let object = viewModel.overlayObjects(for: pageRoute.pageItemID).first(where: { $0.id == overlayID }) {
+            let maxZ = viewModel.overlayObjects(for: pageRoute.pageItemID).map(\.zIndex).max() ?? 0
+            if object.zIndex < maxZ {
+                var updated = object
+                updated.zIndex = maxZ + 1
+                viewModel.updateOverlay(updated)
+            }
+        }
+    }
+
+    /// Hit-test inactive page content so tapping an overlay/annotation counts as intentional edit activation.
+    private func intentionalEditSelection(
+        at location: CGPoint,
+        displaySize: CGSize,
+        pageItem: PageItem
+    ) -> PageModeSelection? {
+        let annotations = viewModel.annotations(for: pageItem.id)
+        if let annotation = AnnotationHitTestEngine.annotation(
+            at: location,
+            displayPageSize: displaySize,
+            annotations: annotations,
+            pageRotation: pageItem.rotation
+        ) {
+            switch annotation.kind {
+            case .highlight: return .highlight(annotation.id)
+            case .drawing: return .drawing(annotation.id)
+            case .stickyNote: return .stickyNote(annotation.id)
+            case .textComment: return .textComment(annotation.id)
+            }
+        }
+
+        let overlays = viewModel.overlayObjects(for: pageItem.id).sorted { $0.zIndex > $1.zIndex }
+        for object in overlays {
+            let layout = OverlayGeometryEngine.pageModeLayout(
+                for: object,
+                pageRotation: pageItem.rotation,
+                renderSize: displaySize
+            )
+            let halfW = layout.size.width / 2
+            let halfH = layout.size.height / 2
+            let rect = CGRect(
+                x: layout.center.x - halfW,
+                y: layout.center.y - halfH,
+                width: layout.size.width,
+                height: layout.size.height
+            )
+            if rect.contains(location) {
+                return .overlay(object.id)
+            }
+        }
+        return nil
     }
 
     private func beginScrollActivationSuppression(
@@ -987,7 +1081,12 @@ struct PageEditorView: View {
                     try? await Task.sleep(nanoseconds: 900_000_000)
                     zoomPositionRestoreSuppressed = false
                 }
-            }
+            },
+            onRequestIntentionalContentEdit: isUnifiedDocumentSurface
+                ? { selection in
+                    intentionallyActivatePage(id: pageItem.id, pendingEdit: selection)
+                }
+                : nil
         )
     }
 

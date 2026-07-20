@@ -69,6 +69,8 @@ struct PageOverlayCanvasView: View {
     var pageLocalZoomEnabled: Bool = true
     /// Double-tap reset when page-local zoom is disabled (forwards to document zoom).
     var onDocumentZoomReset: (() -> Void)? = nil
+    /// Unified document: overlay/annotation taps snap the page into editing position before selection applies.
+    var onRequestIntentionalContentEdit: ((PageModeSelection) -> Void)? = nil
 
     @State private var scale: CGFloat = 1
     @State private var steadyScale: CGFloat = 1
@@ -368,17 +370,23 @@ struct PageOverlayCanvasView: View {
                         onSelect: { annotation in
                             signatureEditOverlayID = nil
                             deactivatePDFTextSelectionLayer()
+                            let selection: PageModeSelection
                             switch annotation.kind {
                             case .highlight:
-                                pageSelection = .highlight(annotation.id)
+                                selection = .highlight(annotation.id)
                             case .drawing:
-                                pageSelection = .drawing(annotation.id)
+                                selection = .drawing(annotation.id)
                             case .stickyNote:
-                                pageSelection = .stickyNote(annotation.id)
+                                selection = .stickyNote(annotation.id)
                             case .textComment:
-                                pageSelection = .textComment(annotation.id)
+                                selection = .textComment(annotation.id)
                             }
-                            onSelectAnnotation(annotation)
+                            if let onRequestIntentionalContentEdit {
+                                onRequestIntentionalContentEdit(selection)
+                            } else {
+                                pageSelection = selection
+                                onSelectAnnotation(annotation)
+                            }
                         }
                     )
                 }
@@ -420,8 +428,12 @@ struct PageOverlayCanvasView: View {
                                 guard !signaturePlacementActive, !textEditingActive else { return }
                                 signatureEditOverlayID = nil
                                 deactivatePDFTextSelectionLayer()
-                                pageSelection = .overlay(object.id)
-                                bringToFront(object)
+                                if let onRequestIntentionalContentEdit {
+                                    onRequestIntentionalContentEdit(.overlay(object.id))
+                                } else {
+                                    pageSelection = .overlay(object.id)
+                                    bringToFront(object)
+                                }
                             },
                             onEdit: {
                                 onEditTextOverlay(object.id)
@@ -452,8 +464,12 @@ struct PageOverlayCanvasView: View {
                                 guard !signaturePlacementActive, !textEditingActive else { return }
                                 signatureEditOverlayID = nil
                                 deactivatePDFTextSelectionLayer()
-                                pageSelection = .overlay(object.id)
-                                bringToFront(object)
+                                if let onRequestIntentionalContentEdit {
+                                    onRequestIntentionalContentEdit(.overlay(object.id))
+                                } else {
+                                    pageSelection = .overlay(object.id)
+                                    bringToFront(object)
+                                }
                             },
                             onUpdate: onUpdate,
                             onDelete: {

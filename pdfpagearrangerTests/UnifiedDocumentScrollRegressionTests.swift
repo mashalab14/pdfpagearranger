@@ -213,10 +213,12 @@ final class UnifiedDocumentScrollRegressionTests: XCTestCase {
         XCTAssertTrue(engine.contains("pageRestAnchor"))
         XCTAssertTrue(engine.contains("primaryPageID"))
         XCTAssertTrue(engine.contains("shouldTrackActivePageFromVisibility"))
+        XCTAssertTrue(engine.contains("shouldAcceptIntentionalPageActivation"))
         XCTAssertFalse(engine.contains("shouldPerformSettleSnap"))
         XCTAssertFalse(pageEditor.contains("settleDocumentScroll"))
         XCTAssertFalse(pageEditor.contains("pendingUserScrollSettle"))
         XCTAssertTrue(pageEditor.contains("updateActivePageFromVisibility"))
+        XCTAssertTrue(pageEditor.contains("intentionallyActivatePage"))
         XCTAssertFalse(pageEditor.contains("anchor: .center"))
     }
 

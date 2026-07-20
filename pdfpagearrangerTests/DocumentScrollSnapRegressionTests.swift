@@ -113,6 +113,27 @@ final class DocumentScrollSnapRegressionTests: XCTestCase {
         )
     }
 
+    func testIntentionalActivationOnlyWhenScrollIdle() {
+        XCTAssertTrue(
+            DocumentScrollNavigationEngine.shouldAcceptIntentionalPageActivation(
+                scrollPhaseIsIdle: true,
+                isPinching: false
+            )
+        )
+        XCTAssertFalse(
+            DocumentScrollNavigationEngine.shouldAcceptIntentionalPageActivation(
+                scrollPhaseIsIdle: false,
+                isPinching: false
+            )
+        )
+        XCTAssertFalse(
+            DocumentScrollNavigationEngine.shouldAcceptIntentionalPageActivation(
+                scrollPhaseIsIdle: true,
+                isPinching: true
+            )
+        )
+    }
+
     func testProgrammaticActivationNotOverriddenByStaleVisibilityWhileSuppressed() {
         let current = viewModel.pages[0].id
         let stale = viewModel.pages[2].id
@@ -225,8 +246,10 @@ final class DocumentScrollSnapSourceRegressionTests: XCTestCase {
         XCTAssertFalse(engine.contains("shouldApplyVisibilityActivation"))
         XCTAssertFalse(zoomEngine.contains("shouldPerformSettleSnap"))
         XCTAssertTrue(pageEditor.contains("updateActivePageFromVisibility"))
+        XCTAssertTrue(pageEditor.contains("intentionallyActivatePage"))
         XCTAssertTrue(pageEditor.contains("scrollDocumentOnNextRouteChange"))
         XCTAssertTrue(engine.contains("shouldTrackActivePageFromVisibility"))
+        XCTAssertTrue(engine.contains("shouldAcceptIntentionalPageActivation"))
     }
 
     func testActivePageChangeDoesNotScrollDocument() throws {
@@ -240,6 +263,24 @@ final class DocumentScrollSnapSourceRegressionTests: XCTestCase {
         XCTAssertTrue(visibilityRegion.contains("activatePage(id: target, scroll: false)"))
         XCTAssertFalse(visibilityRegion.contains("activatePage(id: target, scroll: true)"))
         XCTAssertFalse(visibilityRegion.contains("scrollDocument(to:"))
+    }
+
+    func testIntentionalTapActivatesWithSnapThenEdit() throws {
+        let pageEditor = try source(named: "PageEditorView.swift")
+        let canvas = try source(named: "PageOverlayCanvasView.swift")
+        let engine = try source(named: "DocumentScrollNavigationEngine.swift", subdirectory: "Services")
+        XCTAssertTrue(pageEditor.contains("intentionallyActivatePage(id:"))
+        XCTAssertTrue(pageEditor.contains("pendingIntentionalEdit"))
+        XCTAssertTrue(pageEditor.contains("applyPendingIntentionalEdit"))
+        XCTAssertTrue(pageEditor.contains("shouldAcceptIntentionalPageActivation"))
+        XCTAssertTrue(pageEditor.contains("intentionalEditSelection"))
+        XCTAssertTrue(canvas.contains("onRequestIntentionalContentEdit"))
+        XCTAssertTrue(engine.contains("intentionalActivationSnapNanoseconds"))
+        // Inactive page tap must go through intentional activation, not raw activatePage scroll.
+        let slotRegion = pageEditor.components(separatedBy: "private func documentPageSlot").last?
+            .components(separatedBy: "private func pageRenderKey").first ?? ""
+        XCTAssertTrue(slotRegion.contains("intentionallyActivatePage"))
+        XCTAssertFalse(slotRegion.contains("activatePage(id: item.id, scroll: true)"))
     }
 
     func testInitialViewportUsesTopRestAnchorWithoutCenterSettle() throws {

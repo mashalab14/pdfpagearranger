@@ -444,8 +444,9 @@ Floating page controls sit above the document (not attached to a bottom bar), re
 - Workspace uses a consistent document background; pages are not framed as independent feed cards
 - **Initial position:** opening a document scrolls to the **top** of the active page (page 1 for a new session, or the restored active page when the session already has one). The first frame is pinned without a post-launch corrective jump; lazy page loads re-pin while suppressed
 - **Free scrolling:** the document scrolls continuously with normal inertial deceleration. Scrolling never triggers an automatic repositioning jump or page snap after drag or deceleration
-- **Active page** is determined continuously from viewport geometry (page whose center is closest to the viewport center, preferring the mid-viewport activation band). Changing the active page updates editing state, page actions, and the page-position indicator only — it does **not** move the document
-- Search, Pages-organizer selection, tap-to-activate, and other explicit navigation scroll to the top of the chosen page (`pageRestAnchor`) without resetting document zoom
+- **Intentional page activation:** tapping a page (or an overlay/annotation on it) while the document is idle makes that page active, smoothly scrolls it to the preferred editing position (`pageRestAnchor`), then enables editing controls. Pages stay the same size. Taps during scrolling, deceleration, or pinch are ignored for activation/snap
+- **Active page** may also update continuously from viewport geometry for indicators and toolbar state; that tracking never moves the document
+- Search and Pages-organizer selection continue to scroll directly to the chosen page without resetting document zoom
 - Programmatic navigation suppresses stale scroll-visibility callbacks so they cannot immediately override the intended page
 - **Document zoom:** one shared magnification (1×–4×) owned by the document surface. Pinching anywhere zooms every page uniformly via scaled layout frames and scaled page gaps (pages never overlap). Double-tap resets to fitted width. Switching the active page does not reset zoom; zoom preserves the current page and position
 - While magnified, the document pans freely horizontally and vertically; active-page tracking still follows the viewport
@@ -1534,7 +1535,8 @@ All create **undo** entries.
 | **Double tap** | Document | Reset document zoom to fitted width |
 | **Pinch** | Document (any page) | Zoom entire document 1×–4× |
 | **Drag / scroll** | Document (magnified) | Pan horizontally and vertically |
-| **Vertical scroll** | Document (any zoom) | Free scroll with inertia; no page snap |
+| **Vertical scroll** | Document (any zoom) | Free scroll with inertia; no automatic page snap |
+| **Tap** | Inactive page / overlay / annotation (idle) | Activate page, snap to editing position, then enable editing |
 | **Swipe left/right** | — | Disabled on the unified surface |
 
 ### Page Mode — overlay (selected)
@@ -1597,7 +1599,7 @@ All create **undo** entries.
 6. **Overlay tap** — select
 7. **Native PDF text selection** (long-press to mount layer)
 8. **Document pinch zoom** (unified surface; not blocked solely by idle overlay selection)
-9. **Document scroll** (free inertial scrolling; no page snap)
+9. **Document scroll** (free inertial scrolling; snap only on intentional tap activation)
 10. **Canvas tap** — deselect
 
 **Specific rules:**

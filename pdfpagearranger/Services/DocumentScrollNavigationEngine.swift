@@ -8,7 +8,8 @@ enum DocumentScrollNavigationEngine {
     static let activationMidYNormalizedRange: ClosedRange<CGFloat> = 0.28...0.72
 
     /// Resting scroll position: top of the target page aligned to the top of the viewport.
-    /// Used for open, search, Pages organizer, and other explicit programmatic navigation — never for free-scroll settle.
+    /// Used for intentional tap activation, open, search, Pages organizer, and other explicit navigation —
+    /// never for free-scroll settle after drag or deceleration.
     static let pageRestAnchor = UnitPoint(x: 0.5, y: 0)
 
     /// Chooses the page whose vertical center is closest to the viewport center.
@@ -37,6 +38,17 @@ enum DocumentScrollNavigationEngine {
     ) -> Bool {
         !scrollActivationSuppressed && !interactionBlockingScroll
     }
+
+    /// User tap-to-activate / tap-to-edit may snap only while the document is idle — never during drag, deceleration, or pinch.
+    static func shouldAcceptIntentionalPageActivation(
+        scrollPhaseIsIdle: Bool,
+        isPinching: Bool
+    ) -> Bool {
+        scrollPhaseIsIdle && !isPinching
+    }
+
+    /// Wait for the intentional snap animation before applying deferred overlay/annotation editing.
+    static let intentionalActivationSnapNanoseconds: UInt64 = 300_000_000
 
     static func shouldUpdateActivePage(
         proposedID: UUID?,
