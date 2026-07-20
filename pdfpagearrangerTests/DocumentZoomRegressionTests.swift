@@ -19,12 +19,6 @@ final class DocumentZoomEngineRegressionTests: XCTestCase {
         XCTAssertFalse(DocumentZoomEngine.isAtFittedWidth(2))
     }
 
-    func testSettleSnapOnlyAtFittedWidth() {
-        XCTAssertTrue(DocumentZoomEngine.shouldPerformSettleSnap(pageCount: 3, scale: 1))
-        XCTAssertFalse(DocumentZoomEngine.shouldPerformSettleSnap(pageCount: 3, scale: 2))
-        XCTAssertFalse(DocumentZoomEngine.shouldPerformSettleSnap(pageCount: 1, scale: 1))
-    }
-
     func testScaledPageSizeKeepsAspectAndSharesScale() {
         let fitted = CGSize(width: 300, height: 400)
         let active = DocumentZoomEngine.scaledPageSize(fittedSize: fitted, scale: 2)
@@ -249,13 +243,14 @@ final class DocumentZoomSourceRegressionTests: XCTestCase {
         XCTAssertTrue(pageEditor.contains("documentZoom.resetToFittedWidth()"))
     }
 
-    func testSnappingSuppressedWhileMagnified() throws {
+    func testActivePageTrackingIndependentOfZoom() throws {
         let pageEditor = try source(named: "PageEditorView.swift")
         let engine = try source(named: "DocumentZoomEngine.swift", subdirectory: "Services")
-        XCTAssertTrue(pageEditor.contains("if documentZoom.isMagnified"))
+        XCTAssertTrue(pageEditor.contains("updateActivePageFromVisibility"))
         XCTAssertTrue(pageEditor.contains("activatePage(id: target, scroll: false)"))
-        XCTAssertTrue(engine.contains("shouldPerformSettleSnap(pageCount: Int, scale:"))
-        XCTAssertTrue(pageEditor.contains("DocumentZoomEngine.shouldPerformSettleSnap"))
+        XCTAssertFalse(engine.contains("shouldPerformSettleSnap"))
+        XCTAssertFalse(pageEditor.contains("DocumentZoomEngine.shouldPerformSettleSnap"))
+        XCTAssertFalse(pageEditor.contains("settleDocumentScroll"))
     }
 
     func testHorizontalAndVerticalScrollWhileMagnified() throws {

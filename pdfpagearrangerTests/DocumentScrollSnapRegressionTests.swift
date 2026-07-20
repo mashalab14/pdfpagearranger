@@ -13,7 +13,7 @@ final class DocumentScrollSnapRegressionTests: XCTestCase {
         try await super.setUp()
         viewModel = PDFEditorViewModel()
         let url = try PDFTestFactory.writePDF(
-            named: "document-scroll-snap",
+            named: "document-free-scroll",
             pageCount: 4,
             labels: ["A", "B", "C", "D"]
         )
@@ -46,11 +46,11 @@ final class DocumentScrollSnapRegressionTests: XCTestCase {
         XCTAssertEqual(viewModel.pageIndex(for: resolved!), 2)
     }
 
-    func testSettleTargetUsesActivationBandLikePrimaryDetection() {
+    func testPrimaryPageUsesActivationBandNearestCenter() {
         let a = viewModel.pages[0].id
         let b = viewModel.pages[1].id
         let c = viewModel.pages[2].id
-        let target = DocumentScrollNavigationEngine.settleTargetPageID(
+        let target = DocumentScrollNavigationEngine.primaryPageID(
             visibilityCenters: [a: 40, b: 220, c: 480],
             viewportHeight: 400,
             fallback: a
@@ -58,12 +58,11 @@ final class DocumentScrollSnapRegressionTests: XCTestCase {
         XCTAssertEqual(target, b)
     }
 
-    func testSlowDragSettlesToNearestBandPage() {
+    func testMidScrollVisibilitySelectsNearestBandPage() {
         let previous = viewModel.pages[0].id
         let current = viewModel.pages[1].id
         let next = viewModel.pages[2].id
-        // Midway between previous and current, still closer to current center in band.
-        let target = DocumentScrollNavigationEngine.settleTargetPageID(
+        let target = DocumentScrollNavigationEngine.primaryPageID(
             visibilityCenters: [previous: 80, current: 210, next: 520],
             viewportHeight: 400,
             fallback: previous
@@ -71,10 +70,10 @@ final class DocumentScrollSnapRegressionTests: XCTestCase {
         XCTAssertEqual(target, current)
     }
 
-    func testFastFlickSettlesToNextPage() {
+    func testFastScrollVisibilitySelectsNextPageWithoutRequiringIdle() {
         let current = viewModel.pages[1].id
         let next = viewModel.pages[2].id
-        let target = DocumentScrollNavigationEngine.settleTargetPageID(
+        let target = DocumentScrollNavigationEngine.primaryPageID(
             visibilityCenters: [current: 60, next: 200],
             viewportHeight: 400,
             fallback: current
@@ -82,10 +81,10 @@ final class DocumentScrollSnapRegressionTests: XCTestCase {
         XCTAssertEqual(target, next)
     }
 
-    func testFlickSettlesToPreviousPage() {
+    func testScrollVisibilitySelectsPreviousPage() {
         let previous = viewModel.pages[0].id
         let current = viewModel.pages[1].id
-        let target = DocumentScrollNavigationEngine.settleTargetPageID(
+        let target = DocumentScrollNavigationEngine.primaryPageID(
             visibilityCenters: [previous: 190, current: 340],
             viewportHeight: 400,
             fallback: current
@@ -93,35 +92,23 @@ final class DocumentScrollSnapRegressionTests: XCTestCase {
         XCTAssertEqual(target, previous)
     }
 
-    func testSinglePageDocumentDoesNotPerformSettleSnap() async throws {
-        let url = try PDFTestFactory.writePDF(named: "snap-one-page", pageCount: 1, labels: ["Only"])
-        tempURLs.append(url)
-        let single = PDFEditorViewModel()
-        await single.importPDF(from: url)
-        XCTAssertFalse(DocumentScrollNavigationEngine.shouldPerformSettleSnap(pageCount: single.pageCount))
-        XCTAssertTrue(DocumentScrollNavigationEngine.shouldPerformSettleSnap(pageCount: viewModel.pageCount))
-    }
-
-    func testVisibilityActivationBlockedUntilScrollIdleAndUnsuppressed() {
-        XCTAssertFalse(
-            DocumentScrollNavigationEngine.shouldApplyVisibilityActivation(
-                scrollPhaseIsIdle: false,
+    func testActivePageTrackingDoesNotRequireScrollIdle() {
+        XCTAssertTrue(
+            DocumentScrollNavigationEngine.shouldTrackActivePageFromVisibility(
                 scrollActivationSuppressed: false,
                 interactionBlockingScroll: false
             )
         )
         XCTAssertFalse(
-            DocumentScrollNavigationEngine.shouldApplyVisibilityActivation(
-                scrollPhaseIsIdle: true,
+            DocumentScrollNavigationEngine.shouldTrackActivePageFromVisibility(
                 scrollActivationSuppressed: true,
                 interactionBlockingScroll: false
             )
         )
-        XCTAssertTrue(
-            DocumentScrollNavigationEngine.shouldApplyVisibilityActivation(
-                scrollPhaseIsIdle: true,
+        XCTAssertFalse(
+            DocumentScrollNavigationEngine.shouldTrackActivePageFromVisibility(
                 scrollActivationSuppressed: false,
-                interactionBlockingScroll: false
+                interactionBlockingScroll: true
             )
         )
     }
@@ -129,15 +116,14 @@ final class DocumentScrollSnapRegressionTests: XCTestCase {
     func testProgrammaticActivationNotOverriddenByStaleVisibilityWhileSuppressed() {
         let current = viewModel.pages[0].id
         let stale = viewModel.pages[2].id
-        let proposed = DocumentScrollNavigationEngine.settleTargetPageID(
+        let proposed = DocumentScrollNavigationEngine.primaryPageID(
             visibilityCenters: [stale: 200],
             viewportHeight: 400,
             fallback: current
         )
         XCTAssertEqual(proposed, stale)
         XCTAssertFalse(
-            DocumentScrollNavigationEngine.shouldApplyVisibilityActivation(
-                scrollPhaseIsIdle: true,
+            DocumentScrollNavigationEngine.shouldTrackActivePageFromVisibility(
                 scrollActivationSuppressed: true,
                 interactionBlockingScroll: false
             )
@@ -153,7 +139,6 @@ final class DocumentScrollSnapRegressionTests: XCTestCase {
 
     func testDeletionResolvesNearestRemainingPageAtBeginningMiddleAndEnd() {
         let pages = viewModel.pages
-        // Beginning
         XCTAssertEqual(
             DocumentScrollNavigationEngine.resolvedActivePageID(
                 preferredID: pages[0].id,
@@ -162,7 +147,6 @@ final class DocumentScrollSnapRegressionTests: XCTestCase {
             ),
             pages[1].id
         )
-        // Middle
         XCTAssertEqual(
             DocumentScrollNavigationEngine.resolvedActivePageID(
                 preferredID: pages[1].id,
@@ -171,7 +155,6 @@ final class DocumentScrollSnapRegressionTests: XCTestCase {
             ),
             pages[2].id
         )
-        // End
         XCTAssertEqual(
             DocumentScrollNavigationEngine.resolvedActivePageID(
                 preferredID: pages[3].id,
@@ -196,7 +179,6 @@ final class DocumentScrollSnapRegressionTests: XCTestCase {
             active
         )
 
-        // Insert by duplicating neighbour — active id must still resolve.
         viewModel.duplicatePage(id: viewModel.pages[0].id)
         XCTAssertEqual(
             DocumentScrollNavigationEngine.resolvedActivePageID(preferredID: active, pages: viewModel.pages),
@@ -211,7 +193,7 @@ final class DocumentScrollSnapRegressionTests: XCTestCase {
         )
     }
 
-    func testPageRestAnchorIsTopOfPage() {
+    func testPageRestAnchorIsTopOfPageForProgrammaticNavigation() {
         XCTAssertEqual(DocumentScrollNavigationEngine.pageRestAnchor.x, 0.5, accuracy: 0.001)
         XCTAssertEqual(DocumentScrollNavigationEngine.pageRestAnchor.y, 0, accuracy: 0.001)
     }
@@ -231,6 +213,35 @@ final class DocumentScrollSnapSourceRegressionTests: XCTestCase {
         )
     }
 
+    func testNoSettleSnapCallbacksOrStateRemain() throws {
+        let pageEditor = try source(named: "PageEditorView.swift")
+        let engine = try source(named: "DocumentScrollNavigationEngine.swift", subdirectory: "Services")
+        let zoomEngine = try source(named: "DocumentZoomEngine.swift", subdirectory: "Services")
+        XCTAssertFalse(pageEditor.contains("settleDocumentScroll"))
+        XCTAssertFalse(pageEditor.contains("pendingUserScrollSettle"))
+        XCTAssertFalse(pageEditor.contains("shouldPerformSettleSnap"))
+        XCTAssertFalse(engine.contains("shouldPerformSettleSnap"))
+        XCTAssertFalse(engine.contains("settleTargetPageID"))
+        XCTAssertFalse(engine.contains("shouldApplyVisibilityActivation"))
+        XCTAssertFalse(zoomEngine.contains("shouldPerformSettleSnap"))
+        XCTAssertTrue(pageEditor.contains("updateActivePageFromVisibility"))
+        XCTAssertTrue(pageEditor.contains("scrollDocumentOnNextRouteChange"))
+        XCTAssertTrue(engine.contains("shouldTrackActivePageFromVisibility"))
+    }
+
+    func testActivePageChangeDoesNotScrollDocument() throws {
+        let pageEditor = try source(named: "PageEditorView.swift")
+        XCTAssertTrue(pageEditor.contains("activatePage(id: target, scroll: false)"))
+        XCTAssertTrue(pageEditor.contains("scrollDocumentOnNextRouteChange = scroll"))
+        XCTAssertTrue(pageEditor.contains("guard scrollDocumentOnNextRouteChange else"))
+        // Visibility path must use scroll: false — never scroll: true for free-scroll tracking.
+        let visibilityRegion = pageEditor.components(separatedBy: "private func updateActivePageFromVisibility").last?
+            .components(separatedBy: "private func pageCanvas").first ?? ""
+        XCTAssertTrue(visibilityRegion.contains("activatePage(id: target, scroll: false)"))
+        XCTAssertFalse(visibilityRegion.contains("activatePage(id: target, scroll: true)"))
+        XCTAssertFalse(visibilityRegion.contains("scrollDocument(to:"))
+    }
+
     func testInitialViewportUsesTopRestAnchorWithoutCenterSettle() throws {
         let pageEditor = try source(named: "PageEditorView.swift")
         let engine = try source(named: "DocumentScrollNavigationEngine.swift", subdirectory: "Services")
@@ -239,8 +250,6 @@ final class DocumentScrollSnapSourceRegressionTests: XCTestCase {
         XCTAssertTrue(pageEditor.contains("scrollDocument(to:"))
         XCTAssertTrue(pageEditor.contains("animated: false"))
         XCTAssertFalse(pageEditor.contains("anchor: .center"))
-        XCTAssertTrue(pageEditor.contains("settleDocumentScroll"))
-        XCTAssertTrue(pageEditor.contains("pendingUserScrollSettle"))
         XCTAssertTrue(pageEditor.contains("estimatedUnifiedSlotDisplaySize"))
     }
 
@@ -270,7 +279,6 @@ final class DocumentScrollSnapSourceRegressionTests: XCTestCase {
         XCTAssertTrue(pageEditor.contains("floatingPageActionsCapsule"))
         XCTAssertTrue(pageEditor.contains("accessibilityIdentifier(\"pageBottomToolbar\")"))
         XCTAssertTrue(pageEditor.contains("accessibilityIdentifier(\"floatingPageToolbar\")"))
-        // Toolbar must remain in the floating bottom chrome, not inside LazyVStack page slots.
         let lazyRegion = pageEditor.components(separatedBy: "private var unifiedDocumentScroll").last?
             .components(separatedBy: "private func documentPageSlot").first ?? ""
         XCTAssertFalse(lazyRegion.contains("floatingPageActionsCapsule"))
@@ -306,7 +314,6 @@ final class UnifiedPageSlotGeometryRegressionTests: XCTestCase {
     func testPreviewToEditorActivationHasZeroGeometryChange() {
         let imageSize = CGSize(width: 612, height: 792)
         let before = PageModeLayoutSizing.unifiedSlotDisplaySize(imageSize: imageSize, containerWidth: 430)
-        // Activation only passes the same size into constrainedPageSize — no alternate fit.
         let after = PageModeLayoutSizing.unifiedSlotDisplaySize(imageSize: imageSize, containerWidth: 430)
         XCTAssertEqual(before, after)
     }

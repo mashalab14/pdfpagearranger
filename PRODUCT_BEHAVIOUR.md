@@ -443,15 +443,14 @@ Floating page controls sit above the document (not attached to a bottom bar), re
 - Every sheet uses a consistent base shadow; the **active** sheet adds only a soft blue-tinted halo (**6 pt** blur radius, **0.8** opacity — no thick selection border for ordinary navigation)
 - Workspace uses a consistent document background; pages are not framed as independent feed cards
 - **Initial position:** opening a document scrolls to the **top** of the active page (page 1 for a new session, or the restored active page when the session already has one). The first frame is pinned without a post-launch corrective jump; lazy page loads re-pin while suppressed
-- **Vertical snapping:** free scrolling while dragging; when the gesture/deceleration ends, the document settles to the top of the page chosen by the activation band / nearest-center rule. Search, Pages-organizer, tap activation, and other programmatic navigation use the same resting anchor
-- Active page (and the page-position indicator) update as part of that settled navigation state — not from mid-scroll visibility flicker
+- **Free scrolling:** the document scrolls continuously with normal inertial deceleration. Scrolling never triggers an automatic repositioning jump or page snap after drag or deceleration
+- **Active page** is determined continuously from viewport geometry (page whose center is closest to the viewport center, preferring the mid-viewport activation band). Changing the active page updates editing state, page actions, and the page-position indicator only — it does **not** move the document
+- Search, Pages-organizer selection, tap-to-activate, and other explicit navigation scroll to the top of the chosen page (`pageRestAnchor`) without resetting document zoom
 - Programmatic navigation suppresses stale scroll-visibility callbacks so they cannot immediately override the intended page
-- Single-page documents stay stable and do not run unnecessary settle snaps
-- **Document zoom:** one shared magnification (1×–4×) owned by the document surface. Pinching anywhere zooms every page uniformly via scaled layout frames and scaled page gaps (pages never overlap). Double-tap resets to fitted width. Switching the active page does not reset zoom
-- **Zoom navigation:** at fitted width, vertical page snapping works as above. While magnified, the document allows free horizontal and vertical panning; vertical page snaps are suppressed (active page still tracks the viewport). Returning to fitted width resumes snapping
+- **Document zoom:** one shared magnification (1×–4×) owned by the document surface. Pinching anywhere zooms every page uniformly via scaled layout frames and scaled page gaps (pages never overlap). Double-tap resets to fitted width. Switching the active page does not reset zoom; zoom preserves the current page and position
+- While magnified, the document pans freely horizontally and vertically; active-page tracking still follows the viewport
 - Overlay and annotation coordinates stay **page-normalized**; document zoom is display-only and does not change export geometry
 - Document scrolling is prioritized over page gestures except when interacting with an editable object
-- Search matches and Pages-organizer selection scroll to / activate the target page at the shared resting position without resetting document zoom
 - Rotation, duplication, deletion, insertion, and reordering keep a sensible active page (delete activates the nearest remaining neighbour)
 
 ### Page-level vs document-level actions
@@ -978,7 +977,7 @@ On the **unified vertical document**, magnification is owned by the document sur
 - Every page frame and inter-page gap scales together so pages never overlap
 - Range: **1×** (fitted width) to **4×**
 - Pinch ends at ≤1× (+ small tolerance): returns to fitted-width layout
-- **Position is preserved:** zoom keeps the user on the same page (never jumps to page 1). The content under the pinch centroid is re-anchored after each scale update; settle-snap and active-page changes are frozen during the pinch and briefly afterward
+- **Position is preserved:** zoom keeps the user on the same page (never jumps to page 1). The content under the pinch centroid is re-anchored after each scale update; active-page visibility tracking is frozen during the pinch and briefly afterward
 - Switching the active page does **not** reset zoom; zoom does **not** change the active page
 - Returning to fitted width (pinch end or double-tap) keeps the same page visible
 - Stored overlay/annotation coordinates stay page-normalized; zoom is display-only
@@ -986,8 +985,7 @@ On the **unified vertical document**, magnification is owned by the document sur
 ### Pan while magnified
 
 - Above fitted width, the document scrolls freely **horizontally and vertically**
-- Vertical page snapping is suppressed while magnified; active-page tracking still follows the viewport
-- Returning to fitted width resumes normal settle-snap
+- There is no page snapping at any zoom level; active-page tracking still follows the viewport
 
 ### Double tap
 
@@ -1536,7 +1534,7 @@ All create **undo** entries.
 | **Double tap** | Document | Reset document zoom to fitted width |
 | **Pinch** | Document (any page) | Zoom entire document 1×–4× |
 | **Drag / scroll** | Document (magnified) | Pan horizontally and vertically |
-| **Vertical scroll** | Document (fitted width) | Free scroll; settle-snap on idle |
+| **Vertical scroll** | Document (any zoom) | Free scroll with inertia; no page snap |
 | **Swipe left/right** | — | Disabled on the unified surface |
 
 ### Page Mode — overlay (selected)
@@ -1599,7 +1597,7 @@ All create **undo** entries.
 6. **Overlay tap** — select
 7. **Native PDF text selection** (long-press to mount layer)
 8. **Document pinch zoom** (unified surface; not blocked solely by idle overlay selection)
-9. **Document scroll / settle-snap** (snap only at fitted-width zoom)
+9. **Document scroll** (free inertial scrolling; no page snap)
 10. **Canvas tap** — deselect
 
 **Specific rules:**

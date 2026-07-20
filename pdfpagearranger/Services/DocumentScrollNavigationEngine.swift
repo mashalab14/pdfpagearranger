@@ -4,11 +4,11 @@ import SwiftUI
 
 /// Navigation helpers for the unified vertically scrolling document surface.
 enum DocumentScrollNavigationEngine {
-    /// Fraction of the viewport a page's frame must cover (by mid-Y proximity) to become active while settling.
+    /// Fraction of the viewport a page's frame must cover (by mid-Y proximity) to become active while scrolling.
     static let activationMidYNormalizedRange: ClosedRange<CGFloat> = 0.28...0.72
 
-    /// Resting scroll position: top of the active page aligned to the top of the viewport.
-    /// Used for open, snap-after-scroll, search, Pages organizer, and programmatic activation.
+    /// Resting scroll position: top of the target page aligned to the top of the viewport.
+    /// Used for open, search, Pages organizer, and other explicit programmatic navigation — never for free-scroll settle.
     static let pageRestAnchor = UnitPoint(x: 0.5, y: 0)
 
     /// Chooses the page whose vertical center is closest to the viewport center.
@@ -30,33 +30,12 @@ enum DocumentScrollNavigationEngine {
         return ranked?.key ?? fallback
     }
 
-    /// Page that should become active when a drag/deceleration ends.
-    static func settleTargetPageID(
-        visibilityCenters: [UUID: CGFloat],
-        viewportHeight: CGFloat,
-        fallback: UUID?
-    ) -> UUID? {
-        primaryPageID(
-            visibilityCenters: visibilityCenters,
-            viewportHeight: viewportHeight,
-            fallback: fallback
-        )
-    }
-
-    /// Multi-page documents snap after scrolling ends; single-page documents stay put.
-    static func shouldPerformSettleSnap(pageCount: Int) -> Bool {
-        pageCount > 1
-    }
-
-    /// Visibility-driven activation is deferred until scroll settles; programmatic navigation suppresses it.
-    static func shouldApplyVisibilityActivation(
-        scrollPhaseIsIdle: Bool,
+    /// Continuous active-page tracking from viewport geometry; never requires scroll idle (no settle-snap).
+    static func shouldTrackActivePageFromVisibility(
         scrollActivationSuppressed: Bool,
         interactionBlockingScroll: Bool
     ) -> Bool {
-        scrollPhaseIsIdle
-            && !scrollActivationSuppressed
-            && !interactionBlockingScroll
+        !scrollActivationSuppressed && !interactionBlockingScroll
     }
 
     static func shouldUpdateActivePage(

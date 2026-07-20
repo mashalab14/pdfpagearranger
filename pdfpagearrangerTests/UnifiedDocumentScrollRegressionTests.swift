@@ -211,10 +211,12 @@ final class UnifiedDocumentScrollRegressionTests: XCTestCase {
         let pageEditor = try source(named: "PageEditorView.swift")
         let engine = try source(named: "DocumentScrollNavigationEngine.swift", subdirectory: "Services")
         XCTAssertTrue(engine.contains("pageRestAnchor"))
-        XCTAssertTrue(engine.contains("settleTargetPageID"))
-        XCTAssertTrue(engine.contains("shouldPerformSettleSnap"))
-        XCTAssertTrue(pageEditor.contains("settleDocumentScroll"))
-        XCTAssertTrue(pageEditor.contains("pendingUserScrollSettle"))
+        XCTAssertTrue(engine.contains("primaryPageID"))
+        XCTAssertTrue(engine.contains("shouldTrackActivePageFromVisibility"))
+        XCTAssertFalse(engine.contains("shouldPerformSettleSnap"))
+        XCTAssertFalse(pageEditor.contains("settleDocumentScroll"))
+        XCTAssertFalse(pageEditor.contains("pendingUserScrollSettle"))
+        XCTAssertTrue(pageEditor.contains("updateActivePageFromVisibility"))
         XCTAssertFalse(pageEditor.contains("anchor: .center"))
     }
 

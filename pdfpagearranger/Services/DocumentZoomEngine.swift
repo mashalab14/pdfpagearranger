@@ -49,11 +49,6 @@ enum DocumentZoomEngine {
         !isMagnified(scale)
     }
 
-    /// Vertical page snapping only at fitted-width zoom.
-    static func shouldPerformSettleSnap(pageCount: Int, scale: CGFloat) -> Bool {
-        pageCount > 1 && isAtFittedWidth(scale)
-    }
-
     /// Scales a fitted-width page frame so layout (not a post-layout transform) owns magnification.
     static func scaledPageSize(fittedSize: CGSize, scale: CGFloat) -> CGSize {
         let clamped = clampedScale(scale)

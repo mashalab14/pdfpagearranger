@@ -59,13 +59,13 @@ struct PageEditorView: View {
     @State private var scrollToPageToken = UUID()
     @State private var scrollActivationSuppressed = false
     @State private var scrollActivationResumeTask: Task<Void, Never>?
-    @State private var latestDocumentVisibility = DocumentPageVisibility()
     @State private var interactionBlockingScroll = false
     @State private var floatingChromeVisible = true
     @State private var floatingChromeRevealTask: Task<Void, Never>?
-    @State private var documentScrollPhase: ScrollPhase = .idle
-    @State private var pendingUserScrollSettle = false
     @State private var preferAnimatedDocumentScroll = false
+    /// When true, the next `pageRoute` change scrolls the document (search / organizer / tap / open).
+    /// Visibility-driven active-page updates clear this so free scrolling never jumps.
+    @State private var scrollDocumentOnNextRouteChange = true
     @State private var documentZoom = DocumentZoomState()
     @State private var documentScrollPosition = ScrollPosition(idType: UUID.self)
     @State private var isPinchingDocument = false
@@ -541,22 +541,20 @@ struct PageEditorView: View {
                     trackedDocumentContentOffset = offset
                 }
                 .onScrollPhaseChange { _, newPhase in
-                    documentScrollPhase = newPhase
                     handleDocumentScrollPhase(newPhase)
-                    if newPhase == .idle {
-                        if pendingUserScrollSettle {
-                            pendingUserScrollSettle = false
-                            settleDocumentScroll(proxy: proxy)
-                        }
-                    } else if !isPinchingDocument && !zoomPositionRestoreSuppressed {
-                        pendingUserScrollSettle = true
-                    }
                 }
                 .onPreferenceChange(DocumentPageVisibilityKey.self) { visibility in
-                    latestDocumentVisibility = visibility
+                    updateActivePageFromVisibility(visibility)
                 }
                 .onChange(of: pageRoute.pageItemID) { _, newID in
-                    guard !isPinchingDocument, !zoomPositionRestoreSuppressed else { return }
+                    guard !isPinchingDocument, !zoomPositionRestoreSuppressed else {
+                        scrollDocumentOnNextRouteChange = true
+                        return
+                    }
+                    guard scrollDocumentOnNextRouteChange else {
+                        scrollDocumentOnNextRouteChange = true
+                        return
+                    }
                     scrollDocument(to: newID, proxy: proxy, animated: preferAnimatedDocumentScroll)
                 }
                 .onChange(of: scrollToPageToken) { _, _ in
@@ -592,7 +590,6 @@ struct PageEditorView: View {
             .onChanged { value in
                 if !isPinchingDocument {
                     isPinchingDocument = true
-                    pendingUserScrollSettle = false
                     zoomPositionRestoreSuppressed = true
                     pinchAnchoredPageID = pageRoute.pageItemID
                     pinchViewportAnchor = DocumentZoomEngine.pageScrollAnchor(
@@ -615,7 +612,6 @@ struct PageEditorView: View {
                 let anchoredPageID = pinchAnchoredPageID ?? pageRoute.pageItemID
                 documentZoom.endMagnification()
                 isPinchingDocument = false
-                pendingUserScrollSettle = false
                 restoreZoomAnchoredScroll(proxy: proxy)
                 // Keep the same page after layout settles at the final scale (including fitted width).
                 isApplyingZoomScrollRestore = true
@@ -754,6 +750,7 @@ struct PageEditorView: View {
         guard id != pageRoute.pageItemID else {
             if scroll {
                 preferAnimatedDocumentScroll = true
+                scrollDocumentOnNextRouteChange = true
                 beginScrollActivationSuppression(
                     durationNanoseconds: DocumentScrollNavigationEngine.programmaticNavigationSuppressionNanoseconds
                 )
@@ -770,6 +767,7 @@ struct PageEditorView: View {
         pageSelection = .none
         signatureEditOverlayID = nil
         clearPDFTextSelection()
+        scrollDocumentOnNextRouteChange = scroll
         if scroll {
             preferAnimatedDocumentScroll = true
             beginScrollActivationSuppression(
@@ -813,7 +811,8 @@ struct PageEditorView: View {
         }
     }
 
-    private func settleDocumentScroll(proxy: ScrollViewProxy) {
+    /// Updates editing focus / indicators from viewport geometry without moving the scroll offset.
+    private func updateActivePageFromVisibility(_ visibility: DocumentPageVisibility) {
         guard isUnifiedDocumentSurface else { return }
         if DocumentZoomEngine.shouldFreezeNavigationDuringZoom(
             isPinching: isPinchingDocument,
@@ -821,8 +820,7 @@ struct PageEditorView: View {
         ) {
             return
         }
-        guard DocumentScrollNavigationEngine.shouldApplyVisibilityActivation(
-            scrollPhaseIsIdle: documentScrollPhase == .idle,
+        guard DocumentScrollNavigationEngine.shouldTrackActivePageFromVisibility(
             scrollActivationSuppressed: scrollActivationSuppressed || isPinchingDocument,
             interactionBlockingScroll: interactionBlockingScroll
                 || textEditingActive
@@ -833,43 +831,23 @@ struct PageEditorView: View {
             return
         }
 
-        // While magnified, update the active page from the viewport but do not force vertical page snaps.
-        if documentZoom.isMagnified {
-            let target = DocumentScrollNavigationEngine.settleTargetPageID(
-                visibilityCenters: latestDocumentVisibility.centersInViewport,
-                viewportHeight: latestDocumentVisibility.viewportHeight,
-                fallback: pageRoute.pageItemID
-            )
-            if let target, target != pageRoute.pageItemID {
-                activatePage(id: target, scroll: false)
-            }
-            return
-        }
-
-        guard DocumentZoomEngine.shouldPerformSettleSnap(
-            pageCount: viewModel.pageCount,
-            scale: documentZoom.scale
-        ) else {
-            return
-        }
-
-        guard DocumentScrollNavigationEngine.shouldPerformSettleSnap(pageCount: viewModel.pageCount) else {
-            return
-        }
-
-        let target = DocumentScrollNavigationEngine.settleTargetPageID(
-            visibilityCenters: latestDocumentVisibility.centersInViewport,
-            viewportHeight: latestDocumentVisibility.viewportHeight,
+        let target = DocumentScrollNavigationEngine.primaryPageID(
+            visibilityCenters: visibility.centersInViewport,
+            viewportHeight: visibility.viewportHeight,
             fallback: pageRoute.pageItemID
         )
-        guard let target else { return }
-
-        preferAnimatedDocumentScroll = true
-        if target != pageRoute.pageItemID {
-            activatePage(id: target, scroll: true)
-        } else {
-            scrollDocument(to: target, proxy: proxy, animated: true)
+        guard DocumentScrollNavigationEngine.shouldUpdateActivePage(
+            proposedID: target,
+            currentID: pageRoute.pageItemID,
+            interactionBlockingScroll: interactionBlockingScroll
+                || textEditingActive
+                || drawingModeActive
+                || stickyNotePlacementActive
+                || signaturePlacementActive
+        ), let target else {
+            return
         }
+        activatePage(id: target, scroll: false)
     }
 
     private func pageCanvas(
@@ -994,7 +972,6 @@ struct PageEditorView: View {
             onDocumentZoomReset: {
                 let pageID = pageRoute.pageItemID
                 zoomPositionRestoreSuppressed = true
-                pendingUserScrollSettle = false
                 beginScrollActivationSuppression(durationNanoseconds: 2_000_000_000)
                 withAnimation(.easeInOut(duration: 0.2)) {
                     documentZoom.resetToFittedWidth()
