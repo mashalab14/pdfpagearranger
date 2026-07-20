@@ -11,7 +11,7 @@ PDF Pages is a **local-first PDF transformation workspace**.
 - The app **transforms existing PDFs** — it rearranges, edits, annotates, and exports them.
 - The app can **create PDFs from camera scans or photos** via the scan-to-PDF workflow (draft review → generate → open in editor).
 - The app can **create a blank PDF** via **Create Document** on Home.
-- Home is an **acquisition funnel** (Recent Documents + open/create/scan/photo), not a feature toolbox.
+- Home is an **acquisition funnel** (primary workflows first, then compact Recent Documents), not a feature toolbox.
 - **Files-first:** externally owned PDFs remain owned by the user; Recent Documents indexes them via bookmarks and must never become a second evolving copy (“hostage library”).
 - The app runs **on-device OCR only during scan-to-PDF generation** to embed an invisible searchable text layer. In-editor **document search** reads the PDF text layer (native or OCR-embedded) via PDFKit; it does not run OCR on imported PDFs or extract structured fields.
 - **Editing never mutates mid-session source bytes.** Import always copies into a temp working file. **Export** builds a new PDF for sharing. **External** Files originals are **not** written by Export. **App-owned** authoritative files **are** overwritten on Export (and when Compress preparation runs the same export pipeline).
@@ -209,7 +209,7 @@ Reopen Recent → resolve bookmark / app file → importPDF (working temp) → b
 
 | Mode | View | Purpose |
 |------|------|---------|
-| **Empty / Import** | `ContentView` | Recent Documents, Open Document, Create Document, Scan to PDF, Photo to PDF; Home presents VisionKit and Photos picker directly |
+| **Empty / Import** | `ContentView` | Compact header, always-visible primary workflows (Scan / Photo / Open / Create), then compact Recent Documents (≤5 + More); Home presents VisionKit and Photos picker directly |
 | **Scan-to-PDF** | `ScanDraftRootView` | Draft review, page adjustment, PDF generation (opens after successful home acquisition) |
 | **Document Editor** | `EditorView` + `PageEditorView` | Unified vertically scrolling editable pages; document … menu; page toolbar for the active page |
 | **Pages organizer** | `DocumentPagesOrganizerSheet` | Thumbnail grid for reorder / rotate / duplicate / delete without leaving the document |

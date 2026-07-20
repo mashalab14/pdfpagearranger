@@ -123,33 +123,28 @@ The Home screen is an **acquisition funnel**: it gets the user into a document. 
 
 ### Layout order
 
-1. **Recent Documents** (visual focus)
-2. **Open Document**
-3. **Create Document**
-4. **Scan to PDF**
-5. **Photo to PDF**
+1. **Compact header** (brand + short subtitle)
+2. **Primary workflows** (equal visual weight, always visible without scrolling)
+3. **Recent Documents** (compact preview, up to five rows + **More**)
 
 (A future Digitize Document action may be added later; do not treat Home as a utilities surface.)
 
 ### What the user sees
 
-- Large document icon (`doc.on.doc`)
-- Title: **"PDF Pages"**
-- Subtitle: **"Open, create, scan, or convert photos into PDFs."**
-- **Recent Documents** section at the top (five most recent, with **More** when any exist)
-- Acquisition buttons (stacked):
-  - **Open Document**
-  - **Create Document**
-  - **Scan to PDF**
-  - **Photo to PDF**
+- Compact header: smaller document icon (`doc.on.doc`, ~36–40 pt), title **"PDF Pages"**, single-line subtitle **"Scan, convert and edit PDFs."**
+- Primary action grid (`homePrimaryActions`), equal prominence:
+  - **Scan to PDF** (full width)
+  - **Photo to PDF** | **Open PDF** (side by side)
+  - **Create PDF** (full width)
+- **Recent Documents** below the actions (up to five compact rows; **More** when any exist)
 - Background: grouped system background (light grey in light mode)
 - Settings gear in top-right
 
 ### Recent Documents
 
 - Shows up to **five** most recently opened or created PDF documents (most recent first)
-- Each row: filename, last opened date/time, thumbnail when available
-- **More** opens the full Recent Documents list
+- Compact home rows: smaller thumbnail, tighter vertical spacing, slightly smaller date text
+- **More** opens the full Recent Documents list (standard row size)
 - Selecting a row opens that PDF in the editor immediately from its **authoritative** location (external file via bookmark, or app-owned file)
 - Empty state copy: *"Documents you open or create will appear here."*
 - Acquisition actions remain available when the list is empty
@@ -158,8 +153,8 @@ The Home screen is an **acquisition funnel**: it gets the user into a document. 
 
 | Kind | Authoritative file | What Recent stores |
 |------|--------------------|--------------------|
-| Externally owned (Open Document, Open In…; future Share Extension would use the same path) | User's file in Files / other app | Security-scoped bookmark + metadata + optional thumbnail (**no** PDF copy in the app library) |
-| App-owned (Create Document; Scan/Photo after Create PDF) | App Application Support (`RecentDocuments/appOwned/`) | Relative path + metadata + optional thumbnail |
+| Externally owned (Open PDF / Open Document, Open In…; future Share Extension would use the same path) | User's file in Files / other app | Security-scoped bookmark + metadata + optional thumbnail (**no** PDF copy in the app library) |
+| App-owned (Create PDF / Create Document; Scan/Photo after Create PDF) | App Application Support (`RecentDocuments/appOwned/`) | Relative path + metadata + optional thumbnail |
 | Future Drafts | App-owned draft storage | Same index; `kind: draft` reserved (unused today) |
 
 **Identity:** Recent represents **document identity** (stable path / app id), not file contents. Two different files with identical bytes remain separate entries. Reopening the same file updates one entry.
@@ -172,7 +167,7 @@ The Home screen is an **acquisition funnel**: it gets the user into a document. 
 - **App-owned:** Export (and opening Compress, which runs the same export pipeline for size preview) **immediately overwrites** the authoritative `appOwned/{id}.pdf`. Compression **Continue Editing** on an already app-owned session replaces that same file. Reopen Recent loads those latest app-owned bytes.
 - Editor sessions always use a **temporary working copy**; closing **New PDF** / closing the session deletes that temp copy only. Unexported in-memory edits are lost on close.
 
-**Included** after an actual PDF exists: Open Document, Create Document, Scan to PDF (after Create PDF), Photo to PDF (after Create PDF), Open In…, reopening Recent.
+**Included** after an actual PDF exists: Open PDF, Create PDF, Scan to PDF (after Create PDF), Photo to PDF (after Create PDF), Open In…, reopening Recent.
 
 **Not included:** cancelled scan/photo/open flows, temporary images, draft scan pages, unfinished acquisition.
 
@@ -182,15 +177,15 @@ The Home screen is an **acquisition funnel**: it gets the user into a document. 
 |--------|--------|
 | Tap a **Recent Document** | Opens that PDF in the editor |
 | Tap **More** | Opens the full Recent Documents list |
-| Tap **Open Document** | Opens the system file picker limited to **PDF files**, **single selection only** |
-| Tap **Create Document** | Creates a blank one-page PDF and opens it in the editor |
+| Tap **Open PDF** | Opens the system file picker limited to **PDF files**, **single selection only** |
+| Tap **Create PDF** | Creates a blank one-page PDF and opens it in the editor |
 | Tap **Scan to PDF** | Opens Apple VisionKit document scanner immediately (camera permission dialog on first use only) |
 | Tap **Photo to PDF** | Opens the system Photos picker immediately (Photos permission dialog on first use only) |
 | Tap **Settings** | Opens Settings sheet |
 
 Starting **Scan to PDF** or **Photo to PDF** from home **discards any in-progress scan draft** (temp files removed).
 
-### If the user cancels Open Document import
+### If the user cancels Open PDF import
 
 - File picker closes
 - User remains on home screen
@@ -202,7 +197,7 @@ Starting **Scan to PDF** or **Photo to PDF** from home **discards any in-progres
 
 ### Entry point
 
-- **Open Document** button on home screen
+- **Open PDF** button on home screen (same import workflow as previously labeled Open Document)
 
 ### File picker behaviour
 
@@ -1509,8 +1504,8 @@ All create **undo** entries.
 
 | Gesture | Target | Effect |
 |---------|--------|--------|
-| Tap | Open Document | Open file picker |
-| Tap | Create Document | Create blank PDF |
+| Tap | Open PDF | Open file picker |
+| Tap | Create PDF | Create blank PDF |
 | Tap | Recent document row | Open that PDF |
 | Tap | More | Show all recent documents |
 | Tap | Scan Document | Open scan-to-PDF flow (camera) |
@@ -1734,7 +1729,7 @@ Temporary UI state is **not** restored: selection, search query, zoom/pan, open 
 
 | Context | State | What user sees |
 |---------|-------|----------------|
-| No document | Empty home | PDF Pages title, Recent Documents, Open Document / Create Document / Scan to PDF / Photo to PDF |
+| No document | Empty home | Compact PDF Pages header, primary Scan/Photo/Open/Create actions, compact Recent Documents (≤5) |
 | All pages deleted | Empty document | "No Pages" + hint to import |
 | Importing | Loading overlay | Dimmed screen + "Importing PDF…" |
 | Import failed | Alert | "Import Failed" + message |

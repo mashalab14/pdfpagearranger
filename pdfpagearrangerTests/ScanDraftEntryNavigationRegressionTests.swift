@@ -133,7 +133,18 @@ final class ScanDraftEntryNavigationRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("createDocumentButton"))
         XCTAssertTrue(source.contains("scanDocumentButton"))
         XCTAssertTrue(source.contains("importPhotosButton"))
+        XCTAssertTrue(source.contains("homePrimaryActions"))
         XCTAssertTrue(source.contains("recentDocumentsSection"))
+        // Actions appear before Recent in the empty-state stack.
+        let emptyState = source.components(separatedBy: "private var emptyState").last?
+            .components(separatedBy: "private var homeHeader").first ?? ""
+        let actionsIndex = emptyState.range(of: "acquisitionActions")?.lowerBound
+        let recentIndex = emptyState.range(of: "recentDocumentsSection")?.lowerBound
+        XCTAssertNotNil(actionsIndex)
+        XCTAssertNotNil(recentIndex)
+        if let actionsIndex, let recentIndex {
+            XCTAssertLessThan(actionsIndex, recentIndex)
+        }
         XCTAssertTrue(source.contains("beginPhotosImportFlow()"))
         XCTAssertTrue(source.contains("beginCameraScanFlow()"))
         XCTAssertTrue(source.contains("isScanDraftReviewPresented"))

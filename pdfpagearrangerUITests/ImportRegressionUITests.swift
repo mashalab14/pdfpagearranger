@@ -5,8 +5,10 @@ final class ImportRegressionUITests: PDFPagesUITestCase {
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["emptyStateView"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["openPDFButton"].exists)
+        XCTAssertTrue(app.buttons["createDocumentButton"].exists)
         XCTAssertTrue(app.buttons["scanDocumentButton"].exists)
         XCTAssertTrue(app.buttons["importPhotosButton"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["homePrimaryActions"].exists)
     }
 
     func testImportOpensUnifiedEditorWithCorrectPageCount() throws {

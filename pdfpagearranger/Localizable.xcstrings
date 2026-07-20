@@ -366,7 +366,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Create Document"
+            "value" : "Create PDF"
           }
         }
       }
@@ -388,7 +388,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open Document"
+            "value" : "Open PDF"
           }
         }
       }
@@ -509,7 +509,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open, create, scan, or convert photos into PDFs."
+            "value" : "Scan, convert and edit PDFs."
           }
         }
       }

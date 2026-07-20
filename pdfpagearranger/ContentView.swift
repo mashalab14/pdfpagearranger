@@ -198,13 +198,14 @@ struct ContentView: View {
 
     private var emptyState: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: 20) {
                 homeHeader
-                recentDocumentsSection
                 acquisitionActions
+                recentDocumentsSection
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 24)
+            .padding(.top, 12)
+            .padding(.bottom, 24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -217,29 +218,34 @@ struct ContentView: View {
     }
 
     private var homeHeader: some View {
-        VStack(spacing: 8) {
+        HStack(alignment: .center, spacing: 12) {
             Image(systemName: "doc.on.doc")
-                .font(.system(size: 48))
+                .font(.system(size: 36, weight: .medium))
                 .foregroundStyle(.tint)
+                .frame(width: 40, height: 40)
                 .accessibilityHidden(true)
 
-            Text(HomeScreenCopy.appTitle)
-                .font(.largeTitle.bold())
-                .frame(maxWidth: .infinity)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(HomeScreenCopy.appTitle)
+                    .font(.title2.bold())
 
-            Text(HomeScreenCopy.subtitle)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
+                Text(HomeScreenCopy.subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("homeHeader")
     }
 
     private var recentDocumentsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(HomeScreenCopy.recentDocuments)
-                    .font(.title3.weight(.semibold))
+                    .font(.headline)
 
                 Spacer()
 
@@ -247,7 +253,7 @@ struct ContentView: View {
                     Button(HomeScreenCopy.recentDocumentsMore) {
                         showAllRecentDocuments = true
                     }
-                    .font(.body.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .accessibilityHint(HomeScreenCopy.recentDocumentsMoreAccessibilityHint)
                     .accessibilityIdentifier("recentDocumentsMoreButton")
                 }
@@ -255,10 +261,10 @@ struct ContentView: View {
 
             if recentDocuments.isEmpty {
                 Text(HomeScreenCopy.recentDocumentsEmpty)
-                    .font(.subheadline)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 8)
                     .accessibilityIdentifier("recentDocumentsEmptyLabel")
             } else {
                 VStack(spacing: 0) {
@@ -268,17 +274,18 @@ struct ContentView: View {
                         } label: {
                             RecentDocumentRow(
                                 record: record,
-                                thumbnail: viewModel.loadRecentThumbnail(for: record)
+                                thumbnail: viewModel.loadRecentThumbnail(for: record),
+                                style: .compact
                             )
-                            .padding(.vertical, 10)
-                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 10)
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("homeRecentDocument-\(index)")
 
                         if index < recentDocuments.count - 1 {
                             Divider()
-                                .padding(.leading, 68)
+                                .padding(.leading, 50)
                         }
                     }
                 }
@@ -291,50 +298,61 @@ struct ContentView: View {
     }
 
     private var acquisitionActions: some View {
-        VStack(spacing: 12) {
-            Button(HomeScreenCopy.openDocument) {
-                showImporter = true
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .frame(maxWidth: .infinity)
-            .accessibilityLabel(HomeScreenCopy.openDocument)
-            .accessibilityHint(HomeScreenCopy.openDocumentAccessibilityHint)
-            .accessibilityIdentifier("openPDFButton")
-
-            Button(HomeScreenCopy.createDocument) {
-                Task { await viewModel.createBlankDocument() }
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .frame(maxWidth: .infinity)
-            .accessibilityLabel(HomeScreenCopy.createDocument)
-            .accessibilityHint(HomeScreenCopy.createDocumentAccessibilityHint)
-            .accessibilityIdentifier("createDocumentButton")
-
-            Button(HomeScreenCopy.scanToPDF) {
+        VStack(spacing: 10) {
+            primaryActionButton(
+                title: HomeScreenCopy.scanToPDF,
+                hint: HomeScreenCopy.scanToPDFAccessibilityHint,
+                identifier: "scanDocumentButton"
+            ) {
                 Task { @MainActor in
                     await scanSessionViewModel.beginCameraScanFlow()
                 }
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .frame(maxWidth: .infinity)
-            .accessibilityLabel(HomeScreenCopy.scanToPDF)
-            .accessibilityHint(HomeScreenCopy.scanToPDFAccessibilityHint)
-            .accessibilityIdentifier("scanDocumentButton")
 
-            Button(HomeScreenCopy.photoToPDF) {
-                _ = scanSessionViewModel.beginPhotosImportFlow()
+            HStack(spacing: 10) {
+                primaryActionButton(
+                    title: HomeScreenCopy.photoToPDF,
+                    hint: HomeScreenCopy.photoToPDFAccessibilityHint,
+                    identifier: "importPhotosButton"
+                ) {
+                    _ = scanSessionViewModel.beginPhotosImportFlow()
+                }
+
+                primaryActionButton(
+                    title: HomeScreenCopy.openDocument,
+                    hint: HomeScreenCopy.openDocumentAccessibilityHint,
+                    identifier: "openPDFButton"
+                ) {
+                    showImporter = true
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .frame(maxWidth: .infinity)
-            .accessibilityLabel(HomeScreenCopy.photoToPDF)
-            .accessibilityHint(HomeScreenCopy.photoToPDFAccessibilityHint)
-            .accessibilityIdentifier("importPhotosButton")
+
+            primaryActionButton(
+                title: HomeScreenCopy.createDocument,
+                hint: HomeScreenCopy.createDocumentAccessibilityHint,
+                identifier: "createDocumentButton"
+            ) {
+                Task { await viewModel.createBlankDocument() }
+            }
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("homePrimaryActions")
+    }
+
+    private func primaryActionButton(
+        title: String,
+        hint: String,
+        identifier: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(title, action: action)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel(title)
+            .accessibilityHint(hint)
+            .accessibilityIdentifier(identifier)
     }
 
     private var loadingOverlay: some View {
