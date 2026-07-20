@@ -36,8 +36,10 @@ final class DocumentPageSheetStyleRegressionTests: XCTestCase {
     }
 
     func testActiveHaloConstantsAreSubtle() {
+        XCTAssertEqual(DocumentPageSheetStyle.activeHaloOpacity, 0.8, accuracy: 0.001)
+        XCTAssertEqual(DocumentPageSheetStyle.activeHaloRadius, 6, accuracy: 0.001)
         XCTAssertGreaterThan(DocumentPageSheetStyle.activeHaloOpacity, 0)
-        XCTAssertLessThanOrEqual(DocumentPageSheetStyle.activeHaloOpacity, 0.4)
+        XCTAssertLessThanOrEqual(DocumentPageSheetStyle.activeHaloOpacity, 1.0)
         XCTAssertGreaterThan(DocumentPageSheetStyle.activeHaloRadius, DocumentPageSheetStyle.baseShadowRadius)
         XCTAssertGreaterThan(DocumentPageSheetStyle.baseShadowOpacity, 0)
         XCTAssertLessThan(DocumentPageSheetStyle.baseShadowOpacity, DocumentPageSheetStyle.activeHaloOpacity)

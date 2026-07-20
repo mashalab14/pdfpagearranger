@@ -11,8 +11,8 @@ enum DocumentPageSheetStyle {
     static let baseShadowY: CGFloat = 1.5
 
     /// Restrained blue-tinted halo for the active page only (not a border).
-    static let activeHaloOpacity: Double = 0.32
-    static let activeHaloRadius: CGFloat = 14
+    static let activeHaloOpacity: Double = 0.8
+    static let activeHaloRadius: CGFloat = 6
     static let activeHaloY: CGFloat = 0
 
     static func pageSpacing(forContainerWidth width: CGFloat) -> CGFloat {

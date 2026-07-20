@@ -440,7 +440,7 @@ Floating page controls sit above the document (not attached to a bottom bar), re
 
 - Pages appear **top to bottom** as equally scaled paper sheets in one continuous stack
 - Active and inactive pages share the **same scale and layout footprint** (one shared slot-size calculation); activation never resizes a page
-- Every sheet uses a consistent base shadow; the **active** sheet adds only a soft blue-tinted halo (no thick selection border for ordinary navigation)
+- Every sheet uses a consistent base shadow; the **active** sheet adds only a soft blue-tinted halo (**6 pt** blur radius, **0.8** opacity — no thick selection border for ordinary navigation)
 - Workspace uses a consistent document background; pages are not framed as independent feed cards
 - **Initial position:** opening a document scrolls to the **top** of the active page (page 1 for a new session, or the restored active page when the session already has one). The first frame is pinned without a post-launch corrective jump; lazy page loads re-pin while suppressed
 - **Vertical snapping:** free scrolling while dragging; when the gesture/deceleration ends, the document settles to the top of the page chosen by the activation band / nearest-center rule. Search, Pages-organizer, tap activation, and other programmatic navigation use the same resting anchor

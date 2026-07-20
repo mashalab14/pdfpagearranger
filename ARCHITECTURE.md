@@ -159,7 +159,7 @@ Reopen Recent → resolve bookmark / app file → importPDF (working temp) → b
 | **`PDFPreviewRenderer`** | On-screen PDF page rasterization via `PDFPage.thumbnail` (correct orientation). |
 | **`PageRenderService`** | High-resolution page image for Page Mode. |
 | **`DocumentScrollNavigationEngine`** | Active-page detection, settle-snap targets, shared page-rest anchor (top), and programmatic-navigation suppression for the unified vertical document surface. |
-| **`DocumentPageSheetStyle`** | Paper-stack spacing, shared sheet chrome, and active-page halo tokens (equal scale for active/inactive). |
+| **`DocumentPageSheetStyle`** | Paper-stack spacing, shared sheet chrome, and active-page halo tokens (6 pt blur radius, 0.8 opacity; equal scale for active/inactive). |
 | **`PageModeLayoutSizing`** | Shared unified-slot display size for active canvas and inactive previews (identical width/height/aspect). |
 | **`WatermarkType`** | Extensible watermark payload kind (V1: text, image; future: QR code, PDF page, stamp). |
 | **`WatermarkSettings`** | Document-level watermark configuration (`watermarkType`, text, `imageAssetID`, opacity, normalized scale, color, rotation, position, layer, apply scope). |
